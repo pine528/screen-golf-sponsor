@@ -1,0 +1,733 @@
+openapi: 3.0.3
+info:
+  title: Screen Golf Sponsor Marketplace API
+  version: '0.9'
+  description: MVP API spec for auction-based micro sponsorship inventory (screen
+    golf).
+servers:
+- url: https://api.example.com
+tags:
+- name: Auth
+- name: Brand
+- name: Athlete
+- name: Event
+- name: Slot
+- name: Auction
+- name: Bid
+- name: Contract
+- name: Creative
+- name: Verification
+- name: Report
+- name: Admin
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+      required:
+      - code
+      - message
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+      - email
+      - password
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - access_token
+      - refresh_token
+      - expires_in
+    Brand:
+      type: object
+      properties:
+        brand_id:
+          type: string
+        name:
+          type: string
+        biz_no:
+          type: string
+        category:
+          type: string
+        kyc_status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+      required:
+      - brand_id
+      - name
+      - category
+      - kyc_status
+    Athlete:
+      type: object
+      properties:
+        athlete_id:
+          type: string
+        name:
+          type: string
+        tour:
+          type: string
+        kyc_status:
+          type: string
+          enum:
+          - pending
+          - approved
+          - rejected
+        blocked_categories:
+          type: array
+          items:
+            type: string
+      required:
+      - athlete_id
+      - name
+      - tour
+      - kyc_status
+    Event:
+      type: object
+      properties:
+        event_id:
+          type: string
+        tour:
+          type: string
+        name:
+          type: string
+        date_start:
+          type: string
+          format: date
+        date_end:
+          type: string
+          format: date
+        multiplier:
+          type: number
+      required:
+      - event_id
+      - tour
+      - name
+      - date_start
+      - date_end
+    SlotInstance:
+      type: object
+      properties:
+        slot_instance_id:
+          type: string
+        event_id:
+          type: string
+        athlete_id:
+          type: string
+        slot_code:
+          type: string
+        reserve_price:
+          type: integer
+        status:
+          type: string
+          enum:
+          - open
+          - in_auction
+          - sold
+          - closed
+      required:
+      - slot_instance_id
+      - event_id
+      - athlete_id
+      - slot_code
+      - status
+    Auction:
+      type: object
+      properties:
+        auction_id:
+          type: string
+        slot_instance_id:
+          type: string
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        soft_close_sec:
+          type: integer
+        status:
+          type: string
+          enum:
+          - scheduled
+          - live
+          - ended
+          - cancelled
+      required:
+      - auction_id
+      - slot_instance_id
+      - start_at
+      - end_at
+      - status
+    BidRequest:
+      type: object
+      properties:
+        max_bid:
+          type: integer
+        auto_bid:
+          type: boolean
+          default: true
+      required:
+      - max_bid
+    BidResponse:
+      type: object
+      properties:
+        bid_id:
+          type: string
+        auction_id:
+          type: string
+        brand_id:
+          type: string
+        max_bid:
+          type: integer
+        effective_current_price:
+          type: integer
+        rank:
+          type: integer
+      required:
+      - bid_id
+      - auction_id
+      - brand_id
+      - max_bid
+    Contract:
+      type: object
+      properties:
+        contract_id:
+          type: string
+        auction_id:
+          type: string
+        brand_id:
+          type: string
+        athlete_id:
+          type: string
+        price_final:
+          type: integer
+        status:
+          type: string
+          enum:
+          - pending_signature
+          - active
+          - cancelled
+          - completed
+      required:
+      - contract_id
+      - auction_id
+      - brand_id
+      - athlete_id
+      - price_final
+      - status
+security:
+- bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Login and issue JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /events:
+    get:
+      tags:
+      - Event
+      summary: List events
+      parameters:
+      - name: tour
+        in: query
+        schema:
+          type: string
+        required: false
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        required: false
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        required: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+  /slot-instances:
+    get:
+      tags:
+      - Slot
+      summary: Query available slot instances
+      parameters:
+      - name: event_id
+        in: query
+        schema:
+          type: string
+      - name: slot_code
+        in: query
+        schema:
+          type: string
+      - name: athlete_id
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SlotInstance'
+  /auctions/{auction_id}:
+    get:
+      tags:
+      - Auction
+      summary: Get auction detail
+      parameters:
+      - name: auction_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Auction'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auctions/{auction_id}/bids:
+    post:
+      tags:
+      - Bid
+      summary: Place a proxy bid (optionally auto-bid)
+      parameters:
+      - name: auction_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BidRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BidResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (reserve/conflict rule)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /brands:
+    post:
+      tags:
+      - Brand
+      summary: Create brand and start KYC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                biz_no:
+                  type: string
+                category:
+                  type: string
+                contact_email:
+                  type: string
+                  format: email
+              required:
+              - name
+              - category
+              - contact_email
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /athletes:
+    post:
+      tags:
+      - Athlete
+      summary: Create athlete profile and start KYC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                tour:
+                  type: string
+                contact_email:
+                  type: string
+                  format: email
+              required:
+              - name
+              - tour
+              - contact_email
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Athlete'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auctions:
+    get:
+      tags:
+      - Auction
+      summary: List auctions
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+        required: false
+      - name: event_id
+        in: query
+        schema:
+          type: string
+        required: false
+      - name: athlete_id
+        in: query
+        schema:
+          type: string
+        required: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Auction'
+  /contracts:
+    post:
+      tags:
+      - Contract
+      summary: Create contract after auction end (admin/system call)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auction_id:
+                  type: string
+                brand_id:
+                  type: string
+                athlete_id:
+                  type: string
+                price_final:
+                  type: integer
+              required:
+              - auction_id
+              - brand_id
+              - athlete_id
+              - price_final
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contract'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /contracts/{contract_id}/assets:
+    post:
+      tags:
+      - Creative
+      summary: Upload creative asset (logo patch) metadata
+      parameters:
+      - name: contract_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_url:
+                  type: string
+                notes:
+                  type: string
+              required:
+              - file_url
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset_id:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - submitted
+                    - approved
+                    - rejected
+                required:
+                - asset_id
+                - status
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /contracts/{contract_id}/verification:
+    post:
+      tags:
+      - Verification
+      summary: Submit attachment verification photos
+      parameters:
+      - name: contract_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photo_urls:
+                  type: array
+                  items:
+                    type: string
+                angles:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                    - front
+                    - side
+                    - back
+              required:
+              - photo_urls
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verification_id:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - submitted
+                    - verified
+                    - rejected
+                required:
+                - verification_id
+                - status
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /contracts/{contract_id}/report:
+    get:
+      tags:
+      - Report
+      summary: Get basic fulfillment report
+      parameters:
+      - name: contract_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contract_id:
+                    type: string
+                  event_id:
+                    type: string
+                  athlete_id:
+                    type: string
+                  slot_code:
+                    type: string
+                  verified:
+                    type: boolean
+                  evidence:
+                    type: object
+                required:
+                - contract_id
+                - verified
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /admin/slot-templates:
+    post:
+      tags:
+      - Admin
+      summary: Create or update slot template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                body_part:
+                  type: string
+                size_max_w_mm:
+                  type: integer
+                size_max_h_mm:
+                  type: integer
+                perimeter_max_mm:
+                  type: integer
+                default_reserve_price:
+                  type: integer
+                forbidden_notes:
+                  type: string
+              required:
+              - code
+              - body_part
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slot_template_id:
+                    type: string
+                  code:
+                    type: string
+                required:
+                - slot_template_id
+                - code
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

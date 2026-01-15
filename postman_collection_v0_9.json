@@ -1,0 +1,98 @@
+{
+  "info": {
+    "name": "Screen Golf Sponsor Marketplace (v0.9)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"brand@example.com\",\n  \"password\": \"***\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Events - List",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/events?tour=GTOUR",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "events"
+          ],
+          "query": [
+            {
+              "key": "tour",
+              "value": "GTOUR"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Auctions - Get",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/auctions/{{auction_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auctions",
+            "{{auction_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Bids - Place",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auctions/{{auction_id}}/bids",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auctions",
+            "{{auction_id}}",
+            "bids"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"max_bid\": 300000,\n  \"auto_bid\": true\n}"
+        }
+      }
+    }
+  ]
+}

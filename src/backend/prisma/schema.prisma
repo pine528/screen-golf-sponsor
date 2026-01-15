@@ -1,0 +1,878 @@
+// Screen Golf Sponsor Marketplace - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User & Authentication
+// ============================================
+
+enum UserRole {
+  BRAND
+  ATHLETE
+  ADMIN
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  role          UserRole
+  isActive      Boolean   @default(true) @map("is_active")
+  pointBalance  Int       @default(0) @map("point_balance")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  brand         Brand?
+  athlete       Athlete?
+  admin         Admin?
+  auditLogs     AuditLog[]
+  votes         Vote[]
+  pointLedgers  PointLedger[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  userId      String   @map("user_id")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+// ============================================
+// Brand (Advertiser)
+// ============================================
+
+model Brand {
+  id              String      @id @default(uuid())
+  userId          String      @unique @map("user_id")
+  name            String
+  bizNo           String?     @map("biz_no")
+  category        String
+  contactEmail    String      @map("contact_email")
+  contactPhone    String?     @map("contact_phone")
+  contactName     String?     @map("contact_name")
+  website         String?
+  description     String?
+  address         String?
+  kycStatus       KycStatus   @default(NOT_SUBMITTED) @map("kyc_status")
+  kycDocuments    Json?       @map("kyc_documents")
+  penaltyScore    Int         @default(0) @map("penalty_score")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user            User        @relation(fields: [userId], references: [id])
+  bids            Bid[]
+  contracts       Contract[]
+  campaigns       Campaign[]
+  sponsoredVoteEvents VoteEvent[]
+  payments        Payment[]
+  wallets         Wallet[]
+
+  @@map("brands")
+}
+
+// ============================================
+// Athlete (Player)
+// ============================================
+
+model Athlete {
+  id                  String        @id @default(uuid())
+  userId              String        @unique @map("user_id")
+  name                String
+  realName            String?       @map("real_name")
+  tour                String
+  profileImageUrl     String?       @map("profile_image_url")
+  bio                 String?
+  socialLinks         Json?         @map("social_links")
+  primarySponsors     Json?         @map("primary_sponsors")
+  blockedCategories   String[]      @map("blocked_categories")
+  kycStatus           KycStatus     @default(NOT_SUBMITTED) @map("kyc_status")
+  kycDocuments        Json?         @map("kyc_documents")
+  bankAccount         Json?         @map("bank_account")
+  taxInfo             Json?         @map("tax_info")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  user                User          @relation(fields: [userId], references: [id])
+  slotInstances       SlotInstance[]
+  contracts           Contract[]
+  eventParticipations EventParticipation[]
+  votePoints          AthleteVotePoint[]
+  wallets             Wallet[]
+  payoutItems         PayoutItem[]
+
+  @@map("athletes")
+}
+
+// ============================================
+// Admin
+// ============================================
+
+model Admin {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  name        String
+  department  String?
+  permissions Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("admins")
+}
+
+// ============================================
+// Event (Tournament/Broadcast)
+// ============================================
+
+model Event {
+  id                String    @id @default(uuid())
+  tour              String
+  name              String
+  description       String?
+  dateStart         DateTime  @map("date_start")
+  dateEnd           DateTime  @map("date_end")
+  broadcastEpisode  String?   @map("broadcast_episode")
+  multiplier        Float     @default(1.0)
+  venue             String?
+  status            EventStatus @default(UPCOMING)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  slotInstances     SlotInstance[]
+  participations    EventParticipation[]
+  voteEvents        VoteEvent[]
+
+  @@map("events")
+}
+
+enum EventStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+model EventParticipation {
+  id          String   @id @default(uuid())
+  eventId     String   @map("event_id")
+  athleteId   String   @map("athlete_id")
+  confirmed   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  event       Event    @relation(fields: [eventId], references: [id])
+  athlete     Athlete  @relation(fields: [athleteId], references: [id])
+
+  @@unique([eventId, athleteId])
+  @@map("event_participations")
+}
+
+// ============================================
+// Slot Template & Instance
+// ============================================
+
+enum BodyPart {
+  SHIRT_CHEST_LEFT
+  SHIRT_CHEST_RIGHT
+  SHIRT_SLEEVE_LEFT
+  SHIRT_SLEEVE_RIGHT
+  CAP_SIDE_LEFT
+  CAP_BACK
+  PANTS_BELT
+  SHIRT_BACK
+}
+
+enum MaterialRule {
+  PRINTED_ONLY
+  EMBROIDERY_OK
+  ANY
+}
+
+model SlotTemplate {
+  id                      String        @id @default(uuid())
+  code                    String        @unique
+  name                    String
+  bodyPart                BodyPart      @map("body_part")
+  sizeMaxWMm              Int           @map("size_max_w_mm")
+  sizeMaxHMm              Int           @map("size_max_h_mm")
+  perimeterMaxMm          Int           @map("perimeter_max_mm")
+  recommendedWMm          Int?          @map("recommended_w_mm")
+  recommendedHMm          Int?          @map("recommended_h_mm")
+  forbiddenNotes          String?       @map("forbidden_notes")
+  materialRules           MaterialRule  @default(PRINTED_ONLY) @map("material_rules")
+  requiresVerificationPhotos Boolean    @default(true) @map("requires_verification_photos")
+  requiredAngles          String[]      @default(["front"]) @map("required_angles")
+  categoryExclusivityGroup String?      @map("category_exclusivity_group")
+  defaultReservePrice     Int           @default(100000) @map("default_reserve_price")
+  eventOverrideAllowed    Boolean       @default(true) @map("event_override_allowed")
+  isActive                Boolean       @default(true) @map("is_active")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  slotInstances           SlotInstance[]
+
+  @@map("slot_templates")
+}
+
+enum SlotStatus {
+  OPEN
+  IN_AUCTION
+  SOLD
+  CLOSED
+}
+
+model SlotInstance {
+  id              String        @id @default(uuid())
+  eventId         String        @map("event_id")
+  athleteId       String        @map("athlete_id")
+  slotTemplateId  String        @map("slot_template_id")
+  reservePrice    Int           @map("reserve_price")
+  status          SlotStatus    @default(OPEN)
+  overrideSpecs   Json?         @map("override_specs")
+  // Sale Mode Fields
+  enableAuction     Boolean       @default(true) @map("enable_auction")
+  enableDirectBuy   Boolean       @default(false) @map("enable_direct_buy")
+  directBuyPrice    Decimal?      @map("direct_buy_price") @db.Decimal(18, 0)
+  auctionMinBid     Decimal?      @map("auction_min_bid") @db.Decimal(18, 0)
+  auctionEndAt      DateTime?     @map("auction_end_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  event           Event         @relation(fields: [eventId], references: [id])
+  athlete         Athlete       @relation(fields: [athleteId], references: [id])
+  slotTemplate    SlotTemplate  @relation(fields: [slotTemplateId], references: [id])
+  auction         Auction?
+
+  @@unique([eventId, athleteId, slotTemplateId])
+  @@map("slot_instances")
+}
+
+// ============================================
+// Auction & Bidding
+// ============================================
+
+enum AuctionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+  UNSOLD
+}
+
+model Auction {
+  id              String        @id @default(uuid())
+  slotInstanceId  String        @unique @map("slot_instance_id")
+  startAt         DateTime      @map("start_at")
+  endAt           DateTime      @map("end_at")
+  originalEndAt   DateTime      @map("original_end_at")
+  softCloseSec    Int           @default(120) @map("soft_close_sec")
+  maxExtensionSec Int           @default(600) @map("max_extension_sec")
+  totalExtended   Int           @default(0) @map("total_extended")
+  minBidIncrement Int           @default(10000) @map("min_bid_increment")
+  currentPrice    Int           @default(0) @map("current_price")
+  status          AuctionStatus @default(SCHEDULED)
+  winningBidId    String?       @map("winning_bid_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  slotInstance    SlotInstance  @relation(fields: [slotInstanceId], references: [id])
+  bids            Bid[]
+  contract        Contract?
+
+  @@map("auctions")
+}
+
+model Bid {
+  id              String    @id @default(uuid())
+  auctionId       String    @map("auction_id")
+  brandId         String    @map("brand_id")
+  maxBid          Int       @map("max_bid")
+  currentProxy    Int       @map("current_proxy")
+  autoBid         Boolean   @default(true) @map("auto_bid")
+  isWinning       Boolean   @default(false) @map("is_winning")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  auction         Auction   @relation(fields: [auctionId], references: [id])
+  brand           Brand     @relation(fields: [brandId], references: [id])
+
+  @@map("bids")
+}
+
+// ============================================
+// Contract & Creative Assets
+// ============================================
+
+enum ContractStatus {
+  PENDING_SIGNATURE
+  ACTIVE
+  ASSET_PENDING
+  ASSET_APPROVED
+  VERIFICATION_PENDING
+  VERIFIED
+  COMPLETED
+  CANCELLED
+}
+
+model Contract {
+  id              String          @id @default(uuid())
+  auctionId       String          @unique @map("auction_id")
+  brandId         String          @map("brand_id")
+  athleteId       String          @map("athlete_id")
+  priceFinal      Int             @map("price_final")
+  status          ContractStatus  @default(PENDING_SIGNATURE)
+  brandSignedAt   DateTime?       @map("brand_signed_at")
+  athleteSignedAt DateTime?       @map("athlete_signed_at")
+  signedAt        DateTime?       @map("signed_at")
+  assetDeadline   DateTime?       @map("asset_deadline")
+  terms           Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  auction         Auction         @relation(fields: [auctionId], references: [id])
+  brand           Brand           @relation(fields: [brandId], references: [id])
+  athlete         Athlete         @relation(fields: [athleteId], references: [id])
+  assets          CreativeAsset[]
+  verification    Verification?
+  settlement      Settlement?
+  payments        Payment[]
+  escrow          Escrow?
+
+  @@map("contracts")
+}
+
+enum AssetStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model CreativeAsset {
+  id              String      @id @default(uuid())
+  contractId      String      @map("contract_id")
+  fileUrl         String      @map("file_url")
+  fileName        String?     @map("file_name")
+  fileType        String?     @map("file_type")
+  fileSizeBytes   Int?        @map("file_size_bytes")
+  status          AssetStatus @default(SUBMITTED)
+  reviewNotes     String?     @map("review_notes")
+  reviewedBy      String?     @map("reviewed_by")
+  reviewedAt      DateTime?   @map("reviewed_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  contract        Contract    @relation(fields: [contractId], references: [id])
+
+  @@map("creative_assets")
+}
+
+// ============================================
+// Verification (Attachment Proof)
+// ============================================
+
+enum VerificationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+model Verification {
+  id              String              @id @default(uuid())
+  contractId      String              @unique @map("contract_id")
+  photoUrls       String[]            @map("photo_urls")
+  angles          String[]
+  status          VerificationStatus  @default(SUBMITTED)
+  verifiedBy      String?             @map("verified_by")
+  verifiedAt      DateTime?           @map("verified_at")
+  rejectionReason String?             @map("rejection_reason")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  contract        Contract            @relation(fields: [contractId], references: [id])
+
+  @@map("verifications")
+}
+
+// ============================================
+// Settlement (Payment)
+// ============================================
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Settlement {
+  id              String            @id @default(uuid())
+  contractId      String            @unique @map("contract_id")
+  grossAmount     Int               @map("gross_amount")
+  platformFee     Int               @map("platform_fee")
+  platformFeeRate Float             @map("platform_fee_rate")
+  payoutAmount    Int               @map("payout_amount")
+  status          SettlementStatus  @default(PENDING)
+  paidAt          DateTime?         @map("paid_at")
+  paymentRef      String?           @map("payment_ref")
+  invoiceUrl      String?           @map("invoice_url")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  contract        Contract          @relation(fields: [contractId], references: [id])
+
+  @@map("settlements")
+}
+
+// ============================================
+// Campaign (Brand Campaign Management)
+// ============================================
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+model Campaign {
+  id              String          @id @default(uuid())
+  brandId         String          @map("brand_id")
+  name            String
+  description     String?
+  budget          Int
+  spentAmount     Int             @default(0) @map("spent_amount")
+  targetCategories String[]       @map("target_categories")
+  excludedAthletes String[]       @map("excluded_athletes")
+  preferredAthletes String[]      @map("preferred_athletes")
+  dateStart       DateTime?       @map("date_start")
+  dateEnd         DateTime?       @map("date_end")
+  status          CampaignStatus  @default(DRAFT)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  brand           Brand           @relation(fields: [brandId], references: [id])
+
+  @@map("campaigns")
+}
+
+// ============================================
+// Forbidden Categories
+// ============================================
+
+model ForbiddenCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("forbidden_categories")
+}
+
+// ============================================
+// Category Mapping
+// ============================================
+
+model CategoryMapping {
+  id              String   @id @default(uuid())
+  categoryCode    String   @map("category_code")
+  exclusivityGroup String  @map("exclusivity_group")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([categoryCode, exclusivityGroup])
+  @@map("category_mappings")
+}
+
+// ============================================
+// Audit Log
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  oldValue    Json?    @map("old_value")
+  newValue    Json?    @map("new_value")
+  metadata    Json?    // 추가 메타데이터 (요청 정보, 변경 사유 등)
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// Admin Action Log (운영자 액션 멱등성/감사)
+// ============================================
+
+model AdminActionLog {
+  id              String   @id @default(uuid())
+  actorId         String   @map("actor_id")  // admin user id
+  action          String   // ESCROW_RELEASE_MANUAL, ESCROW_REFUND_MANUAL, CONTRACT_CANCEL_MANUAL
+  targetType      String   @map("target_type")  // ESCROW, CONTRACT
+  targetId        String   @map("target_id")
+  idempotencyKey  String?  @unique @map("idempotency_key")
+  requestBody     Json?    @map("request_body")
+  result          Json?
+  reason          String?  // 사유
+  ipAddress       String?  @map("ip_address")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@map("admin_action_logs")
+}
+
+// ============================================
+// System Settings
+// ============================================
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+// ============================================
+// Notification
+// ============================================
+
+enum NotificationType {
+  BID_PLACED
+  BID_OUTBID
+  AUCTION_WON
+  AUCTION_LOST
+  AUCTION_ENDING_SOON
+  CONTRACT_CREATED
+  ASSET_SUBMITTED
+  ASSET_APPROVED
+  ASSET_REJECTED
+  VERIFICATION_SUBMITTED
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+  SETTLEMENT_COMPLETED
+  KYC_APPROVED
+  KYC_REJECTED
+  ADMIN_ALERT
+}
+
+model Notification {
+  id          String            @id @default(uuid())
+  userId      String            @map("user_id")
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?
+  payload     Json?             // 추가 페이로드 (링크, 액션 버튼 등)
+  isRead      Boolean           @default(false) @map("is_read")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ============================================
+// Vote/Point System (팬 참여 시스템)
+// ============================================
+
+enum VoteEventStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  SETTLED
+}
+
+enum VoteQuestionType {
+  PREDICTION     // 경기 결과 예측
+  QUIZ           // 퀴즈
+  POLL           // 여론조사
+}
+
+model VoteEvent {
+  id              String           @id @default(uuid())
+  eventId         String?          @map("event_id")
+  title           String
+  description     String?
+  questionType    VoteQuestionType @map("question_type")
+  question        String
+  options         Json             // [{id: string, label: string, athleteId?: string}]
+  correctOptionId String?          @map("correct_option_id")
+  pointsPerCorrect Int             @default(100) @map("points_per_correct")
+  sponsorBrandId  String?          @map("sponsor_brand_id")
+  startAt         DateTime         @map("start_at")
+  endAt           DateTime         @map("end_at")
+  status          VoteEventStatus  @default(DRAFT)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  event           Event?           @relation(fields: [eventId], references: [id])
+  sponsorBrand    Brand?           @relation(fields: [sponsorBrandId], references: [id])
+  votes           Vote[]
+  athletePoints   AthleteVotePoint[]
+
+  @@map("vote_events")
+}
+
+model Vote {
+  id              String      @id @default(uuid())
+  voteEventId     String      @map("vote_event_id")
+  userId          String      @map("user_id")
+  selectedOptionId String     @map("selected_option_id")
+  isCorrect       Boolean?    @map("is_correct")
+  pointsEarned    Int         @default(0) @map("points_earned")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  voteEvent       VoteEvent   @relation(fields: [voteEventId], references: [id])
+  user            User        @relation(fields: [userId], references: [id])
+
+  @@unique([voteEventId, userId])
+  @@map("votes")
+}
+
+model AthleteVotePoint {
+  id              String      @id @default(uuid())
+  voteEventId     String      @map("vote_event_id")
+  athleteId       String      @map("athlete_id")
+  points          Int         @default(0)
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  voteEvent       VoteEvent   @relation(fields: [voteEventId], references: [id])
+  athlete         Athlete     @relation(fields: [athleteId], references: [id])
+
+  @@unique([voteEventId, athleteId])
+  @@map("athlete_vote_points")
+}
+
+model PointLedger {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  amount          Int
+  balance         Int
+  type            String      // VOTE_REWARD, REFERRAL, REDEMPTION, EXPIRED 등
+  description     String?
+  referenceId     String?     @map("reference_id")
+  referenceType   String?     @map("reference_type")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  user            User        @relation(fields: [userId], references: [id])
+
+  @@map("point_ledgers")
+}
+
+// ============================================
+// Payment System (결제 시스템)
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  VIRTUAL_ACCOUNT
+}
+
+model Payment {
+  id              String         @id @default(uuid())
+  brandId         String         @map("brand_id")
+  contractId      String?        @map("contract_id")
+  amount          Int
+  method          PaymentMethod
+  status          PaymentStatus  @default(PENDING)
+  pgProvider      String?        @map("pg_provider")
+  pgTransactionId String?        @map("pg_transaction_id")
+  pgResponse      Json?          @map("pg_response")
+  paidAt          DateTime?      @map("paid_at")
+  failedAt        DateTime?      @map("failed_at")
+  failReason      String?        @map("fail_reason")
+  refundedAt      DateTime?      @map("refunded_at")
+  refundAmount    Int?           @map("refund_amount")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  brand           Brand          @relation(fields: [brandId], references: [id])
+  contract        Contract?      @relation(fields: [contractId], references: [id])
+
+  @@map("payments")
+}
+
+// ============================================
+// Wallet & Escrow System (내부 원장/에스크로)
+// ============================================
+
+enum WalletOwnerType {
+  BRAND
+  ATHLETE
+  PLATFORM
+}
+
+model Wallet {
+  id          String          @id @default(uuid())
+  ownerType   WalletOwnerType @map("owner_type")
+  ownerId     String          @map("owner_id")
+  balance     Decimal         @default(0) @db.Decimal(18, 0)  // 원 단위 정수, 최대 10^18
+  frozenAmount Decimal        @default(0) @map("frozen_amount") @db.Decimal(18, 0)
+  version     Int             @default(0)  // 낙관적 락용 버전
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  ledgerTxs   LedgerTx[]
+  // Virtual relations for admin queries (no FK constraint)
+  brand       Brand?          @relation(fields: [ownerId], references: [id], map: "wallet_brand_fk")
+  athlete     Athlete?        @relation(fields: [ownerId], references: [id], map: "wallet_athlete_fk")
+
+  @@unique([ownerType, ownerId])
+  @@map("wallets")
+}
+
+enum LedgerTxType {
+  DEPOSIT           // 충전
+  WITHDRAW          // 출금
+  ESCROW_HOLD       // 에스크로 홀드
+  ESCROW_RELEASE    // 에스크로 릴리스 (선수에게)
+  ESCROW_REFUND     // 에스크로 환불 (브랜드에게)
+  PLATFORM_FEE      // 플랫폼 수수료
+  ADJUSTMENT        // 수동 조정
+}
+
+enum LedgerTxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+model LedgerTx {
+  id          String          @id @default(uuid())
+  walletId    String          @map("wallet_id")
+  type        LedgerTxType
+  amount      Decimal         @db.Decimal(18, 0)  // 양수: 입금, 음수: 출금
+  balanceAfter Decimal        @map("balance_after") @db.Decimal(18, 0)
+  status      LedgerTxStatus  @default(COMPLETED)
+  refType     String?         @map("ref_type")  // CONTRACT, ESCROW, PAYOUT 등
+  refId       String?         @map("ref_id")
+  description String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  wallet      Wallet          @relation(fields: [walletId], references: [id])
+
+  @@unique([walletId, type, refType, refId])  // 동일 ref에 대한 중복 트랜잭션 방지
+  @@index([walletId, createdAt])
+  @@map("ledger_txs")
+}
+
+enum EscrowStatus {
+  HELD              // 브랜드 결제 완료, 홀드 중
+  RELEASED          // 선수에게 지급 완료
+  REFUNDED          // 브랜드에게 환불 완료
+  PARTIALLY_RELEASED // 일부 지급 (분쟁 등)
+}
+
+model Escrow {
+  id              String        @id @default(uuid())
+  contractId      String        @unique @map("contract_id")  // 계약당 1개만
+  brandId         String        @map("brand_id")
+  athleteId       String        @map("athlete_id")
+  grossAmount     Decimal       @map("gross_amount") @db.Decimal(18, 0)      // 총 금액
+  platformFee     Decimal       @map("platform_fee") @db.Decimal(18, 0)      // 플랫폼 수수료
+  platformFeeRate Decimal       @map("platform_fee_rate") @db.Decimal(5, 4)  // 수수료율 (예: 0.1000 = 10%)
+  athletePayout   Decimal       @map("athlete_payout") @db.Decimal(18, 0)    // 선수 지급액
+  status          EscrowStatus  @default(HELD)
+  heldAt          DateTime      @default(now()) @map("held_at")
+  releasedAt      DateTime?     @map("released_at")
+  refundedAt      DateTime?     @map("refunded_at")
+  refundReason    String?       @map("refund_reason")  // 환불 사유
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  contract        Contract      @relation(fields: [contractId], references: [id])
+  payoutItems     PayoutItem[]
+
+  @@index([status])
+  @@index([brandId])
+  @@index([athleteId])
+  @@map("escrows")
+}
+
+enum PayoutBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model PayoutBatch {
+  id              String            @id @default(uuid())
+  status          PayoutBatchStatus @default(PENDING)
+  totalAmount     Decimal           @map("total_amount") @db.Decimal(18, 0)
+  itemCount       Int               @map("item_count")
+  processedAt     DateTime?         @map("processed_at")
+  bankFileUrl     String?           @map("bank_file_url")
+  notes           String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  items           PayoutItem[]
+
+  @@map("payout_batches")
+}
+
+model PayoutItem {
+  id              String      @id @default(uuid())
+  batchId         String      @map("batch_id")
+  escrowId        String      @unique @map("escrow_id")  // 에스크로당 1개 지급만
+  athleteId       String      @map("athlete_id")
+  amount          Decimal     @db.Decimal(18, 0)
+  bankName        String?     @map("bank_name")
+  bankAccount     String?     @map("bank_account")
+  accountHolder   String?     @map("account_holder")
+  status          String      @default("PENDING")
+  processedAt     DateTime?   @map("processed_at")
+  failReason      String?     @map("fail_reason")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  batch           PayoutBatch @relation(fields: [batchId], references: [id])
+  escrow          Escrow      @relation(fields: [escrowId], references: [id])
+  athlete         Athlete     @relation(fields: [athleteId], references: [id])
+
+  @@map("payout_items")
+}
