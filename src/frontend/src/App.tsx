@@ -30,7 +30,8 @@ import {
 } from './pages/admin/finance';
 import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
-import { FanHome, Votes, VoteDetail, Points, Ranking } from './pages/fan';
+import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister } from './pages/fan';
+import { AdminBrandRegistrations } from './pages/admin/AdminBrandRegistrations';
 import { Inventory } from './pages/Inventory';
 import { Contracts } from './pages/Contracts';
 import { Profile } from './pages/Profile';
@@ -120,6 +121,10 @@ function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/for-who" element={<ForWho />} />
 
+      {/* Fan Auth Routes (Public) */}
+      <Route path="/fan/login" element={<FanLogin />} />
+      <Route path="/fan/register" element={<FanRegister />} />
+
       {/* Protected Routes */}
       <Route
         path="/dashboard"
@@ -204,7 +209,7 @@ function App() {
 
       {/* Fan Routes */}
       <Route
-        path="/fan-home"
+        path="/fan"
         element={
           <ProtectedRoute>
             <FanHome />
@@ -240,6 +245,22 @@ function App() {
         element={
           <ProtectedRoute>
             <Ranking />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/favorites"
+        element={
+          <ProtectedRoute>
+            <Favorites />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brand-register"
+        element={
+          <ProtectedRoute>
+            <BrandRegister />
           </ProtectedRoute>
         }
       />
@@ -322,6 +343,14 @@ function App() {
         element={
           <ProtectedRoute>
             <AdminEntities />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/brand-registrations"
+        element={
+          <ProtectedRoute>
+            <AdminBrandRegistrations />
           </ProtectedRoute>
         }
       />

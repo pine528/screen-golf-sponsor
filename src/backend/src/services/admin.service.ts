@@ -342,6 +342,185 @@ export class AdminService {
     await settingsService.set(key, value);
     return { key, value };
   }
+
+  // Brand Registration Requests
+  async getBrandRegistrations(filters: {
+    status?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { status, q, page = 1, limit = 20 } = filters;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (q) {
+      where.OR = [
+        { brandName: { contains: q, mode: 'insensitive' } },
+        { contactEmail: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [requests, total] = await Promise.all([
+      prisma.brandRegistrationRequest.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          fan: {
+            include: {
+              user: {
+                select: { id: true, email: true },
+              },
+            },
+          },
+        },
+      }),
+      prisma.brandRegistrationRequest.count({ where }),
+    ]);
+
+    return { requests, total };
+  }
+
+  async approveBrandRegistration(requestId: string, adminUserId: string, adminNote?: string) {
+    const request = await prisma.brandRegistrationRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        fan: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundError('브랜드 등록 신청을 찾을 수 없습니다');
+    }
+
+    if (request.status !== 'SUBMITTED') {
+      throw new Error('이미 처리된 신청입니다');
+    }
+
+    // Transaction: Update request + Create Brand + Update user role
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update request status
+      const updatedRequest = await tx.brandRegistrationRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'APPROVED',
+          adminNote,
+          reviewedBy: adminUserId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      // 2. Update user role to BRAND
+      await tx.user.update({
+        where: { id: request.fan.userId },
+        data: { role: 'BRAND' },
+      });
+
+      // 3. Create Brand profile
+      const brand = await tx.brand.create({
+        data: {
+          userId: request.fan.userId,
+          name: request.brandName,
+          contactEmail: request.contactEmail,
+          contactPhone: request.contactPhone,
+          website: request.website,
+          category: '미분류',
+        },
+      });
+
+      // 4. Create notification for user
+      await tx.notification.create({
+        data: {
+          userId: request.fan.userId,
+          type: 'BRAND_REGISTRATION_APPROVED',
+          title: '브랜드 등록 승인',
+          message: `${request.brandName} 브랜드 등록이 승인되었습니다. 이제 브랜드 계정으로 로그인하실 수 있습니다.`,
+          data: { brandId: brand.id },
+        },
+      });
+
+      // 5. Create audit log
+      await tx.auditLog.create({
+        data: {
+          userId: adminUserId,
+          action: 'BRAND_REGISTRATION_APPROVE',
+          entityType: 'BrandRegistrationRequest',
+          entityId: requestId,
+          newValue: { status: 'APPROVED', adminNote, brandId: brand.id },
+        },
+      });
+
+      return { request: updatedRequest, brand };
+    });
+
+    return result;
+  }
+
+  async rejectBrandRegistration(requestId: string, adminUserId: string, adminNote?: string) {
+    const request = await prisma.brandRegistrationRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        fan: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundError('브랜드 등록 신청을 찾을 수 없습니다');
+    }
+
+    if (request.status !== 'SUBMITTED') {
+      throw new Error('이미 처리된 신청입니다');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update request status
+      const updatedRequest = await tx.brandRegistrationRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'REJECTED',
+          adminNote,
+          reviewedBy: adminUserId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      // 2. Create notification for user
+      await tx.notification.create({
+        data: {
+          userId: request.fan.userId,
+          type: 'BRAND_REGISTRATION_REJECTED',
+          title: '브랜드 등록 반려',
+          message: `${request.brandName} 브랜드 등록이 반려되었습니다.${adminNote ? ` 사유: ${adminNote}` : ''}`,
+          data: { requestId },
+        },
+      });
+
+      // 3. Create audit log
+      await tx.auditLog.create({
+        data: {
+          userId: adminUserId,
+          action: 'BRAND_REGISTRATION_REJECT',
+          entityType: 'BrandRegistrationRequest',
+          entityId: requestId,
+          newValue: { status: 'REJECTED', adminNote },
+        },
+      });
+
+      return updatedRequest;
+    });
+
+    return result;
+  }
 }
 
 export const adminService = new AdminService();

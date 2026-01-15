@@ -71,6 +71,17 @@ class ApiService {
     return response.data;
   }
 
+  // Fan Auth
+  async fanRegister(data: { email: string; password: string; nickname?: string }) {
+    const response = await this.client.post<ApiResponse<any>>('/auth/fan/register', data);
+    return response.data;
+  }
+
+  async fanLogin(email: string, password: string) {
+    const response = await this.client.post<ApiResponse<any>>('/auth/fan/login', { email, password });
+    return response.data;
+  }
+
   // Events
   async getEvents(params?: any) {
     const response = await this.client.get<ApiResponse<any[]>>('/events', { params });
@@ -843,6 +854,100 @@ class ApiService {
 
   async toggleBrandActive(brandId: string) {
     const response = await this.client.patch<ApiResponse<any>>(`/admin/entities/brands/${brandId}/toggle-active`);
+    return response.data;
+  }
+
+  // ============================================
+  // Fan Favorites API
+  // ============================================
+
+  async getFavorites() {
+    const response = await this.client.get<ApiResponse<{
+      athletes: any[];
+      brands: any[];
+    }>>('/fan/favorites');
+    return response.data;
+  }
+
+  async addFavoriteAthlete(athleteId: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan/favorites/athletes/${athleteId}`);
+    return response.data;
+  }
+
+  async removeFavoriteAthlete(athleteId: string) {
+    const response = await this.client.delete<ApiResponse<any>>(`/fan/favorites/athletes/${athleteId}`);
+    return response.data;
+  }
+
+  async addFavoriteBrand(brandId: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan/favorites/brands/${brandId}`);
+    return response.data;
+  }
+
+  async removeFavoriteBrand(brandId: string) {
+    const response = await this.client.delete<ApiResponse<any>>(`/fan/favorites/brands/${brandId}`);
+    return response.data;
+  }
+
+  // ============================================
+  // Fan Brand Registration API
+  // ============================================
+
+  async submitBrandRegistration(data: {
+    brandName: string;
+    contactEmail: string;
+    contactPhone?: string;
+    website?: string;
+    note?: string;
+  }) {
+    const response = await this.client.post<ApiResponse<any>>('/fan/brand-registration', data);
+    return response.data;
+  }
+
+  async getMyBrandRegistrations() {
+    const response = await this.client.get<ApiResponse<any[]>>('/fan/brand-registration');
+    return response.data;
+  }
+
+  // ============================================
+  // Admin Brand Registration API
+  // ============================================
+
+  async getAdminBrandRegistrations(params?: {
+    status?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const response = await this.client.get<ApiResponse<any>>('/admin/brand-registrations', { params });
+    return response.data;
+  }
+
+  async approveBrandRegistration(id: string, adminNote?: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/brand-registrations/${id}/approve`, {
+      adminNote,
+    });
+    return response.data;
+  }
+
+  async rejectBrandRegistration(id: string, adminNote?: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/brand-registrations/${id}/reject`, {
+      adminNote,
+    });
+    return response.data;
+  }
+
+  // ============================================
+  // Athletes/Brands Public List API (for favorites)
+  // ============================================
+
+  async getAthletesList(params?: { q?: string; tour?: string; limit?: number }) {
+    const response = await this.client.get<ApiResponse<any[]>>('/athletes', { params });
+    return response.data;
+  }
+
+  async getBrandsList(params?: { q?: string; category?: string; limit?: number }) {
+    const response = await this.client.get<ApiResponse<any[]>>('/brands', { params });
     return response.data;
   }
 }

@@ -119,6 +119,64 @@ export class AuthService {
     });
   }
 
+  // Fan Registration
+  async registerFan(data: { email: string; password: string; nickname?: string }): Promise<TokenResponse> {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictError('이미 등록된 이메일입니다');
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        passwordHash,
+        role: 'FAN',
+      },
+    });
+
+    // Create Fan profile
+    await prisma.fan.create({
+      data: {
+        userId: user.id,
+        nickname: data.nickname || null,
+      },
+    });
+
+    return this.generateTokens(user.id, user.email, user.role);
+  }
+
+  // Fan Login (same as regular login but only allows FAN role)
+  async loginFan(email: string, password: string): Promise<TokenResponse> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError('이메일 또는 비밀번호가 일치하지 않습니다');
+    }
+
+    // Only allow FAN role to login through fan login endpoint
+    if (user.role !== 'FAN') {
+      throw new UnauthorizedError('팬 계정이 아닙니다. 다른 로그인 페이지를 이용해주세요');
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPassword) {
+      throw new UnauthorizedError('이메일 또는 비밀번호가 일치하지 않습니다');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedError('비활성화된 계정입니다');
+    }
+
+    return this.generateTokens(user.id, user.email, user.role);
+  }
+
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = await prisma.user.findUnique({
       where: { id: userId },

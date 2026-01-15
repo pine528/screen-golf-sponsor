@@ -12,7 +12,6 @@ import {
   Trophy,
   ArrowRight,
   Loader2,
-  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../../utils';
 

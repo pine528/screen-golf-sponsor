@@ -21,6 +21,10 @@ import {
   Bell,
   CheckCheck,
   Users,
+  Trophy,
+  Star,
+  Heart,
+  Building2,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils';
@@ -99,8 +103,9 @@ export function Layout({ children }: LayoutProps) {
   }, []);
 
   const handleLogout = () => {
+    const isFan = user?.role === 'FAN';
     logout();
-    navigate('/login');
+    navigate(isFan ? '/fan/login' : '/login');
   };
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -171,6 +176,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin/auctions', label: '경매 모니터링', icon: Gavel },
     { path: '/admin/entities', label: '등록 회원', icon: Users },
     { path: '/admin/kyc', label: 'KYC 심사', icon: User },
+    { path: '/admin/brand-registrations', label: '브랜드 신청', icon: Building2 },
     { path: '/admin/reviews', label: '검수 관리', icon: FileText },
     { path: '/admin/votes', label: '투표 이벤트', icon: Vote },
     { path: '/admin/payments', label: '결제 관리', icon: CreditCard },
@@ -178,15 +184,44 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin/settings', label: '설정', icon: Settings },
   ];
 
+  const fanNavItems = [
+    { path: '/fan', label: '홈', icon: Home },
+    { path: '/votes', label: '투표', icon: Vote },
+    { path: '/points', label: '내 포인트', icon: Trophy },
+    { path: '/ranking', label: '랭킹', icon: Star },
+    { path: '/favorites', label: '즐겨찾기', icon: Heart },
+    { path: '/brand-register', label: '브랜드 등록', icon: Building2 },
+  ];
+
   const navItems =
     user?.role === 'ADMIN'
       ? adminNavItems
       : user?.role === 'ATHLETE'
       ? athleteNavItems
+      : user?.role === 'FAN'
+      ? fanNavItems
       : brandNavItems;
 
-  const roleLabel = user?.role === 'ADMIN' ? '관리자' : user?.role === 'ATHLETE' ? '선수' : '브랜드';
-  const roleColor = user?.role === 'ADMIN' ? 'text-violet-600' : user?.role === 'ATHLETE' ? 'text-emerald-600' : 'text-sky-600';
+  const getRoleLabel = () => {
+    switch (user?.role) {
+      case 'ADMIN': return '관리자';
+      case 'ATHLETE': return '선수';
+      case 'FAN': return '팬';
+      default: return '브랜드';
+    }
+  };
+
+  const getRoleColor = () => {
+    switch (user?.role) {
+      case 'ADMIN': return 'text-violet-600';
+      case 'ATHLETE': return 'text-emerald-600';
+      case 'FAN': return 'text-amber-600';
+      default: return 'text-sky-600';
+    }
+  };
+
+  const roleLabel = getRoleLabel();
+  const roleColor = getRoleColor();
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -194,7 +229,7 @@ export function Layout({ children }: LayoutProps) {
     <div className="min-h-screen bg-slate-50 transition-colors duration-300">
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4">
-        <Link to="/dashboard" className="flex items-center gap-2">
+        <Link to={user?.role === 'FAN' ? '/fan' : '/dashboard'} className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/25">
             <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
@@ -246,7 +281,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 lg:h-16 px-4 lg:px-6 border-b border-slate-200">
-            <Link to="/dashboard" className="flex items-center gap-3" onClick={closeMobileMenu}>
+            <Link to={user?.role === 'FAN' ? '/fan' : '/dashboard'} className="flex items-center gap-3" onClick={closeMobileMenu}>
               <div className="relative">
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                   <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />

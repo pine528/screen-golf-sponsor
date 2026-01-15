@@ -61,6 +61,27 @@ export class AuthController {
       next(error);
     }
   }
+
+  // Fan Auth Methods
+  async registerFan(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, password, nickname } = req.body;
+      const result = await authService.registerFan({ email, password, nickname });
+      sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async loginFan(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, password } = req.body;
+      const result = await authService.loginFan(email, password);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();

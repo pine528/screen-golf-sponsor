@@ -15,6 +15,7 @@ import campaignRoutes from './campaign.routes';
 import voteRoutes from './vote.routes';
 import paymentRoutes from './payment.routes';
 import notificationRoutes from './notification.routes';
+import fanRoutes from './fan.routes';
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.use('/campaigns', campaignRoutes);
 router.use('/votes', voteRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/fan', fanRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

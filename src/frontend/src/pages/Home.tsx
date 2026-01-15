@@ -17,6 +17,8 @@ import {
   LayoutDashboard,
   Menu,
   X,
+  Vote,
+  Star,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -523,24 +525,23 @@ export function Home() {
             </h2>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4 sm:gap-8">
+          <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
             {/* For Brands */}
             <div className="card p-5 sm:p-8">
               <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 bg-sky-100 rounded-xl flex items-center justify-center">
                   <Target className="w-6 h-6 sm:w-7 sm:h-7 text-sky-600" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900">브랜드 · 광고주</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">브랜드 · 광고주</h3>
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6 leading-relaxed">
                 스크린골프 방송 시청자에게 효과적으로 브랜드를 노출하세요
               </p>
-              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
+              <ul className="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
                 {[
                   '원하는 예산 내 자동 입찰',
                   '실시간 경쟁 모니터링',
                   '성과 리포트 제공',
-                  '다중 슬롯 동시 입찰',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2 sm:gap-3">
                     <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
@@ -548,7 +549,7 @@ export function Home() {
                   </li>
                 ))}
               </ul>
-              <Link to="/register" className="btn btn-secondary inline-flex items-center gap-2 text-sm sm:text-base">
+              <Link to="/register" className="btn btn-secondary inline-flex items-center gap-2 text-sm sm:text-base w-full justify-center">
                 브랜드로 시작
                 <ArrowRight className="w-4 h-4" />
               </Link>
@@ -560,17 +561,16 @@ export function Home() {
                 <div className="w-12 h-12 sm:w-14 sm:h-14 bg-emerald-100 rounded-xl flex items-center justify-center">
                   <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-600" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900">선수 · 매니지먼트</h3>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">선수 · 매니지먼트</h3>
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6 leading-relaxed">
                 추가 수익을 창출하고 팬들에게 더 가까이 다가가세요
               </p>
-              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
+              <ul className="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
                 {[
                   '슬롯별 가용성 직접 설정',
                   '계약 조건 검토 및 승인',
                   'D+7 영업일 내 정산',
-                  '충돌 브랜드 자동 필터',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2 sm:gap-3">
                     <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
@@ -578,8 +578,37 @@ export function Home() {
                   </li>
                 ))}
               </ul>
-              <Link to="/register" className="btn btn-primary inline-flex items-center gap-2 text-sm sm:text-base">
+              <Link to="/register" className="btn btn-primary inline-flex items-center gap-2 text-sm sm:text-base w-full justify-center">
                 선수로 시작
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* For Fans */}
+            <div className="card p-5 sm:p-8 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <Vote className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">팬 · 일반회원</h3>
+              </div>
+              <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6 leading-relaxed">
+                투표에 참여하고 포인트를 획득하세요
+              </p>
+              <ul className="space-y-2 sm:space-y-3 mb-6 sm:mb-8">
+                {[
+                  '경기 결과 예측 투표',
+                  '퀴즈 참여로 포인트 적립',
+                  '선수 랭킹 확인',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 sm:gap-3">
+                    <Star className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <span className="text-sm sm:text-base text-slate-600">{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link to="/fan/register" className="btn bg-amber-500 text-white hover:bg-amber-600 inline-flex items-center gap-2 text-sm sm:text-base w-full justify-center">
+                팬으로 참여
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

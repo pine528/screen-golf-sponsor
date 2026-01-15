@@ -62,6 +62,7 @@ interface VoteStats {
 
 interface MyVote {
   id: string;
+  voteEventId: string;
   selectedOptionId: string;
   pointsEarned: number;
   createdAt: string;
@@ -82,7 +83,7 @@ export default function VoteDetail() {
     enabled: !!id,
   });
 
-  const { data: stats, isLoading: loadingStats } = useQuery({
+  const { data: stats } = useQuery({
     queryKey: ['voteEventStats', id],
     queryFn: async () => {
       const res = await api.getVoteEventStats(id!);

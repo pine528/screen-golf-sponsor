@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   AlertCircle,
   BarChart3,
-  Settings,
   ShoppingCart,
   ToggleLeft,
   ToggleRight,

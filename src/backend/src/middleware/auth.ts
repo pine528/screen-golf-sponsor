@@ -33,6 +33,7 @@ export const authenticate = async (
         brand: true,
         athlete: true,
         admin: true,
+        fan: true,
       },
     });
 
@@ -47,6 +48,7 @@ export const authenticate = async (
       brandId: user.brand?.id,
       athleteId: user.athlete?.id,
       adminId: user.admin?.id,
+      fanId: user.fan?.id,
     };
 
     next();

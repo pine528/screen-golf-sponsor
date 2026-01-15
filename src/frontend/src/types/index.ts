@@ -1,5 +1,5 @@
 // User Types
-export type UserRole = 'BRAND' | 'ATHLETE' | 'ADMIN';
+export type UserRole = 'BRAND' | 'ATHLETE' | 'ADMIN' | 'FAN';
 export type KycStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface User {

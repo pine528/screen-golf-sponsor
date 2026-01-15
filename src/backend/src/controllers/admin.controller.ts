@@ -208,6 +208,44 @@ export class AdminController {
       next(error);
     }
   }
+
+  // Brand Registration Requests
+  async getBrandRegistrations(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { page = 1, limit = 20, status, q } = req.query;
+      const { requests, total } = await adminService.getBrandRegistrations({
+        status: status as string,
+        q: q as string,
+        page: Number(page),
+        limit: Number(limit),
+      });
+      sendPaginated(res, requests, Number(page), Number(limit), total);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async approveBrandRegistration(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { adminNote } = req.body;
+      const result = await adminService.approveBrandRegistration(id, req.user!.id, adminNote);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async rejectBrandRegistration(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { adminNote } = req.body;
+      const result = await adminService.rejectBrandRegistration(id, req.user!.id, adminNote);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const adminController = new AdminController();

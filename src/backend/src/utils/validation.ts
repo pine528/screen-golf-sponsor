@@ -16,6 +16,18 @@ export const registerSchema = z.object({
   bizNo: z.string().optional(),
 });
 
+// Fan Auth Schemas
+export const fanRegisterSchema = z.object({
+  email: z.string().email('이메일 형식이 올바르지 않습니다'),
+  password: z.string().min(8, '비밀번호는 최소 8자 이상이어야 합니다'),
+  nickname: z.string().min(2, '닉네임은 최소 2자 이상이어야 합니다').max(20, '닉네임은 최대 20자까지 가능합니다').optional(),
+});
+
+export const fanLoginSchema = z.object({
+  email: z.string().email('이메일 형식이 올바르지 않습니다'),
+  password: z.string().min(1, '비밀번호를 입력해주세요'),
+});
+
 // Brand Schemas
 export const createBrandSchema = z.object({
   name: z.string().min(1, 'Name is required'),

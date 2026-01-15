@@ -10,6 +10,7 @@ export interface AuthRequest extends Request {
     brandId?: string;
     athleteId?: string;
     adminId?: string;
+    fanId?: string;
   };
 }
 

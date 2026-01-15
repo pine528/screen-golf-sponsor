@@ -16,6 +16,7 @@ enum UserRole {
   BRAND
   ATHLETE
   ADMIN
+  FAN
 }
 
 enum KycStatus {
@@ -38,6 +39,7 @@ model User {
   brand         Brand?
   athlete       Athlete?
   admin         Admin?
+  fan           Fan?
   auditLogs     AuditLog[]
   votes         Vote[]
   pointLedgers  PointLedger[]
@@ -84,6 +86,7 @@ model Brand {
   sponsoredVoteEvents VoteEvent[]
   payments        Payment[]
   wallets         Wallet[]
+  favoritedBy     FavoriteBrand[]
 
   @@map("brands")
 }
@@ -117,6 +120,7 @@ model Athlete {
   votePoints          AthleteVotePoint[]
   wallets             Wallet[]
   payoutItems         PayoutItem[]
+  favoritedBy         FavoriteAthlete[]
 
   @@map("athletes")
 }
@@ -137,6 +141,86 @@ model Admin {
   user        User     @relation(fields: [userId], references: [id])
 
   @@map("admins")
+}
+
+// ============================================
+// Fan (General User)
+// ============================================
+
+model Fan {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  nickname    String?
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user                    User                      @relation(fields: [userId], references: [id])
+  favoriteAthletes        FavoriteAthlete[]
+  favoriteBrands          FavoriteBrand[]
+  brandRegistrationRequests BrandRegistrationRequest[]
+
+  @@map("fans")
+}
+
+// ============================================
+// Fan Favorites
+// ============================================
+
+model FavoriteAthlete {
+  id          String   @id @default(uuid())
+  fanId       String   @map("fan_id")
+  athleteId   String   @map("athlete_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  fan         Fan      @relation(fields: [fanId], references: [id], onDelete: Cascade)
+  athlete     Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([fanId, athleteId])
+  @@map("favorite_athletes")
+}
+
+model FavoriteBrand {
+  id          String   @id @default(uuid())
+  fanId       String   @map("fan_id")
+  brandId     String   @map("brand_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  fan         Fan      @relation(fields: [fanId], references: [id], onDelete: Cascade)
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([fanId, brandId])
+  @@map("favorite_brands")
+}
+
+// ============================================
+// Brand Registration Request (Fan -> Brand)
+// ============================================
+
+enum BrandRegistrationStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model BrandRegistrationRequest {
+  id              String                    @id @default(uuid())
+  fanId           String                    @map("fan_id")
+  brandName       String                    @map("brand_name")
+  contactEmail    String                    @map("contact_email")
+  contactPhone    String?                   @map("contact_phone")
+  website         String?
+  note            String?
+  status          BrandRegistrationStatus   @default(SUBMITTED)
+  adminNote       String?                   @map("admin_note")
+  reviewedBy      String?                   @map("reviewed_by")
+  reviewedAt      DateTime?                 @map("reviewed_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+
+  fan             Fan                       @relation(fields: [fanId], references: [id])
+
+  @@map("brand_registration_requests")
 }
 
 // ============================================
@@ -587,6 +671,9 @@ enum NotificationType {
   KYC_APPROVED
   KYC_REJECTED
   ADMIN_ALERT
+  BRAND_REGISTRATION_SUBMITTED
+  BRAND_REGISTRATION_APPROVED
+  BRAND_REGISTRATION_REJECTED
 }
 
 model Notification {

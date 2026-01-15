@@ -163,4 +163,26 @@ router.get('/settings', adminController.getSettings);
  */
 router.patch('/settings/:key', adminController.updateSetting);
 
+// ============================================
+// Brand Registration Requests
+// ============================================
+
+/**
+ * @route GET /admin/brand-registrations
+ * @desc Get brand registration requests with filters
+ */
+router.get('/brand-registrations', adminController.getBrandRegistrations);
+
+/**
+ * @route POST /admin/brand-registrations/:id/approve
+ * @desc Approve brand registration request
+ */
+router.post('/brand-registrations/:id/approve', adminController.approveBrandRegistration);
+
+/**
+ * @route POST /admin/brand-registrations/:id/reject
+ * @desc Reject brand registration request
+ */
+router.post('/brand-registrations/:id/reject', adminController.rejectBrandRegistration);
+
 export default router;
