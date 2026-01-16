@@ -213,8 +213,9 @@ export class RedemptionService {
           include: { item: true },
         });
 
-        // 5-3. 포인트 차감
-        const pointResult = await pointService.adjustPoints(
+        // 5-3. 포인트 차감 (같은 트랜잭션 내에서 실행)
+        await pointService.adjustPointsWithTx(
+          tx,
           userId,
           totalPoints.negated(),
           'REDEEM_GOODS',
@@ -222,10 +223,6 @@ export class RedemptionService {
           newOrder.id,
           `포인트 샵 교환: ${item.title} x${quantity} (${totalPoints}P)`
         );
-
-        if (!pointResult.success && !pointResult.alreadyProcessed) {
-          throw new BadRequestError('포인트가 부족합니다');
-        }
 
         return newOrder;
       });
@@ -333,13 +330,14 @@ export class RedemptionService {
         },
       });
 
-      // 3. 포인트 환불
-      await pointService.adjustPoints(
+      // 3. 포인트 환불 (같은 트랜잭션 내에서 실행)
+      await pointService.adjustPointsWithTx(
+        tx,
         userId,
         order.totalPoints,
         'REDEEM_CANCEL_REFUND',
         'REDEMPTION_ORDER',
-        orderId,
+        `${orderId}-cancel`, // 취소 환불은 별도 refId 사용
         `포인트 샵 취소 환불: ${order.item.title} x${order.quantity} (+${order.totalPoints}P)`
       );
     });
