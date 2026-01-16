@@ -8,9 +8,7 @@ import {
   Vote,
   Clock,
   Users,
-  CheckCircle2,
   Send,
-  AlertCircle,
   Loader2,
   ChevronRight,
 } from 'lucide-react';

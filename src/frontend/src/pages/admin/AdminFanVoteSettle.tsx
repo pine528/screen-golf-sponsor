@@ -5,7 +5,6 @@ import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 import {
   ArrowLeft,
-  Vote,
   Users,
   Coins,
   Trophy,

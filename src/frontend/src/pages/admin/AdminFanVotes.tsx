@@ -11,7 +11,6 @@ import {
   XCircle,
   Loader2,
   ChevronRight,
-  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '../../utils';
 
