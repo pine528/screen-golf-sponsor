@@ -21,7 +21,8 @@ export interface RegisterData {
   email: string;
   password: string;
   role: UserRole;
-  name: string;
+  name?: string;
+  nickname?: string;
   tour?: string;
   category?: string;
 }

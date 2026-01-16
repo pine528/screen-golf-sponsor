@@ -534,17 +534,18 @@ class ApiService {
     return response.data;
   }
 
-  async getMyPoints() {
+  // Legacy vote points (deprecated - use new point system)
+  async getMyVotePoints() {
     const response = await this.client.get<ApiResponse<any>>('/votes/my/points');
     return response.data;
   }
 
-  async getMyPointHistory(params?: any) {
+  async getMyVotePointHistory(params?: any) {
     const response = await this.client.get<ApiResponse<any[]>>('/votes/my/points/history', { params });
     return response.data;
   }
 
-  async redeemPoints(amount: number, description?: string) {
+  async redeemVotePoints(amount: number, description?: string) {
     const response = await this.client.post<ApiResponse<any>>('/votes/my/points/redeem', {
       amount,
       description,
@@ -948,6 +949,82 @@ class ApiService {
 
   async getBrandsList(params?: { q?: string; category?: string; limit?: number }) {
     const response = await this.client.get<ApiResponse<any[]>>('/brands', { params });
+    return response.data;
+  }
+
+  // ============================================
+  // Points API
+  // ============================================
+
+  // Fan: 내 포인트 잔액 조회
+  async getMyPointBalance() {
+    const response = await this.client.get<ApiResponse<any>>('/points/me');
+    return response.data;
+  }
+
+  // Fan: 내 포인트 내역 조회
+  async getMyPointHistory(params?: { page?: number; pageSize?: number; reason?: string }) {
+    const response = await this.client.get<ApiResponse<any>>('/points/me/history', { params });
+    return response.data;
+  }
+
+  // Admin: 포인트 지급
+  async adminGrantPoints(data: { userId: string; amount: number; reasonText?: string }) {
+    const response = await this.client.post<ApiResponse<any>>('/points/admin/grant', data);
+    return response.data;
+  }
+
+  // Admin: 사용자 포인트 잔액 조회
+  async adminGetUserPointBalance(userId: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/points/admin/user/${userId}/balance`);
+    return response.data;
+  }
+
+  // Admin: 사용자 포인트 내역 조회
+  async adminGetUserPointHistory(userId: string, params?: { page?: number; pageSize?: number; reason?: string }) {
+    const response = await this.client.get<ApiResponse<any>>(`/points/admin/user/${userId}/history`, { params });
+    return response.data;
+  }
+
+  // ============================================
+  // Fan Votes API
+  // ============================================
+
+  // Public: 활성화된 팬 투표 목록
+  async getActiveFanVotes() {
+    const response = await this.client.get<ApiResponse<any[]>>('/fan-votes/active');
+    return response.data;
+  }
+
+  // Public: 종료된 팬 투표 목록
+  async getEndedFanVotes(limit?: number) {
+    const response = await this.client.get<ApiResponse<any[]>>('/fan-votes/ended', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  // Public: 팬 투표 상세
+  async getFanVoteEvent(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/fan-votes/${id}`);
+    return response.data;
+  }
+
+  // Fan: 팬 투표 참여
+  async enterFanVote(id: string, optionIndex: number, idempotencyKey?: string) {
+    const response = await this.client.post<ApiResponse<any>>(
+      `/fan-votes/${id}/enter`,
+      { optionIndex },
+      {
+        headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {},
+      }
+    );
+    return response.data;
+  }
+
+  // Fan: 내 참여 내역
+  async getMyFanVoteEntries(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/fan-votes/my/entries', { params });
     return response.data;
   }
 }

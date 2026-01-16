@@ -50,7 +50,7 @@ export default function FanHome() {
   const { data: pointsData, isLoading: loadingPoints } = useQuery({
     queryKey: ['myPoints'],
     queryFn: async () => {
-      const res = await api.getMyPoints();
+      const res = await api.getMyVotePoints();
       return res.data;
     },
   });

@@ -43,6 +43,8 @@ model User {
   auditLogs     AuditLog[]
   votes         Vote[]
   pointLedgers  PointLedger[]
+  pointWallet   PointWallet?
+  pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
 
   @@map("users")
 }
@@ -764,6 +766,50 @@ model AthleteVotePoint {
   @@map("athlete_vote_points")
 }
 
+// ============================================
+// Point System (원장 기반 포인트 시스템)
+// ============================================
+
+enum PointTxReason {
+  ADMIN_GRANT
+  VOTE_ENTRY_FEE
+  VOTE_WIN_PAYOUT
+  VOTE_CREATE_FEE
+  REDEEM_GOODS
+}
+
+model PointWallet {
+  id          String      @id @default(uuid())
+  userId      String      @unique @map("user_id")
+  balance     Decimal     @default(0) @db.Decimal(18, 0)
+  version     Int         @default(0)  // 낙관적 락
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("point_wallets")
+}
+
+model PointLedgerTx {
+  id              String          @id @default(uuid())
+  userId          String          @map("user_id")
+  delta           Decimal         @db.Decimal(18, 0)  // +: 적립, -: 차감
+  balanceAfter    Decimal         @db.Decimal(18, 0)
+  reason          PointTxReason
+  refType         String          @map("ref_type")
+  refId           String          @map("ref_id")
+  description     String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  user            User            @relation(name: "PointLedgerTxs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reason, refType, refId], name: "unique_point_tx")
+  @@index([userId, createdAt])
+  @@map("point_ledger_txs")
+}
+
+// Legacy model - to be migrated
 model PointLedger {
   id              String      @id @default(uuid())
   userId          String      @map("user_id")
@@ -778,6 +824,53 @@ model PointLedger {
   user            User        @relation(fields: [userId], references: [id])
 
   @@map("point_ledgers")
+}
+
+// ============================================
+// Fan Vote System (팬 투표 시스템)
+// ============================================
+
+enum FanVoteStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  SETTLED
+}
+
+model FanVoteEvent {
+  id                  String          @id @default(uuid())
+  creatorUserId       String          @map("creator_user_id")
+  title               String
+  question            String
+  options             Json            // string[]
+  entryFeePoints      Decimal         @default(0) @map("entry_fee_points") @db.Decimal(18, 0)
+  winnersCount        Int             @default(1) @map("winners_count")
+  status              FanVoteStatus   @default(DRAFT)
+  startsAt            DateTime        @map("starts_at")
+  endsAt              DateTime        @map("ends_at")
+  resultOptionIndex   Int?            @map("result_option_index")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  entries             FanVoteEntry[]
+
+  @@index([status, startsAt, endsAt])
+  @@map("fan_vote_events")
+}
+
+model FanVoteEntry {
+  id              String          @id @default(uuid())
+  eventId         String          @map("event_id")
+  userId          String          @map("user_id")
+  optionIndex     Int             @map("option_index")
+  paidPoints      Decimal         @map("paid_points") @db.Decimal(18, 0)
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId], name: "unique_fan_vote_entry")
+  @@index([userId, createdAt])
+  @@map("fan_vote_entries")
 }
 
 // ============================================

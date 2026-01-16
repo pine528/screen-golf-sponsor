@@ -41,7 +41,19 @@ export const useAuth = create<AuthState>()(
       },
 
       register: async (data: RegisterData) => {
-        const response = await api.register(data);
+        let response;
+
+        // FAN 역할이면 fanRegister 호출, 아니면 기존 register 호출
+        if (data.role === 'FAN') {
+          response = await api.fanRegister({
+            email: data.email,
+            password: data.password,
+            nickname: data.nickname,
+          });
+        } else {
+          response = await api.register(data);
+        }
+
         if (response.success && response.data) {
           const { accessToken, refreshToken, user } = response.data;
           localStorage.setItem('accessToken', accessToken);

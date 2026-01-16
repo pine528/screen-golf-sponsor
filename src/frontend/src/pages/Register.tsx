@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Hexagon, ArrowRight, AlertCircle, Target, Users } from 'lucide-react';
+import { Hexagon, ArrowRight, AlertCircle, Target, Users, Heart } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 const registerSchema = z
@@ -11,15 +11,28 @@ const registerSchema = z
     email: z.string().email('유효한 이메일을 입력하세요'),
     password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다'),
     confirmPassword: z.string(),
-    role: z.enum(['BRAND', 'ATHLETE']),
-    name: z.string().min(1, '이름을 입력하세요'),
+    role: z.enum(['FAN', 'BRAND', 'ATHLETE']),
+    name: z.string().optional(),
+    nickname: z.string().optional(),
     tour: z.string().optional(),
     category: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: '비밀번호가 일치하지 않습니다',
     path: ['confirmPassword'],
-  });
+  })
+  .refine(
+    (data) => {
+      // FAN: nickname optional, name not required
+      if (data.role === 'FAN') return true;
+      // BRAND/ATHLETE: name required
+      return data.name && data.name.length > 0;
+    },
+    {
+      message: '이름을 입력하세요',
+      path: ['name'],
+    }
+  );
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
@@ -36,7 +49,7 @@ export function Register() {
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      role: 'BRAND',
+      role: 'FAN',
     },
   });
 
@@ -50,6 +63,7 @@ export function Register() {
         password: data.password,
         role: data.role,
         name: data.name,
+        nickname: data.nickname,
         tour: data.tour,
         category: data.category,
       });
@@ -94,7 +108,26 @@ export function Register() {
             {/* Role Selection */}
             <div>
               <label className="label">가입 유형</label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <label
+                  className={`flex items-center justify-center p-4 rounded-xl cursor-pointer transition-all ${
+                    role === 'FAN'
+                      ? 'bg-gradient-to-br from-pink-500/10 to-rose-500/10 border-2 border-pink-500/50'
+                      : 'bg-slate-100 border-2 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    value="FAN"
+                    className="sr-only"
+                    {...register('role')}
+                  />
+                  <div className="text-center">
+                    <Heart className={`w-6 h-6 mx-auto mb-2 ${role === 'FAN' ? 'text-pink-500' : 'text-slate-400'}`} />
+                    <div className={`font-semibold text-sm ${role === 'FAN' ? 'text-slate-900' : 'text-slate-500'}`}>일반(팬)</div>
+                    <div className="text-xs text-slate-500 mt-1">팬으로 참여</div>
+                  </div>
+                </label>
                 <label
                   className={`flex items-center justify-center p-4 rounded-xl cursor-pointer transition-all ${
                     role === 'BRAND'
@@ -110,7 +143,7 @@ export function Register() {
                   />
                   <div className="text-center">
                     <Target className={`w-6 h-6 mx-auto mb-2 ${role === 'BRAND' ? 'text-sky-500' : 'text-slate-400'}`} />
-                    <div className={`font-semibold ${role === 'BRAND' ? 'text-slate-900' : 'text-slate-500'}`}>브랜드</div>
+                    <div className={`font-semibold text-sm ${role === 'BRAND' ? 'text-slate-900' : 'text-slate-500'}`}>브랜드</div>
                     <div className="text-xs text-slate-500 mt-1">광고주로 참여</div>
                   </div>
                 </label>
@@ -129,28 +162,48 @@ export function Register() {
                   />
                   <div className="text-center">
                     <Users className={`w-6 h-6 mx-auto mb-2 ${role === 'ATHLETE' ? 'text-emerald-500' : 'text-slate-400'}`} />
-                    <div className={`font-semibold ${role === 'ATHLETE' ? 'text-slate-900' : 'text-slate-500'}`}>선수</div>
+                    <div className={`font-semibold text-sm ${role === 'ATHLETE' ? 'text-slate-900' : 'text-slate-500'}`}>선수</div>
                     <div className="text-xs text-slate-500 mt-1">프로선수로 참여</div>
                   </div>
                 </label>
               </div>
             </div>
 
-            <div>
-              <label htmlFor="name" className="label">
-                {role === 'BRAND' ? '회사/브랜드명' : '선수명'}
-              </label>
-              <input
-                id="name"
-                type="text"
-                className="input"
-                placeholder={role === 'BRAND' ? '회사명을 입력하세요' : '선수명을 입력하세요'}
-                {...register('name')}
-              />
-              {errors.name && (
-                <p className="mt-2 text-sm text-red-500">{errors.name.message}</p>
-              )}
-            </div>
+            {role === 'FAN' && (
+              <div>
+                <label htmlFor="nickname" className="label">
+                  닉네임 (선택)
+                </label>
+                <input
+                  id="nickname"
+                  type="text"
+                  className="input"
+                  placeholder="닉네임을 입력하세요"
+                  {...register('nickname')}
+                />
+                {errors.nickname && (
+                  <p className="mt-2 text-sm text-red-500">{errors.nickname.message}</p>
+                )}
+              </div>
+            )}
+
+            {role !== 'FAN' && (
+              <div>
+                <label htmlFor="name" className="label">
+                  {role === 'BRAND' ? '회사/브랜드명' : '선수명'}
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  className="input"
+                  placeholder={role === 'BRAND' ? '회사명을 입력하세요' : '선수명을 입력하세요'}
+                  {...register('name')}
+                />
+                {errors.name && (
+                  <p className="mt-2 text-sm text-red-500">{errors.name.message}</p>
+                )}
+              </div>
+            )}
 
             {role === 'ATHLETE' && (
               <div>

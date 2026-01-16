@@ -24,38 +24,43 @@ router.get('/ranking/athletes', voteController.getAthleteRanking.bind(voteContro
 // Authenticated Routes
 // ============================================
 
-// 투표하기
+// 투표하기 (FAN 권한만 허용)
 router.post(
   '/events/:voteEventId/vote',
   authenticate,
+  requireRole('FAN'),
   voteController.submitVote.bind(voteController)
 );
 
-// 내 투표 내역
+// 내 투표 내역 (FAN 권한만 허용)
 router.get(
   '/my/votes',
   authenticate,
+  requireRole('FAN'),
   voteController.getMyVotes.bind(voteController)
 );
 
-// 내 포인트 조회
+// 내 포인트 조회 (FAN 권한만 허용)
 router.get(
   '/my/points',
   authenticate,
+  requireRole('FAN'),
   voteController.getMyPoints.bind(voteController)
 );
 
-// 내 포인트 내역
+// 내 포인트 내역 (FAN 권한만 허용)
 router.get(
   '/my/points/history',
   authenticate,
+  requireRole('FAN'),
   voteController.getMyPointHistory.bind(voteController)
 );
 
-// 포인트 사용
+// 포인트 사용 (FAN 권한만 허용)
 router.post(
   '/my/points/redeem',
   authenticate,
+  requireRole('FAN'),
   voteController.redeemPoints.bind(voteController)
 );
 
