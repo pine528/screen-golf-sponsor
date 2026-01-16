@@ -528,7 +528,20 @@ export class FanVoteService {
       where: { id: eventId },
       include: {
         settlement: true,
-        winners: true,
+        winners: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fan: {
+                  select: {
+                    nickname: true,  // Fan 닉네임만 선택
+                  },
+                },
+              },
+            },
+          },
+        },
         _count: {
           select: { entries: true },
         },
@@ -541,8 +554,10 @@ export class FanVoteService {
 
     // 정산 전이면 대기 상태 반환
     if (event.status === 'CLOSED' && !event.settlement) {
+      // event에서 winners 제거 후 반환
+      const { winners, ...eventWithoutWinners } = event;
       return {
-        event,
+        event: eventWithoutWinners,
         status: 'PENDING_SETTLEMENT',
         message: '정산 대기 중입니다',
       };
@@ -572,8 +587,17 @@ export class FanVoteService {
         }
       }
 
+      // 당첨자 목록에서 개인정보 제거 (닉네임만 노출)
+      const winnersPublic = event.winners.map((w) => ({
+        nickname: w.user?.fan?.nickname || '익명',
+        payoutPoints: w.payoutPoints,
+      }));
+
+      // event에서 winners 제거
+      const { winners, ...eventWithoutWinners } = event;
+
       return {
-        event,
+        event: eventWithoutWinners,
         status: 'SETTLED',
         settlement: {
           potTotal: event.settlement.potTotal,
@@ -582,13 +606,15 @@ export class FanVoteService {
           remainder: event.settlement.remainder,
         },
         resultOptionIndex: event.resultOptionIndex,
+        winners: winnersPublic,  // 닉네임만 포함된 당첨자 목록
         myWin,
       };
     }
 
-    // 아직 종료되지 않음
+    // 아직 종료되지 않음 (winners 제거)
+    const { winners, ...eventWithoutWinners } = event;
     return {
-      event,
+      event: eventWithoutWinners,
       status: event.status,
     };
   }

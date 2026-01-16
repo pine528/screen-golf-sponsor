@@ -45,6 +45,7 @@ model User {
   pointLedgers  PointLedger[]
   pointWallet   PointWallet?
   pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
+  fanVoteWins    FanVoteWinner[]
 
   @@map("users")
 }
@@ -913,6 +914,7 @@ model FanVoteWinner {
   createdAt       DateTime        @default(now()) @map("created_at")
 
   event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id])
 
   @@unique([eventId, userId], name: "unique_fan_vote_winner")
   @@map("fan_vote_winners")
