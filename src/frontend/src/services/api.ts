@@ -1027,6 +1027,72 @@ class ApiService {
     const response = await this.client.get<ApiResponse<any>>('/fan-votes/my/entries', { params });
     return response.data;
   }
+
+  // ============================================
+  // Phase F4: Fan-created Votes
+  // ============================================
+
+  // Fan: 투표 생성
+  async createFanVote(data: {
+    title: string;
+    question: string;
+    options: string[];
+    entryFeePoints: number;
+    winnersCount: number;
+    startsAt: string;
+    endsAt: string;
+  }) {
+    const response = await this.client.post<ApiResponse<any>>('/fan-votes/create', data);
+    return response.data;
+  }
+
+  // Fan: 내가 만든 투표 목록
+  async getMyCreatedFanVotes(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/fan-votes/my/events', { params });
+    return response.data;
+  }
+
+  // Fan: 투표 제출 (DRAFT -> SUBMITTED)
+  async submitFanVote(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan-votes/${id}/submit`);
+    return response.data;
+  }
+
+  // Public: 투표 결과 조회
+  async getFanVoteResult(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/fan-votes/${id}/result`);
+    return response.data;
+  }
+
+  // ============================================
+  // Admin: Fan Vote Management
+  // ============================================
+
+  // Admin: 승인 대기 투표 목록
+  async getPendingFanVotes(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/fan-votes/admin/pending', { params });
+    return response.data;
+  }
+
+  // Admin: 승인 및 활성화
+  async approveFanVote(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan-votes/admin/${id}/approve-and-activate`);
+    return response.data;
+  }
+
+  // Admin: 투표 종료
+  async closeFanVote(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan-votes/admin/${id}/close`);
+    return response.data;
+  }
+
+  // Admin: 정산 실행
+  async settleFanVote(id: string, resultOptionIndex: number) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan-votes/admin/${id}/settle`, {
+      resultOptionIndex,
+    });
+    return response.data;
+  }
 }
 
 export const api = new ApiService();

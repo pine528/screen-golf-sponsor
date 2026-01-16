@@ -676,6 +676,10 @@ enum NotificationType {
   BRAND_REGISTRATION_SUBMITTED
   BRAND_REGISTRATION_APPROVED
   BRAND_REGISTRATION_REJECTED
+  FAN_VOTE_SUBMITTED
+  FAN_VOTE_APPROVED
+  FAN_VOTE_SETTLED
+  FAN_VOTE_WIN
 }
 
 model Notification {
@@ -775,6 +779,7 @@ enum PointTxReason {
   VOTE_ENTRY_FEE
   VOTE_WIN_PAYOUT
   VOTE_CREATE_FEE
+  VOTE_POT_REMAINDER
   REDEEM_GOODS
 }
 
@@ -832,6 +837,7 @@ model PointLedger {
 
 enum FanVoteStatus {
   DRAFT
+  SUBMITTED
   ACTIVE
   CLOSED
   SETTLED
@@ -844,17 +850,24 @@ model FanVoteEvent {
   question            String
   options             Json            // string[]
   entryFeePoints      Decimal         @default(0) @map("entry_fee_points") @db.Decimal(18, 0)
+  createFeePoints     Decimal         @default(0) @map("create_fee_points") @db.Decimal(18, 0)
   winnersCount        Int             @default(1) @map("winners_count")
   status              FanVoteStatus   @default(DRAFT)
   startsAt            DateTime        @map("starts_at")
   endsAt              DateTime        @map("ends_at")
   resultOptionIndex   Int?            @map("result_option_index")
+  submittedAt         DateTime?       @map("submitted_at")
+  approvedAt          DateTime?       @map("approved_at")
+  settledAt           DateTime?       @map("settled_at")
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
   entries             FanVoteEntry[]
+  settlement          FanVoteSettlement?
+  winners             FanVoteWinner[]
 
   @@index([status, startsAt, endsAt])
+  @@index([creatorUserId])
   @@map("fan_vote_events")
 }
 
@@ -871,6 +884,38 @@ model FanVoteEntry {
   @@unique([eventId, userId], name: "unique_fan_vote_entry")
   @@index([userId, createdAt])
   @@map("fan_vote_entries")
+}
+
+// ============================================
+// Fan Vote Settlement (정산)
+// ============================================
+
+model FanVoteSettlement {
+  id              String          @id @default(uuid())
+  eventId         String          @unique @map("event_id")
+  potTotal        Decimal         @map("pot_total") @db.Decimal(18, 0)
+  winnersCount    Int             @map("winners_count")
+  payoutEach      Decimal         @map("payout_each") @db.Decimal(18, 0)
+  remainder       Decimal         @db.Decimal(18, 0)
+  decidedByAdminId String         @map("decided_by_admin_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("fan_vote_settlements")
+}
+
+model FanVoteWinner {
+  id              String          @id @default(uuid())
+  eventId         String          @map("event_id")
+  userId          String          @map("user_id")
+  payoutPoints    Decimal         @map("payout_points") @db.Decimal(18, 0)
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId], name: "unique_fan_vote_winner")
+  @@map("fan_vote_winners")
 }
 
 // ============================================

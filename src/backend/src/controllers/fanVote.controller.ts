@@ -130,6 +130,141 @@ export class FanVoteController {
       next(error);
     }
   }
+
+  // ============================================
+  // Phase F4: Fan-created Votes
+  // ============================================
+
+  /**
+   * POST /api/fan-votes/create
+   * 팬이 투표 생성
+   */
+  async createByFan(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.id;
+      const { title, question, options, entryFeePoints, winnersCount, startsAt, endsAt } = req.body;
+
+      const event = await fanVoteService.createByFan(userId, {
+        title,
+        question,
+        options,
+        entryFeePoints,
+        winnersCount,
+        startsAt: new Date(startsAt),
+        endsAt: new Date(endsAt),
+      });
+
+      sendSuccess(res, event, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/fan-votes/:id/submit
+   * 팬이 투표 제출 (DRAFT -> SUBMITTED)
+   */
+  async submitFanVote(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      const event = await fanVoteService.submitFanVote(userId, id);
+      sendSuccess(res, event);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/fan-votes/my/events
+   * 내가 만든 투표 목록
+   */
+  async getMyCreatedEvents(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.id;
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 20;
+
+      const result = await fanVoteService.getMyCreatedEvents(userId, { page, pageSize });
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/fan-votes/:id/result
+   * 투표 결과 조회
+   */
+  async getEventResult(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      const result = await fanVoteService.getEventResult(id, userId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // Admin: Phase F4
+  // ============================================
+
+  /**
+   * GET /api/fan-votes/admin/pending
+   * 승인 대기 투표 목록
+   */
+  async listPendingApproval(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 20;
+
+      const result = await fanVoteService.listPendingApproval({ page, pageSize });
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/fan-votes/admin/:id/approve-and-activate
+   * 관리자: 승인 및 활성화
+   */
+  async approveAndActivate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const adminId = req.user!.id;
+
+      const event = await fanVoteService.adminApproveAndActivate(id, adminId);
+      sendSuccess(res, event);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/fan-votes/admin/:id/settle
+   * 관리자: 정산 실행
+   */
+  async settleEvent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { resultOptionIndex } = req.body;
+      const adminId = req.user!.id;
+
+      const result = await fanVoteService.adminSettle(id, adminId, resultOptionIndex);
+
+      sendSuccess(res, {
+        ...result,
+        message: result.alreadyProcessed ? '이미 정산된 투표입니다' : '정산이 완료되었습니다',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const fanVoteController = new FanVoteController();

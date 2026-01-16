@@ -31,7 +31,12 @@ import {
 import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
 import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister } from './pages/fan';
+import FanVoteCreate from './pages/fan/FanVoteCreate';
+import MyFanVotes from './pages/fan/MyFanVotes';
+import FanVoteResult from './pages/fan/FanVoteResult';
 import { AdminBrandRegistrations } from './pages/admin/AdminBrandRegistrations';
+import AdminFanVotes from './pages/admin/AdminFanVotes';
+import AdminFanVoteSettle from './pages/admin/AdminFanVoteSettle';
 import { Inventory } from './pages/Inventory';
 import { Contracts } from './pages/Contracts';
 import { Profile } from './pages/Profile';
@@ -265,6 +270,32 @@ function App() {
         }
       />
 
+      {/* Fan Votes Routes */}
+      <Route
+        path="/fan-votes/create"
+        element={
+          <ProtectedRoute>
+            <FanVoteCreate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fan-votes/my"
+        element={
+          <ProtectedRoute>
+            <MyFanVotes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fan-votes/:id/result"
+        element={
+          <ProtectedRoute>
+            <FanVoteResult />
+          </ProtectedRoute>
+        }
+      />
+
       {/* Admin Routes */}
       <Route
         path="/admin"
@@ -351,6 +382,22 @@ function App() {
         element={
           <ProtectedRoute>
             <AdminBrandRegistrations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/fan-votes"
+        element={
+          <ProtectedRoute>
+            <AdminFanVotes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/fan-votes/:id"
+        element={
+          <ProtectedRoute>
+            <AdminFanVoteSettle />
           </ProtectedRoute>
         }
       />

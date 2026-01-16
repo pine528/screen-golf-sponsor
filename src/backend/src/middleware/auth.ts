@@ -80,6 +80,53 @@ export const authorize = (...roles: UserRole[]) => {
 // Alias for single role (string) authorization
 export const requireRole = (role: UserRole) => authorize(role);
 
+/**
+ * 선택적 인증: 토큰이 있으면 인증, 없어도 통과
+ */
+export const optionalAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // 토큰 없으면 그냥 통과
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: {
+        brand: true,
+        athlete: true,
+        admin: true,
+        fan: true,
+      },
+    });
+
+    if (user && user.isActive) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        brandId: user.brand?.id,
+        athleteId: user.athlete?.id,
+        adminId: user.admin?.id,
+        fanId: user.fan?.id,
+      };
+    }
+
+    next();
+  } catch (error) {
+    // 토큰 검증 실패해도 그냥 통과 (로그인 안 한 것으로 처리)
+    next();
+  }
+};
+
 export const requireKycApproved = async (
   req: AuthRequest,
   res: Response,

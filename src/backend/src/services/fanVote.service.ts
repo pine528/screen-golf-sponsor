@@ -1,7 +1,11 @@
 import { Prisma, FanVoteStatus } from '@prisma/client';
+import { randomInt } from 'crypto';
 import prisma from '../models/prisma';
 import { pointService } from './point.service';
 import { BadRequestError, NotFoundError, ConflictError } from '../utils/errors';
+
+// 플랫폼 포인트 지갑용 시스템 사용자 ID
+const PLATFORM_USER_ID = 'PLATFORM_SYSTEM';
 
 export class FanVoteService {
   /**
@@ -346,6 +350,566 @@ export class FanVoteService {
     });
 
     return updatedEvent;
+  }
+
+  // ============================================
+  // Phase F4: Fan-created Votes
+  // ============================================
+
+  /**
+   * 팬이 투표 생성 (DRAFT 상태)
+   */
+  async createByFan(
+    userId: string,
+    data: {
+      title: string;
+      question: string;
+      options: string[];
+      entryFeePoints: number;
+      winnersCount: number;
+      startsAt: Date;
+      endsAt: Date;
+    }
+  ) {
+    // 유효성 검사
+    if (data.options.length < 2 || data.options.length > 6) {
+      throw new BadRequestError('옵션은 2개 이상 6개 이하로 입력해주세요');
+    }
+
+    if (data.entryFeePoints < 0) {
+      throw new BadRequestError('참가비는 0 이상이어야 합니다');
+    }
+
+    if (data.winnersCount < 1) {
+      throw new BadRequestError('당첨자 수는 1명 이상이어야 합니다');
+    }
+
+    if (data.startsAt >= data.endsAt) {
+      throw new BadRequestError('종료 시간은 시작 시간보다 늦어야 합니다');
+    }
+
+    // 시스템 설정에서 생성비 조회 (없으면 0)
+    const createFeeSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'FAN_VOTE_CREATE_FEE' },
+    });
+    const createFeePoints = createFeeSetting ? parseInt(createFeeSetting.value) : 0;
+
+    // 트랜잭션으로 생성 + 생성비 차감
+    const event = await prisma.$transaction(async (tx) => {
+      // 이벤트 생성
+      const newEvent = await tx.fanVoteEvent.create({
+        data: {
+          creatorUserId: userId,
+          title: data.title,
+          question: data.question,
+          options: data.options,
+          entryFeePoints: data.entryFeePoints,
+          createFeePoints: createFeePoints,
+          winnersCount: data.winnersCount,
+          startsAt: data.startsAt,
+          endsAt: data.endsAt,
+          status: 'DRAFT',
+        },
+      });
+
+      // 생성비 차감 (0보다 클 때만)
+      if (createFeePoints > 0) {
+        const pointResult = await pointService.adjustPoints(
+          userId,
+          -createFeePoints,
+          'VOTE_CREATE_FEE',
+          'FAN_VOTE_CREATE',
+          newEvent.id,
+          `팬 투표 생성: ${data.title} (${createFeePoints}P)`
+        );
+
+        if (!pointResult.success && !pointResult.alreadyProcessed) {
+          throw new BadRequestError('포인트가 부족합니다');
+        }
+      }
+
+      return newEvent;
+    });
+
+    return event;
+  }
+
+  /**
+   * 팬이 투표 제출 (DRAFT -> SUBMITTED)
+   */
+  async submitFanVote(userId: string, eventId: string) {
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    if (event.creatorUserId !== userId) {
+      throw new BadRequestError('자신이 만든 투표만 제출할 수 있습니다');
+    }
+
+    if (event.status !== 'DRAFT') {
+      throw new ConflictError('초안 상태의 투표만 제출할 수 있습니다');
+    }
+
+    const updatedEvent = await prisma.fanVoteEvent.update({
+      where: { id: eventId },
+      data: {
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+      },
+    });
+
+    // 관리자에게 알림 전송
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          type: 'FAN_VOTE_SUBMITTED',
+          title: '팬 투표 승인 요청',
+          message: `"${event.title}" 투표가 승인 대기 중입니다`,
+          data: { eventId: event.id },
+        })),
+      });
+    }
+
+    return updatedEvent;
+  }
+
+  /**
+   * 내가 만든 투표 목록 조회
+   */
+  async getMyCreatedEvents(
+    userId: string,
+    options: { page?: number; pageSize?: number } = {}
+  ) {
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const [events, total] = await Promise.all([
+      prisma.fanVoteEvent.findMany({
+        where: { creatorUserId: userId },
+        include: {
+          _count: {
+            select: { entries: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.fanVoteEvent.count({ where: { creatorUserId: userId } }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  /**
+   * 투표 결과 조회
+   */
+  async getEventResult(eventId: string, userId?: string) {
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        settlement: true,
+        winners: true,
+        _count: {
+          select: { entries: true },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    // 정산 전이면 대기 상태 반환
+    if (event.status === 'CLOSED' && !event.settlement) {
+      return {
+        event,
+        status: 'PENDING_SETTLEMENT',
+        message: '정산 대기 중입니다',
+      };
+    }
+
+    // 정산 완료
+    if (event.status === 'SETTLED' && event.settlement) {
+      let myWin = null;
+      if (userId) {
+        const winner = event.winners.find((w) => w.userId === userId);
+        if (winner) {
+          myWin = {
+            isWinner: true,
+            payoutPoints: winner.payoutPoints,
+          };
+        } else {
+          // 참여했지만 당첨되지 않음
+          const myEntry = await prisma.fanVoteEntry.findFirst({
+            where: { eventId, userId },
+          });
+          if (myEntry) {
+            myWin = {
+              isWinner: false,
+              payoutPoints: 0,
+            };
+          }
+        }
+      }
+
+      return {
+        event,
+        status: 'SETTLED',
+        settlement: {
+          potTotal: event.settlement.potTotal,
+          winnersCount: event.settlement.winnersCount,
+          payoutEach: event.settlement.payoutEach,
+          remainder: event.settlement.remainder,
+        },
+        resultOptionIndex: event.resultOptionIndex,
+        myWin,
+      };
+    }
+
+    // 아직 종료되지 않음
+    return {
+      event,
+      status: event.status,
+    };
+  }
+
+  // ============================================
+  // Admin: Phase F4
+  // ============================================
+
+  /**
+   * 승인 대기 중인 투표 목록 (SUBMITTED)
+   */
+  async listPendingApproval(options: { page?: number; pageSize?: number } = {}) {
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const [events, total] = await Promise.all([
+      prisma.fanVoteEvent.findMany({
+        where: { status: 'SUBMITTED' },
+        include: {
+          _count: {
+            select: { entries: true },
+          },
+        },
+        orderBy: { submittedAt: 'asc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.fanVoteEvent.count({ where: { status: 'SUBMITTED' } }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  /**
+   * 관리자: 승인 및 활성화 (SUBMITTED/DRAFT -> ACTIVE)
+   */
+  async adminApproveAndActivate(eventId: string, adminId: string) {
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    if (event.status !== 'SUBMITTED' && event.status !== 'DRAFT') {
+      throw new ConflictError('제출됨 또는 초안 상태의 투표만 승인할 수 있습니다');
+    }
+
+    const updatedEvent = await prisma.fanVoteEvent.update({
+      where: { id: eventId },
+      data: {
+        status: 'ACTIVE',
+        approvedAt: new Date(),
+      },
+    });
+
+    // 감사 로그
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'FAN_VOTE_APPROVE',
+        entityType: 'FAN_VOTE_EVENT',
+        entityId: eventId,
+        newValue: { status: 'ACTIVE' },
+      },
+    });
+
+    // 생성자에게 알림
+    await prisma.notification.create({
+      data: {
+        userId: event.creatorUserId,
+        type: 'FAN_VOTE_APPROVED',
+        title: '투표 승인 완료',
+        message: `"${event.title}" 투표가 승인되어 활성화되었습니다`,
+        data: { eventId: event.id },
+      },
+    });
+
+    return updatedEvent;
+  }
+
+  /**
+   * 관리자: 정산 실행
+   * 멱등성: FanVoteSettlement.eventId unique constraint
+   */
+  async adminSettle(
+    eventId: string,
+    adminId: string,
+    resultOptionIndex: number
+  ) {
+    // 1. 이벤트 조회
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        settlement: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    // 이미 정산됨 (멱등성)
+    if (event.settlement) {
+      return {
+        success: true,
+        alreadyProcessed: true,
+        settlement: event.settlement,
+      };
+    }
+
+    if (event.status !== 'CLOSED') {
+      throw new ConflictError('종료된 투표만 정산할 수 있습니다');
+    }
+
+    // 옵션 인덱스 유효성
+    const options = event.options as string[];
+    if (resultOptionIndex < 0 || resultOptionIndex >= options.length) {
+      throw new BadRequestError('유효하지 않은 결과 옵션입니다');
+    }
+
+    // 2. 총 포인트 풀 계산
+    const potTotalResult = await prisma.fanVoteEntry.aggregate({
+      where: { eventId },
+      _sum: { paidPoints: true },
+    });
+    const potTotal = potTotalResult._sum.paidPoints || new Prisma.Decimal(0);
+
+    // 3. 정답 엔트리 조회
+    const correctEntries = await prisma.fanVoteEntry.findMany({
+      where: {
+        eventId,
+        optionIndex: resultOptionIndex,
+      },
+    });
+
+    // 4. 당첨자 선정 (랜덤)
+    const winnersCountTarget = event.winnersCount;
+    const winnersCountActual = Math.min(winnersCountTarget, correctEntries.length);
+
+    let selectedWinners: typeof correctEntries = [];
+    if (winnersCountActual > 0) {
+      // Fisher-Yates 셔플 (crypto.randomInt 사용)
+      const shuffled = [...correctEntries];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = randomInt(0, i + 1);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      selectedWinners = shuffled.slice(0, winnersCountActual);
+    }
+
+    // 5. 지급액 계산
+    let payoutEach = new Prisma.Decimal(0);
+    let remainder = potTotal;
+
+    if (winnersCountActual > 0) {
+      payoutEach = potTotal.dividedToIntegerBy(winnersCountActual);
+      remainder = potTotal.minus(payoutEach.times(winnersCountActual));
+    }
+
+    // 6. 트랜잭션으로 정산 처리
+    try {
+      const settlement = await prisma.$transaction(async (tx) => {
+        // 6-1. 정산 기록 생성
+        const newSettlement = await tx.fanVoteSettlement.create({
+          data: {
+            eventId,
+            potTotal,
+            winnersCount: winnersCountActual,
+            payoutEach,
+            remainder,
+            decidedByAdminId: adminId,
+          },
+        });
+
+        // 6-2. 당첨자 기록 및 포인트 지급
+        for (const winner of selectedWinners) {
+          await tx.fanVoteWinner.create({
+            data: {
+              eventId,
+              userId: winner.userId,
+              payoutPoints: payoutEach,
+            },
+          });
+
+          // 포인트 지급
+          if (payoutEach.greaterThan(0)) {
+            await pointService.adjustPoints(
+              winner.userId,
+              payoutEach,
+              'VOTE_WIN_PAYOUT',
+              'FAN_VOTE',
+              eventId,
+              `팬 투표 당첨: ${event.title} (${payoutEach}P)`
+            );
+          }
+        }
+
+        // 6-3. 잔여 포인트 플랫폼 귀속
+        if (remainder.greaterThan(0)) {
+          await pointService.adjustPoints(
+            PLATFORM_USER_ID,
+            remainder,
+            'VOTE_POT_REMAINDER',
+            'FAN_VOTE',
+            eventId,
+            `팬 투표 잔여금: ${event.title} (${remainder}P)`
+          );
+        }
+
+        // 6-4. 이벤트 상태 업데이트
+        await tx.fanVoteEvent.update({
+          where: { id: eventId },
+          data: {
+            status: 'SETTLED',
+            resultOptionIndex,
+            settledAt: new Date(),
+          },
+        });
+
+        return newSettlement;
+      });
+
+      // 7. 감사 로그
+      await prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'FAN_VOTE_SETTLE',
+          entityType: 'FAN_VOTE_EVENT',
+          entityId: eventId,
+          newValue: {
+            resultOptionIndex,
+            potTotal: potTotal.toString(),
+            winnersCount: winnersCountActual,
+            payoutEach: payoutEach.toString(),
+            remainder: remainder.toString(),
+          },
+        },
+      });
+
+      // 8. 알림: 생성자
+      await prisma.notification.create({
+        data: {
+          userId: event.creatorUserId,
+          type: 'FAN_VOTE_SETTLED',
+          title: '투표 정산 완료',
+          message: `"${event.title}" 투표 정산이 완료되었습니다. 당첨자 ${winnersCountActual}명`,
+          data: { eventId },
+        },
+      });
+
+      // 9. 알림: 당첨자들
+      if (selectedWinners.length > 0) {
+        await prisma.notification.createMany({
+          data: selectedWinners.map((winner) => ({
+            userId: winner.userId,
+            type: 'FAN_VOTE_WIN',
+            title: '🎉 투표 당첨!',
+            message: `"${event.title}" 투표에 당첨되어 ${payoutEach}P를 받았습니다`,
+            data: { eventId, payoutPoints: payoutEach.toString() },
+          })),
+        });
+      }
+
+      return {
+        success: true,
+        alreadyProcessed: false,
+        settlement,
+      };
+    } catch (error: any) {
+      // P2002: Unique constraint violation (이미 정산됨)
+      if (error.code === 'P2002') {
+        const existingSettlement = await prisma.fanVoteSettlement.findUnique({
+          where: { eventId },
+        });
+
+        return {
+          success: true,
+          alreadyProcessed: true,
+          settlement: existingSettlement,
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * 자동 종료: 종료 시간이 지난 ACTIVE 투표 CLOSED로 전환
+   */
+  async autoCloseExpiredEvents() {
+    const now = new Date();
+
+    const expiredEvents = await prisma.fanVoteEvent.findMany({
+      where: {
+        status: 'ACTIVE',
+        endsAt: { lt: now },
+      },
+    });
+
+    const closedIds: string[] = [];
+
+    for (const event of expiredEvents) {
+      await prisma.fanVoteEvent.update({
+        where: { id: event.id },
+        data: { status: 'CLOSED' },
+      });
+      closedIds.push(event.id);
+    }
+
+    return { closedCount: closedIds.length, closedIds };
   }
 }
 
