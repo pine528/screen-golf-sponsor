@@ -279,6 +279,36 @@ export class PointService {
       itemName ? `상품 교환: ${itemName} (${amount}P)` : `포인트 교환: ${amount}P`
     );
   }
+
+  /**
+   * 포인트 랭킹 조회 (공개)
+   * 닉네임만 노출, 개인정보 보호
+   */
+  async getRanking(limit: number = 10) {
+    const wallets = await prisma.pointWallet.findMany({
+      where: {
+        balance: { gt: 0 },
+      },
+      orderBy: { balance: 'desc' },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fan: {
+              select: { nickname: true },
+            },
+          },
+        },
+      },
+    });
+
+    return wallets.map((wallet, index) => ({
+      rank: index + 1,
+      nickname: wallet.user.fan?.nickname || '익명',
+      points: wallet.balance,
+    }));
+  }
 }
 
 export const pointService = new PointService();

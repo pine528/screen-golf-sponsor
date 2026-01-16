@@ -7,6 +7,13 @@ import { z } from 'zod';
 const router = Router();
 
 // ============================================
+// Public Routes
+// ============================================
+
+// 포인트 랭킹 조회
+router.get('/ranking', pointController.getRanking.bind(pointController));
+
+// ============================================
 // Fan Routes (FAN 권한 필요)
 // ============================================
 
