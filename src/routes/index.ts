@@ -18,6 +18,7 @@ import notificationRoutes from './notification.routes';
 import fanRoutes from './fan.routes';
 import pointRoutes from './point.routes';
 import fanVoteRoutes from './fanVote.routes';
+import shopRoutes from './shop.routes';
 
 const router = Router();
 
@@ -46,6 +47,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/fan', fanRoutes);
 router.use('/points', pointRoutes);
 router.use('/fan-votes', fanVoteRoutes);
+router.use('/shop', shopRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

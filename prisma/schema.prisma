@@ -46,6 +46,7 @@ model User {
   pointWallet   PointWallet?
   pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
   fanVoteWins    FanVoteWinner[]
+  redemptionOrders RedemptionOrder[]
 
   @@map("users")
 }
@@ -782,6 +783,7 @@ enum PointTxReason {
   VOTE_CREATE_FEE
   VOTE_POT_REMAINDER
   REDEEM_GOODS
+  REDEEM_CANCEL_REFUND
 }
 
 model PointWallet {
@@ -1102,4 +1104,63 @@ model PayoutItem {
   athlete         Athlete     @relation(fields: [athleteId], references: [id])
 
   @@map("payout_items")
+}
+
+// ============================================
+// Point Shop (포인트 샵)
+// ============================================
+
+enum ShopItemStatus {
+  ACTIVE
+  PAUSED
+  SOLDOUT
+}
+
+enum RedemptionStatus {
+  REQUESTED
+  CANCELED
+  FULFILLED
+}
+
+model ShopItem {
+  id                String          @id @default(uuid())
+  title             String
+  description       String?
+  imageUrl          String?         @map("image_url")
+  pricePoints       Decimal         @map("price_points") @db.Decimal(18, 0)
+  stock             Int             @default(0)
+  status            ShopItemStatus  @default(ACTIVE)
+  requiresShipping  Boolean         @default(false) @map("requires_shipping")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  orders            RedemptionOrder[]
+
+  @@map("shop_items")
+}
+
+model RedemptionOrder {
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  itemId            String            @map("item_id")
+  quantity          Int               @default(1)
+  totalPoints       Decimal           @map("total_points") @db.Decimal(18, 0)
+  status            RedemptionStatus  @default(REQUESTED)
+  idempotencyKey    String?           @unique @map("idempotency_key")
+  shippingName      String?           @map("shipping_name")
+  shippingPhone     String?           @map("shipping_phone")
+  shippingAddress1  String?           @map("shipping_address1")
+  shippingAddress2  String?           @map("shipping_address2")
+  memo              String?
+  fulfilledAt       DateTime?         @map("fulfilled_at")
+  fulfilledBy       String?           @map("fulfilled_by")
+  canceledAt        DateTime?         @map("canceled_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  user              User              @relation(fields: [userId], references: [id])
+  item              ShopItem          @relation(fields: [itemId], references: [id])
+
+  @@index([userId, status, createdAt])
+  @@map("redemption_orders")
 }
