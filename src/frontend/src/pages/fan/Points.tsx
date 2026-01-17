@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Coins, TrendingUp, TrendingDown, Calendar, Filter } from 'lucide-react';
+import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 
 const REASON_LABELS: Record<string, string> = {
@@ -37,8 +38,11 @@ export default function Points() {
   const transactions = historyData?.data?.transactions || [];
   const pagination = historyData?.data?.pagination;
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleString('ko-KR', {
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return '-';
+    const parsed = new Date(date);
+    if (isNaN(parsed.getTime())) return '-';
+    return parsed.toLocaleString('ko-KR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -52,8 +56,9 @@ export default function Points() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* 포인트 잔액 카드 */}
+    <Layout>
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* 포인트 잔액 카드 */}
       <div className="card p-8 bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
         <div className="flex items-center gap-3 mb-4">
           <Coins className="w-8 h-8" />
@@ -61,7 +66,7 @@ export default function Points() {
         </div>
         <div className="text-5xl font-bold mb-2">{formatNumber(balance)}P</div>
         <div className="text-emerald-100 text-sm">
-          마지막 업데이트: {balanceData?.data?.updatedAt ? formatDate(balanceData.data.updatedAt) : '-'}
+          마지막 업데이트: {formatDate(balanceData?.data?.updatedAt)}
         </div>
       </div>
 
@@ -181,6 +186,7 @@ export default function Points() {
           </>
         )}
       </div>
-    </div>
+      </div>
+    </Layout>
   );
 }

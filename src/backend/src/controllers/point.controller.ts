@@ -103,6 +103,20 @@ export class PointController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/points/ranking
+   * 포인트 랭킹 조회 (공개)
+   */
+  async getRanking(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string), 50) : 10;
+      const ranking = await pointService.getRanking(limit);
+      sendSuccess(res, { ranking });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const pointController = new PointController();

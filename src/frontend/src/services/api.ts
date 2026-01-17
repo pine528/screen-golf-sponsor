@@ -956,6 +956,14 @@ class ApiService {
   // Points API
   // ============================================
 
+  // Public: 포인트 랭킹 조회
+  async getPointRanking(limit?: number) {
+    const response = await this.client.get<ApiResponse<any>>('/points/ranking', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
   // Fan: 내 포인트 잔액 조회
   async getMyPointBalance() {
     const response = await this.client.get<ApiResponse<any>>('/points/me');
@@ -1091,6 +1099,103 @@ class ApiService {
     const response = await this.client.post<ApiResponse<any>>(`/fan-votes/admin/${id}/settle`, {
       resultOptionIndex,
     });
+    return response.data;
+  }
+
+  // ============================================
+  // Point Shop (포인트 샵)
+  // ============================================
+
+  // 상품 목록 조회
+  async getShopItems(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/shop/items', { params });
+    return response.data;
+  }
+
+  // 상품 상세 조회
+  async getShopItem(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/shop/items/${id}`);
+    return response.data;
+  }
+
+  // 교환 주문 생성
+  async createRedemptionOrder(
+    data: {
+      itemId: string;
+      quantity?: number;
+      shipping?: {
+        name: string;
+        phone: string;
+        address1: string;
+        address2?: string;
+      };
+      memo?: string;
+    },
+    idempotencyKey?: string
+  ) {
+    const response = await this.client.post<ApiResponse<any>>('/shop/orders', data, {
+      headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {},
+    });
+    return response.data;
+  }
+
+  // 내 주문 목록 조회
+  async getMyRedemptionOrders(params?: { page?: number; pageSize?: number; status?: string }) {
+    const response = await this.client.get<ApiResponse<any>>('/shop/orders/my', { params });
+    return response.data;
+  }
+
+  // 주문 취소
+  async cancelRedemptionOrder(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/shop/orders/${id}/cancel`);
+    return response.data;
+  }
+
+  // Admin: 상품 생성
+  async createShopItem(data: {
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    pricePoints: number;
+    stock: number;
+    requiresShipping?: boolean;
+  }) {
+    const response = await this.client.post<ApiResponse<any>>('/shop/admin/items', data);
+    return response.data;
+  }
+
+  // Admin: 상품 목록 (모든 상태)
+  async getAdminShopItems(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/shop/admin/items', { params });
+    return response.data;
+  }
+
+  // Admin: 상품 수정
+  async updateShopItem(
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      imageUrl?: string;
+      pricePoints?: number;
+      stock?: number;
+      status?: string;
+      requiresShipping?: boolean;
+    }
+  ) {
+    const response = await this.client.patch<ApiResponse<any>>(`/shop/admin/items/${id}`, data);
+    return response.data;
+  }
+
+  // Admin: 주문 목록
+  async getAdminRedemptionOrders(params?: { page?: number; pageSize?: number; status?: string; q?: string }) {
+    const response = await this.client.get<ApiResponse<any>>('/shop/admin/orders', { params });
+    return response.data;
+  }
+
+  // Admin: 주문 처리 완료
+  async fulfillRedemptionOrder(id: string, memo?: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/shop/admin/orders/${id}/fulfill`, { memo });
     return response.data;
   }
 }

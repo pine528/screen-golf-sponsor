@@ -1,4 +1,5 @@
-export { default as FanHome } from './FanHome';
+export { default as FanHome } from './FanDashboard';
+export { default as FanDashboard } from './FanDashboard';
 export { default as FanLogin } from './FanLogin';
 export { default as FanRegister } from './FanRegister';
 export { default as Votes } from './Votes';
@@ -7,3 +8,6 @@ export { default as Points } from './Points';
 export { default as Ranking } from './Ranking';
 export { default as Favorites } from './Favorites';
 export { default as BrandRegister } from './BrandRegister';
+export { default as Shop } from './Shop';
+export { default as ShopDetail } from './ShopDetail';
+export { default as Orders } from './Orders';

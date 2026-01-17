@@ -30,7 +30,7 @@ import {
 } from './pages/admin/finance';
 import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
-import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister } from './pages/fan';
+import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister, Shop, ShopDetail, Orders } from './pages/fan';
 import FanVoteCreate from './pages/fan/FanVoteCreate';
 import MyFanVotes from './pages/fan/MyFanVotes';
 import FanVoteResult from './pages/fan/FanVoteResult';
@@ -266,6 +266,32 @@ function App() {
         element={
           <ProtectedRoute>
             <BrandRegister />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Shop Routes */}
+      <Route
+        path="/shop"
+        element={
+          <ProtectedRoute>
+            <Shop />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/shop/:id"
+        element={
+          <ProtectedRoute>
+            <ShopDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          <ProtectedRoute>
+            <Orders />
           </ProtectedRoute>
         }
       />

@@ -48,60 +48,7 @@ export class PointService {
 
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // 1. 지갑 조회 또는 생성
-        let wallet = await tx.pointWallet.findUnique({
-          where: { userId },
-        });
-
-        if (!wallet) {
-          wallet = await tx.pointWallet.create({
-            data: {
-              userId,
-              balance: 0,
-              version: 0,
-            },
-          });
-        }
-
-        // 2. 새로운 잔액 계산
-        const newBalance = new Prisma.Decimal(wallet.balance.toString()).plus(deltaDecimal);
-
-        // 3. 잔액 음수 방지
-        if (newBalance.lessThan(0)) {
-          throw new BadRequestError('포인트 잔액이 부족합니다');
-        }
-
-        // 4. 낙관적 락으로 지갑 업데이트
-        const updatedWallet = await tx.pointWallet.updateMany({
-          where: {
-            userId,
-            version: wallet.version,
-          },
-          data: {
-            balance: newBalance,
-            version: { increment: 1 },
-          },
-        });
-
-        // 버전 충돌 (동시성 문제)
-        if (updatedWallet.count === 0) {
-          throw new ConflictError('포인트 업데이트 중 충돌이 발생했습니다. 다시 시도해주세요');
-        }
-
-        // 5. 원장 기록 (멱등성 보장 - unique constraint)
-        const ledgerTx = await tx.pointLedgerTx.create({
-          data: {
-            userId,
-            delta: deltaDecimal,
-            balanceAfter: newBalance,
-            reason,
-            refType,
-            refId,
-            description,
-          },
-        });
-
-        return { success: true, alreadyProcessed: false, tx: ledgerTx };
+        return this.adjustPointsWithTx(tx, userId, deltaDecimal, reason, refType, refId, description);
       });
 
       return result;
@@ -113,6 +60,77 @@ export class PointService {
 
       throw error;
     }
+  }
+
+  /**
+   * 외부 트랜잭션 컨텍스트에서 포인트 조정
+   * 다른 서비스에서 트랜잭션 내에서 포인트를 조정할 때 사용
+   */
+  async adjustPointsWithTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    delta: number | Prisma.Decimal,
+    reason: PointTxReason,
+    refType: string,
+    refId: string,
+    description?: string
+  ) {
+    const deltaDecimal = new Prisma.Decimal(delta.toString());
+
+    // 1. 지갑 조회 또는 생성
+    let wallet = await tx.pointWallet.findUnique({
+      where: { userId },
+    });
+
+    if (!wallet) {
+      wallet = await tx.pointWallet.create({
+        data: {
+          userId,
+          balance: 0,
+          version: 0,
+        },
+      });
+    }
+
+    // 2. 새로운 잔액 계산
+    const newBalance = new Prisma.Decimal(wallet.balance.toString()).plus(deltaDecimal);
+
+    // 3. 잔액 음수 방지
+    if (newBalance.lessThan(0)) {
+      throw new BadRequestError('포인트 잔액이 부족합니다');
+    }
+
+    // 4. 낙관적 락으로 지갑 업데이트
+    const updatedWallet = await tx.pointWallet.updateMany({
+      where: {
+        userId,
+        version: wallet.version,
+      },
+      data: {
+        balance: newBalance,
+        version: { increment: 1 },
+      },
+    });
+
+    // 버전 충돌 (동시성 문제)
+    if (updatedWallet.count === 0) {
+      throw new ConflictError('포인트 업데이트 중 충돌이 발생했습니다. 다시 시도해주세요');
+    }
+
+    // 5. 원장 기록 (멱등성 보장 - unique constraint)
+    const ledgerTx = await tx.pointLedgerTx.create({
+      data: {
+        userId,
+        delta: deltaDecimal,
+        balanceAfter: newBalance,
+        reason,
+        refType,
+        refId,
+        description,
+      },
+    });
+
+    return { success: true, alreadyProcessed: false, tx: ledgerTx };
   }
 
   /**
@@ -260,6 +278,36 @@ export class PointService {
       redemptionId,
       itemName ? `상품 교환: ${itemName} (${amount}P)` : `포인트 교환: ${amount}P`
     );
+  }
+
+  /**
+   * 포인트 랭킹 조회 (공개)
+   * 닉네임만 노출, 개인정보 보호
+   */
+  async getRanking(limit: number = 10) {
+    const wallets = await prisma.pointWallet.findMany({
+      where: {
+        balance: { gt: 0 },
+      },
+      orderBy: { balance: 'desc' },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fan: {
+              select: { nickname: true },
+            },
+          },
+        },
+      },
+    });
+
+    return wallets.map((wallet, index) => ({
+      rank: index + 1,
+      nickname: wallet.user.fan?.nickname || '익명',
+      points: wallet.balance,
+    }));
   }
 }
 
