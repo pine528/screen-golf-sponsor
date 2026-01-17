@@ -2,47 +2,47 @@ import { Router } from 'express';
 import { redemptionController } from '../controllers/redemption.controller';
 import { authenticate, requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import Joi from 'joi';
+import { z } from 'zod';
 
 const router = Router();
 
 // ============================================
-// Validation Schemas
+// Validation Schemas (Zod)
 // ============================================
 
-const createOrderSchema = Joi.object({
-  itemId: Joi.string().uuid().required(),
-  quantity: Joi.number().integer().min(1).default(1),
-  shipping: Joi.object({
-    name: Joi.string().required(),
-    phone: Joi.string().required(),
-    address1: Joi.string().required(),
-    address2: Joi.string().allow('', null),
+const createOrderSchema = z.object({
+  itemId: z.string().uuid('유효한 상품 ID를 입력하세요'),
+  quantity: z.number().int().min(1).default(1),
+  shipping: z.object({
+    name: z.string().min(1, '이름을 입력하세요'),
+    phone: z.string().min(1, '연락처를 입력하세요'),
+    address1: z.string().min(1, '주소를 입력하세요'),
+    address2: z.string().optional().nullable(),
   }).optional(),
-  memo: Joi.string().max(500).allow('', null),
+  memo: z.string().max(500).optional().nullable(),
 });
 
-const createItemSchema = Joi.object({
-  title: Joi.string().min(1).max(200).required(),
-  description: Joi.string().max(2000).allow('', null),
-  imageUrl: Joi.string().uri().allow('', null),
-  pricePoints: Joi.number().integer().min(0).required(),
-  stock: Joi.number().integer().min(0).required(),
-  requiresShipping: Joi.boolean().default(false),
+const createItemSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  pricePoints: z.number().int().min(0),
+  stock: z.number().int().min(0),
+  requiresShipping: z.boolean().default(false),
 });
 
-const updateItemSchema = Joi.object({
-  title: Joi.string().min(1).max(200),
-  description: Joi.string().max(2000).allow('', null),
-  imageUrl: Joi.string().uri().allow('', null),
-  pricePoints: Joi.number().integer().min(0),
-  stock: Joi.number().integer().min(0),
-  status: Joi.string().valid('ACTIVE', 'PAUSED', 'SOLDOUT'),
-  requiresShipping: Joi.boolean(),
+const updateItemSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  pricePoints: z.number().int().min(0).optional(),
+  stock: z.number().int().min(0).optional(),
+  status: z.enum(['ACTIVE', 'PAUSED', 'SOLDOUT']).optional(),
+  requiresShipping: z.boolean().optional(),
 });
 
-const fulfillOrderSchema = Joi.object({
-  memo: Joi.string().max(500).allow('', null),
+const fulfillOrderSchema = z.object({
+  memo: z.string().max(500).optional().nullable(),
 });
 
 // ============================================

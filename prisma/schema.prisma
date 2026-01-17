@@ -682,6 +682,7 @@ enum NotificationType {
   FAN_VOTE_APPROVED
   FAN_VOTE_SETTLED
   FAN_VOTE_WIN
+  REDEMPTION_FULFILLED
 }
 
 model Notification {

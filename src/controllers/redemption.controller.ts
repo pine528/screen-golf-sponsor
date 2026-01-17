@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { redemptionService } from '../services/redemption.service';
-import { successResponse } from '../utils/response';
-import { AuthRequest } from '../middleware/auth';
+import { sendSuccess } from '../utils/response';
+import { AuthRequest } from '../types';
 import { ShopItemStatus, RedemptionStatus } from '@prisma/client';
 
 export class RedemptionController {
@@ -19,7 +19,7 @@ export class RedemptionController {
         page: page ? parseInt(page as string) : undefined,
         pageSize: pageSize ? parseInt(pageSize as string) : undefined,
       });
-      res.json(successResponse(result));
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -32,7 +32,7 @@ export class RedemptionController {
     try {
       const { id } = req.params;
       const item = await redemptionService.getItem(id);
-      res.json(successResponse(item));
+      sendSuccess(res, item);
     } catch (error) {
       next(error);
     }
@@ -47,7 +47,7 @@ export class RedemptionController {
    */
   async createOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const userId = req.user!.userId;
+      const userId = req.user!.id;
       const { itemId, quantity, shipping, memo } = req.body;
       const idempotencyKey = req.headers['x-idempotency-key'] as string | undefined;
 
@@ -59,7 +59,8 @@ export class RedemptionController {
         idempotencyKey,
       });
 
-      res.status(result.alreadyProcessed ? 200 : 201).json(successResponse(result));
+      res.status(result.alreadyProcessed ? 200 : 201);
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -70,7 +71,7 @@ export class RedemptionController {
    */
   async getMyOrders(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const userId = req.user!.userId;
+      const userId = req.user!.id;
       const { page, pageSize, status } = req.query;
 
       const result = await redemptionService.getMyOrders(userId, {
@@ -79,7 +80,7 @@ export class RedemptionController {
         status: status as RedemptionStatus | undefined,
       });
 
-      res.json(successResponse(result));
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -90,11 +91,11 @@ export class RedemptionController {
    */
   async cancelOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const userId = req.user!.userId;
+      const userId = req.user!.id;
       const { id } = req.params;
 
       const result = await redemptionService.cancelOrder(userId, id);
-      res.json(successResponse(result));
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -120,7 +121,8 @@ export class RedemptionController {
         requiresShipping,
       });
 
-      res.status(201).json(successResponse(item));
+      res.status(201);
+      sendSuccess(res, item);
     } catch (error) {
       next(error);
     }
@@ -144,7 +146,7 @@ export class RedemptionController {
         requiresShipping,
       });
 
-      res.json(successResponse(item));
+      sendSuccess(res, item);
     } catch (error) {
       next(error);
     }
@@ -161,7 +163,7 @@ export class RedemptionController {
         pageSize: pageSize ? parseInt(pageSize as string) : undefined,
         includeAll: true,
       });
-      res.json(successResponse(result));
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -181,7 +183,7 @@ export class RedemptionController {
         q: q as string | undefined,
       });
 
-      res.json(successResponse(result));
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -192,12 +194,12 @@ export class RedemptionController {
    */
   async adminFulfillOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const adminId = req.user!.userId;
+      const adminId = req.user!.id;
       const { id } = req.params;
       const { memo } = req.body;
 
       const order = await redemptionService.adminFulfill(id, adminId, memo);
-      res.json(successResponse(order));
+      sendSuccess(res, order);
     } catch (error) {
       next(error);
     }
