@@ -20,6 +20,9 @@ brandRouter.use(authenticate);
 // POST /api/brand/topups - 충전 생성
 brandRouter.post('/', topupController.create.bind(topupController));
 
+// POST /api/brand/topups/mock - 테스트용 모의 충전
+brandRouter.post('/mock', topupController.mockTopup.bind(topupController));
+
 // POST /api/brand/topups/:id/confirm - 결제 확인
 brandRouter.post('/:id/confirm', topupController.confirm.bind(topupController));
 
