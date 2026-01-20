@@ -59,6 +59,16 @@ router.patch('/me/slots', authenticate, authorize('ATHLETE'), athleteController.
 router.post('/me/kyc', authenticate, authorize('ATHLETE'), athleteController.submitKyc);
 
 /**
+ * ★ Phase 9-3: Athlete pending signatures API
+ */
+
+/**
+ * @route GET /athletes/me/pending-signatures
+ * @desc Get athlete's contracts pending signature
+ */
+router.get('/me/pending-signatures', authenticate, authorize('ATHLETE'), athleteController.getPendingSignatures);
+
+/**
  * @route GET /athletes/:id
  * @desc Get athlete by ID
  */

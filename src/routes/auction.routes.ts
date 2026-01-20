@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { auctionController } from '../controllers/auction.controller';
-import { authenticate, authorize, requireKycApproved } from '../middleware/auth';
+import { authenticate, authorize, requireKycApproved, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createAuctionSchema, placeBidSchema } from '../utils/validation';
 
@@ -53,6 +53,13 @@ router.post(
  * @desc Get auction by ID
  */
 router.get('/:id', authenticate, auctionController.getById);
+
+/**
+ * ★ Phase 9-3: Auction summary API (polling)
+ * @route GET /auctions/:id/summary
+ * @desc Get auction summary for polling (optional auth)
+ */
+router.get('/:id/summary', optionalAuth, auctionController.getSummary);
 
 /**
  * @route POST /auctions/:id/bids

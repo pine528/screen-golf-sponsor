@@ -265,15 +265,16 @@ export class AuctionService {
       });
 
       // Update slot status
+      // ★ Phase 9-2: 낙찰 시 RESERVED (선수 서명 대기), 선수 서명 후 SOLD로 전환
       await tx.slotInstance.update({
         where: { id: auction.slotInstanceId },
         data: {
-          status: hasValidBid ? 'SOLD' : 'OPEN',
+          status: hasValidBid ? 'RESERVED' : 'OPEN',
         },
       });
 
-      // Mark winning bid
-      if (hasValidBid) {
+      // Mark winning bid (isWinning은 이미 placeBid에서 설정됨)
+      if (hasValidBid && !winningBid.isWinning) {
         await tx.bid.update({
           where: { id: winningBid.id },
           data: { isWinning: true },
@@ -437,6 +438,51 @@ export class AuctionService {
     }
 
     return toEnd.length;
+  }
+
+  /**
+   * ★ Phase 9-3: 경매 요약 정보 (폴링용)
+   * - currentPrice, bidCount, remainingSeconds, status
+   * - myIsHighest: 로그인한 브랜드가 최고 입찰자인지 (optional)
+   */
+  async getSummary(auctionId: string, brandId?: string) {
+    const now = new Date();
+
+    const auction = await prisma.auction.findUnique({
+      where: { id: auctionId },
+      include: {
+        bids: {
+          orderBy: { currentProxy: 'desc' },
+          take: 1,
+          select: {
+            brandId: true,
+            currentProxy: true,
+          },
+        },
+        _count: {
+          select: { bids: true },
+        },
+      },
+    });
+
+    if (!auction) {
+      throw new NotFoundError('Auction not found');
+    }
+
+    const remainingMs = auction.endAt.getTime() - now.getTime();
+    const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const highestBid = auction.bids[0];
+
+    return {
+      id: auction.id,
+      currentPrice: auction.currentPrice,
+      bidCount: auction._count.bids,
+      remainingSeconds,
+      status: auction.status,
+      endAt: auction.endAt,
+      // 로그인한 브랜드가 최고 입찰자인지
+      myIsHighest: brandId && highestBid ? highestBid.brandId === brandId : undefined,
+    };
   }
 }
 

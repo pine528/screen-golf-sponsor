@@ -10,13 +10,16 @@ import { sendSuccess, sendPaginated } from '../utils/response';
 import { Prisma } from '@prisma/client';
 import { escrowService } from '../services/escrow.service';
 import { notificationService } from '../services/notification.service';
+import { withdrawalService } from '../services/withdrawal.service';
+import { withdrawalBatchService } from '../services/withdrawalBatch.service';
+import { refundController } from '../controllers/refund.controller';
 import { logAudit } from '../lib/logger';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
-// 모든 라우트에 ADMIN 인증 필요
-router.use(authenticate, authorize('ADMIN'));
+// 모든 라우트에 ADMIN 또는 FINANCE 인증 필요
+router.use(authenticate, authorize('ADMIN', 'FINANCE'));
 
 // WRITE 액션용 Rate Limiter (분당 10회)
 const writeRateLimiter = rateLimit({
@@ -1122,5 +1125,443 @@ router.get('/action-logs', async (req: Request, res: Response) => {
 
   sendPaginated(res, logs, pageNum, limit, total);
 });
+
+// =========================================
+// WITHDRAWAL MANAGEMENT (출금 관리)
+// =========================================
+
+// GET /admin/finance/withdrawals - 출금 요청 목록
+router.get('/withdrawals', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, q, from, to, page = '1', pageSize = '20' } = req.query;
+
+    const result = await withdrawalService.adminList({
+      status: status as any,
+      q: q as string,
+      from: from as string,
+      to: to as string,
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+    });
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /admin/finance/withdrawals/summary - 출금 통계 요약
+router.get('/withdrawals/summary', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const summary = await withdrawalService.getStatusSummary();
+    sendSuccess(res, summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /admin/finance/withdrawals.csv - CSV 내보내기
+router.get('/withdrawals.csv', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, from, to } = req.query;
+
+    const result = await withdrawalService.adminList({
+      status: status as any,
+      from: from as string,
+      to: to as string,
+      page: 1,
+      pageSize: 10000, // CSV는 최대 10000건
+    });
+
+    const headers = ['ID', '선수명', '금액', '은행', '계좌', '예금주', '상태', '요청일', '처리일', '이체참조'];
+    const rows = result.requests.map((r: any) => toCsvRow([
+      r.id,
+      r.athlete?.name || '',
+      r.amount?.toString() || '0',
+      r.bankName,
+      r.bankAccountMasked,
+      r.accountHolder,
+      r.status,
+      r.createdAt?.toISOString() || '',
+      r.paidAt?.toISOString() || r.rejectedAt?.toISOString() || '',
+      r.payoutReference || '',
+    ]));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=withdrawals-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send('\uFEFF' + csv); // BOM for Excel
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /admin/finance/withdrawals/:id - 출금 요청 상세
+router.get('/withdrawals/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const request = await withdrawalService.getById(id);
+    sendSuccess(res, request);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/:id/approve - 출금 승인
+router.post('/withdrawals/:id/approve', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { confirmText, reason } = req.body;
+    const adminId = (req as any).user.id;
+
+    // confirmText 검증 (ID 마지막 6자리)
+    const expectedConfirm = id.slice(-6).toUpperCase();
+    if (!validateConfirmText(expectedConfirm, confirmText || '')) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CONFIRM', message: `확인을 위해 '${expectedConfirm}'를 입력하세요` },
+      });
+    }
+
+    // Idempotency 체크
+    const idempotencyKey = req.headers['x-idempotency-key'] as string;
+    const idempCheck = await checkIdempotency(idempotencyKey, adminId, 'WITHDRAWAL_APPROVE', 'WITHDRAWAL', id);
+    if (idempCheck.alreadyProcessed) {
+      return res.json({ success: true, data: idempCheck.existingResult, alreadyProcessed: true });
+    }
+
+    const result = await withdrawalService.adminApprove(id, adminId, reason);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_APPROVE',
+      'WITHDRAWAL',
+      id,
+      { reason },
+      { status: 'APPROVED' },
+      reason || '승인',
+      idempotencyKey,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/:id/reject - 출금 거부
+router.post('/withdrawals/:id/reject', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { confirmText, reason } = req.body;
+    const adminId = (req as any).user.id;
+
+    // confirmText 검증
+    const expectedConfirm = id.slice(-6).toUpperCase();
+    if (!validateConfirmText(expectedConfirm, confirmText || '')) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CONFIRM', message: `확인을 위해 '${expectedConfirm}'를 입력하세요` },
+      });
+    }
+
+    // 사유 필수 (10자 이상)
+    if (!reason || reason.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'REASON_REQUIRED', message: '거부 사유는 10자 이상 입력해주세요' },
+      });
+    }
+
+    // Idempotency 체크
+    const idempotencyKey = req.headers['x-idempotency-key'] as string;
+    const idempCheck = await checkIdempotency(idempotencyKey, adminId, 'WITHDRAWAL_REJECT', 'WITHDRAWAL', id);
+    if (idempCheck.alreadyProcessed) {
+      return res.json({ success: true, data: idempCheck.existingResult, alreadyProcessed: true });
+    }
+
+    const result = await withdrawalService.adminReject(id, adminId, reason);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_REJECT',
+      'WITHDRAWAL',
+      id,
+      { reason },
+      { status: 'REJECTED' },
+      reason,
+      idempotencyKey,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/:id/paid - 지급 완료 처리
+router.post('/withdrawals/:id/paid', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { confirmText, payoutReference, reason } = req.body;
+    const adminId = (req as any).user.id;
+
+    // confirmText 검증
+    if (!validateConfirmText('PAY', confirmText || '')) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CONFIRM', message: "확인을 위해 'PAY'를 입력하세요" },
+      });
+    }
+
+    // payoutReference 필수
+    if (!payoutReference || payoutReference.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'PAYOUT_REF_REQUIRED', message: '이체 참조번호(증빙)를 입력해주세요' },
+      });
+    }
+
+    // Idempotency 체크
+    const idempotencyKey = req.headers['x-idempotency-key'] as string;
+    const idempCheck = await checkIdempotency(idempotencyKey, adminId, 'WITHDRAWAL_PAID', 'WITHDRAWAL', id);
+    if (idempCheck.alreadyProcessed) {
+      return res.json({ success: true, data: idempCheck.existingResult, alreadyProcessed: true });
+    }
+
+    const result = await withdrawalService.adminMarkPaid(id, adminId, payoutReference, reason);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_PAID',
+      'WITHDRAWAL',
+      id,
+      { payoutReference, reason },
+      { status: 'PAID', payoutReference },
+      reason || `지급완료: ${payoutReference}`,
+      idempotencyKey,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =========================================
+// WITHDRAWAL BATCH MANAGEMENT (출금 배치 관리)
+// =========================================
+
+// GET /admin/finance/withdrawals/batches - 배치 목록
+router.get('/withdrawals/batches', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, page = '1', pageSize = '20' } = req.query;
+
+    const result = await withdrawalBatchService.list({
+      status: status as any,
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+    });
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/batches - 배치 생성
+router.post('/withdrawals/batches', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { withdrawalIds, note } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!withdrawalIds || !Array.isArray(withdrawalIds) || withdrawalIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: '출금 요청 ID를 1개 이상 선택해주세요' },
+      });
+    }
+
+    const result = await withdrawalBatchService.createBatch(withdrawalIds, adminId, note);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_BATCH_CREATE',
+      'WITHDRAWAL_BATCH',
+      result.batch.id,
+      { withdrawalIds, note },
+      { batchId: result.batch.id, included: result.included.length, skipped: result.skipped.length },
+      note || `배치 생성: ${result.included.length}건`,
+      undefined,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /admin/finance/withdrawals/batches/:id - 배치 상세
+router.get('/withdrawals/batches/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const batch = await withdrawalBatchService.getById(id);
+    sendSuccess(res, batch);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /admin/finance/withdrawals/batches/:id/export.csv - 배치 CSV 내보내기 (원본 계좌 포함)
+// ADMIN/FINANCE 권한 필요, 감사로그 기록됨
+router.get('/withdrawals/batches/:id/export.csv', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user.id;
+    const csv = await withdrawalBatchService.exportCsv(id, adminId);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=withdrawal-batch-${id}-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/batches/:id/complete - 배치 일괄 지급 완료
+router.post('/withdrawals/batches/:id/complete', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { confirmText, reason, proofUrl } = req.body;
+    const adminId = (req as any).user.id;
+
+    // confirmText 검증
+    if (!validateConfirmText('PAY', confirmText || '')) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CONFIRM', message: "확인을 위해 'PAY'를 입력하세요" },
+      });
+    }
+
+    // reason 필수 (10자 이상)
+    if (!reason || reason.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'REASON_REQUIRED', message: '사유는 10자 이상 입력해주세요' },
+      });
+    }
+
+    const result = await withdrawalBatchService.completeBatch(id, adminId, proofUrl, reason);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_BATCH_COMPLETE',
+      'WITHDRAWAL_BATCH',
+      id,
+      { reason, proofUrl },
+      { successCount: result.successCount, failedCount: result.failedIds.length },
+      reason,
+      undefined,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/batches/:id/cancel - 배치 취소
+router.post('/withdrawals/batches/:id/cancel', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { confirmText, reason } = req.body;
+    const adminId = (req as any).user.id;
+
+    // confirmText 검증
+    if (!validateConfirmText('CANCEL', confirmText || '')) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_CONFIRM', message: "확인을 위해 'CANCEL'를 입력하세요" },
+      });
+    }
+
+    // reason 필수 (10자 이상)
+    if (!reason || reason.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'REASON_REQUIRED', message: '취소 사유는 10자 이상 입력해주세요' },
+      });
+    }
+
+    const result = await withdrawalBatchService.cancelBatch(id, adminId, reason);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_BATCH_CANCEL',
+      'WITHDRAWAL_BATCH',
+      id,
+      { reason },
+      { status: 'CANCELED' },
+      reason,
+      undefined,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =========================================
+// WITHDRAWAL METRICS (출금 메트릭)
+// =========================================
+
+// GET /admin/finance/withdrawals/metrics - 출금 메트릭
+router.get('/withdrawals/metrics', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metrics = await withdrawalService.getMetrics();
+    sendSuccess(res, metrics);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =========================================
+// REFUND MANAGEMENT (Phase 10-2: 환불 관리)
+// =========================================
+
+// GET /admin/finance/refunds - 환불 요청 목록
+router.get('/refunds', refundController.getList.bind(refundController));
+
+// GET /admin/finance/refunds/stats - 환불 통계
+router.get('/refunds/stats', refundController.getStats.bind(refundController));
+
+// POST /admin/finance/refunds - 환불 요청 생성
+router.post('/refunds', writeRateLimiter, refundController.create.bind(refundController));
+
+// GET /admin/finance/refunds/:id - 환불 요청 상세
+router.get('/refunds/:id', refundController.getDetail.bind(refundController));
+
+// POST /admin/finance/refunds/:id/approve - 환불 요청 승인
+router.post('/refunds/:id/approve', writeRateLimiter, refundController.approve.bind(refundController));
+
+// POST /admin/finance/refunds/:id/reject - 환불 요청 거절
+router.post('/refunds/:id/reject', writeRateLimiter, refundController.reject.bind(refundController));
+
+// POST /admin/finance/refunds/:id/process - 환불 처리 (PG API 호출)
+router.post('/refunds/:id/process', writeRateLimiter, refundController.process.bind(refundController));
 
 export default router;

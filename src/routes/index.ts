@@ -10,6 +10,7 @@ import adminRoutes from './admin.routes';
 import adminFinanceRoutes from './admin.finance.routes';
 import adminReportsRoutes from './admin.reports.routes';
 import adminEntitiesRoutes from './admin.entities.routes';
+import adminOpsRoutes from './admin.ops.routes';
 import uploadRoutes from './upload.routes';
 import campaignRoutes from './campaign.routes';
 import voteRoutes from './vote.routes';
@@ -19,6 +20,9 @@ import fanRoutes from './fan.routes';
 import pointRoutes from './point.routes';
 import fanVoteRoutes from './fanVote.routes';
 import shopRoutes from './shop.routes';
+import withdrawalRoutes from './withdrawal.routes';
+import { brandTopupRoutes, webhookRoutes, adminTopupRoutes } from './topup.routes';
+import adminReconciliationRoutes from './admin.reconciliation.routes';
 
 const router = Router();
 
@@ -39,6 +43,7 @@ router.use('/admin', adminRoutes);
 router.use('/admin/finance', adminFinanceRoutes);
 router.use('/admin/reports', adminReportsRoutes);
 router.use('/admin/entities', adminEntitiesRoutes);
+router.use('/admin/ops', adminOpsRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/campaigns', campaignRoutes);
 router.use('/votes', voteRoutes);
@@ -48,6 +53,11 @@ router.use('/fan', fanRoutes);
 router.use('/points', pointRoutes);
 router.use('/fan-votes', fanVoteRoutes);
 router.use('/shop', shopRoutes);
+router.use('/withdrawals', withdrawalRoutes);
+router.use('/brand/topups', brandTopupRoutes);
+router.use('/payments/webhook', webhookRoutes);
+router.use('/admin/finance/topups', adminTopupRoutes);
+router.use('/admin/reconciliation', adminReconciliationRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

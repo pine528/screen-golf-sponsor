@@ -17,6 +17,7 @@ enum UserRole {
   ATHLETE
   ADMIN
   FAN
+  FINANCE   // 재무/출금 관리 권한
 }
 
 enum KycStatus {
@@ -117,14 +118,15 @@ model Athlete {
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
-  user                User          @relation(fields: [userId], references: [id])
-  slotInstances       SlotInstance[]
-  contracts           Contract[]
-  eventParticipations EventParticipation[]
-  votePoints          AthleteVotePoint[]
-  wallets             Wallet[]
-  payoutItems         PayoutItem[]
-  favoritedBy         FavoriteAthlete[]
+  user                 User          @relation(fields: [userId], references: [id])
+  slotInstances        SlotInstance[]
+  contracts            Contract[]
+  eventParticipations  EventParticipation[]
+  votePoints           AthleteVotePoint[]
+  wallets              Wallet[]
+  payoutItems          PayoutItem[]
+  favoritedBy          FavoriteAthlete[]
+  withdrawalRequests   WithdrawalRequest[]
 
   @@map("athletes")
 }
@@ -323,6 +325,7 @@ model SlotTemplate {
 enum SlotStatus {
   OPEN
   IN_AUCTION
+  RESERVED      // 즉시구매 진행 중 (선수 서명 대기)
   SOLD
   CLOSED
 }
@@ -396,12 +399,14 @@ model Bid {
   currentProxy    Int       @map("current_proxy")
   autoBid         Boolean   @default(true) @map("auto_bid")
   isWinning       Boolean   @default(false) @map("is_winning")
+  frozenAmount    Decimal?  @map("frozen_amount") @db.Decimal(18, 0)  // 동결 금액 (최고 입찰자만)
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   auction         Auction   @relation(fields: [auctionId], references: [id])
   brand           Brand     @relation(fields: [brandId], references: [id])
 
+  @@unique([auctionId, brandId])
   @@map("bids")
 }
 
@@ -431,6 +436,7 @@ model Contract {
   athleteSignedAt DateTime?       @map("athlete_signed_at")
   signedAt        DateTime?       @map("signed_at")
   assetDeadline   DateTime?       @map("asset_deadline")
+  reservedUntil   DateTime?       @map("reserved_until")  // Direct Buy 예약 만료 시간
   terms           Json?
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
@@ -683,6 +689,9 @@ enum NotificationType {
   FAN_VOTE_SETTLED
   FAN_VOTE_WIN
   REDEMPTION_FULFILLED
+  WITHDRAWAL_APPROVED
+  WITHDRAWAL_REJECTED
+  WITHDRAWAL_PAID
 }
 
 model Notification {
@@ -975,6 +984,37 @@ enum WalletOwnerType {
   PLATFORM
 }
 
+enum PaymentProvider {
+  TOSS
+  STRIPE
+}
+
+enum TopupPaymentStatus {
+  CREATED      // Checkout 세션 생성됨
+  PENDING      // PG로 리다이렉트됨
+  PAID         // 결제 확인 완료
+  FAILED       // 결제 실패
+  CANCELED     // 사용자 취소
+  REFUNDED     // 환불 완료
+  CHARGEBACK   // 차지백 발생
+}
+
+// Phase 10-2: Refund enums
+enum RefundStatus {
+  NONE      // 환불 없음
+  PARTIAL   // 부분 환불
+  FULL      // 전액 환불
+}
+
+enum RefundRequestStatus {
+  REQUESTED   // 관리자가 환불 요청 생성
+  APPROVED    // 승인됨 (PG 호출 대기)
+  REJECTED    // 거절됨
+  PROCESSING  // PG API 호출 중
+  REFUNDED    // 환불 완료
+  FAILED      // PG 환불 실패
+}
+
 model Wallet {
   id          String          @id @default(uuid())
   ownerType   WalletOwnerType @map("owner_type")
@@ -985,7 +1025,10 @@ model Wallet {
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
 
-  ledgerTxs   LedgerTx[]
+  ledgerTxs            LedgerTx[]
+  withdrawalRequests   WithdrawalRequest[]
+  topupPayments        TopupPayment[]
+  refundRequests       RefundRequest[]
   // Virtual relations for admin queries (no FK constraint)
   brand       Brand?          @relation(fields: [ownerId], references: [id], map: "wallet_brand_fk")
   athlete     Athlete?        @relation(fields: [ownerId], references: [id], map: "wallet_athlete_fk")
@@ -1002,6 +1045,12 @@ enum LedgerTxType {
   ESCROW_REFUND     // 에스크로 환불 (브랜드에게)
   PLATFORM_FEE      // 플랫폼 수수료
   ADJUSTMENT        // 수동 조정
+  DIRECT_BUY_RESERVE         // 즉시구매 예약 동결
+  DIRECT_BUY_RESERVE_RELEASE // 즉시구매 예약 해제
+  AUCTION_BID_RESERVE         // 경매 입찰 동결
+  AUCTION_BID_RESERVE_RELEASE // 경매 입찰 해제 (outbid/낙찰/만료)
+  TOPUP_DEPOSIT               // 충전 결제 완료 시 CREDIT
+  TOPUP_REFUND                // 충전 환불 시 DEBIT
 }
 
 enum LedgerTxStatus {
@@ -1028,6 +1077,198 @@ model LedgerTx {
   @@unique([walletId, type, refType, refId])  // 동일 ref에 대한 중복 트랜잭션 방지
   @@index([walletId, createdAt])
   @@map("ledger_txs")
+}
+
+model TopupPayment {
+  id                  String              @id @default(uuid())
+  walletId            String              @map("wallet_id")
+  brandUserId         String              @map("brand_user_id")
+  brandId             String              @map("brand_id")
+
+  amount              Decimal             @db.Decimal(18, 0)
+  currency            String              @default("KRW")
+  status              TopupPaymentStatus  @default(CREATED)
+
+  provider            PaymentProvider
+  providerPaymentKey  String?             @unique @map("provider_payment_key")
+  providerOrderId     String?             @unique @map("provider_order_id")
+
+  checkoutUrl         String?             @map("checkout_url")
+  checkoutExpiresAt   DateTime?           @map("checkout_expires_at")
+
+  paidAt              DateTime?           @map("paid_at")
+  failedAt            DateTime?           @map("failed_at")
+  canceledAt          DateTime?           @map("canceled_at")
+
+  failureReason       String?             @map("failure_reason")
+  failureCode         String?             @map("failure_code")
+  rawPayload          Json?               @map("raw_payload")
+
+  idempotencyKey      String              @map("idempotency_key")
+
+  // Phase 10-2: Refund fields
+  refundedAmount      Decimal             @default(0) @map("refunded_amount") @db.Decimal(18, 0)
+  refundStatus        RefundStatus        @default(NONE) @map("refund_status")
+  lastRefundAt        DateTime?           @map("last_refund_at")
+  chargebackAt        DateTime?           @map("chargeback_at")
+
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  wallet              Wallet              @relation(fields: [walletId], references: [id])
+  refundRequests      RefundRequest[]
+
+  @@unique([walletId, idempotencyKey])
+  @@index([brandUserId, status, createdAt])
+  @@index([provider, providerPaymentKey])
+  @@map("topup_payments")
+}
+
+// Phase 10-2: Refund Request Model
+model RefundRequest {
+  id                String              @id @default(uuid())
+  topupPaymentId    String              @map("topup_payment_id")
+  walletId          String              @map("wallet_id")
+
+  amount            Decimal             @db.Decimal(18, 0)
+  reason            String
+  status            RefundRequestStatus @default(REQUESTED)
+
+  providerRefundId  String?             @unique @map("provider_refund_id")
+
+  requestedBy       String              @map("requested_by")
+  requestedAt       DateTime            @default(now()) @map("requested_at")
+  processedBy       String?             @map("processed_by")
+  processedAt       DateTime?           @map("processed_at")
+
+  approvedBy        String?             @map("approved_by")
+  approvedAt        DateTime?           @map("approved_at")
+  rejectedBy        String?             @map("rejected_by")
+  rejectedAt        DateTime?           @map("rejected_at")
+  rejectionReason   String?             @map("rejection_reason")
+
+  failureReason     String?             @map("failure_reason")
+  rawPayload        Json?               @map("raw_payload")
+
+  idempotencyKey    String              @map("idempotency_key")
+
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  topupPayment      TopupPayment        @relation(fields: [topupPaymentId], references: [id])
+  wallet            Wallet              @relation(fields: [walletId], references: [id])
+
+  @@unique([topupPaymentId, idempotencyKey])
+  @@index([walletId, status, createdAt])
+  @@map("refund_requests")
+}
+
+// ============================================
+// Phase 10-3: Webhook Event Logging & Reconciliation
+// ============================================
+
+enum WebhookEventStatus {
+  RECEIVED      // Webhook 수신, 처리 시작
+  PROCESSED     // 정상 처리 완료
+  IGNORED       // 무시 (중복, 관련 없는 이벤트)
+  FAILED        // 처리 실패
+}
+
+model WebhookEventLog {
+  id                  String              @id @default(uuid())
+  provider            PaymentProvider
+  eventType           String              @map("event_type")
+  eventId             String              @map("event_id")
+  providerPaymentKey  String?             @map("provider_payment_key")
+  status              WebhookEventStatus  @default(RECEIVED)
+  errorMessage        String?             @map("error_message")
+  rawPayload          Json?               @map("raw_payload")
+  receivedAt          DateTime            @default(now()) @map("received_at")
+  processedAt         DateTime?           @map("processed_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  @@unique([provider, eventId])
+  @@index([provider, eventType, createdAt])
+  @@index([status, createdAt])
+  @@map("webhook_event_logs")
+}
+
+enum ReconciliationScope {
+  FULL
+  CRITICAL_ONLY
+}
+
+enum ReconciliationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ReconciliationRun {
+  id              String                    @id @default(uuid())
+  scope           ReconciliationScope
+  fromDate        DateTime                  @map("from_date")
+  toDate          DateTime                  @map("to_date")
+  totalChecked    Int                       @default(0) @map("total_checked")
+  issuesFound     Int                       @default(0) @map("issues_found")
+  status          ReconciliationRunStatus   @default(RUNNING)
+  errorMessage    String?                   @map("error_message")
+  startedAt       DateTime                  @default(now()) @map("started_at")
+  completedAt     DateTime?                 @map("completed_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  issues          ReconciliationIssue[]
+
+  @@index([status, startedAt])
+  @@map("reconciliation_runs")
+}
+
+enum ReconciliationIssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReconciliationIssueType {
+  TOPUP_PAID_NO_LEDGER          // PAID 인데 LedgerTx 없음
+  LEDGER_TOPUP_NO_PAID          // LedgerTx 있는데 PAID 아님
+  REFUND_REFUNDED_NO_LEDGER     // REFUNDED 인데 LedgerTx 없음
+  LEDGER_REFUND_NO_REQUEST      // LedgerTx 있는데 REFUNDED 아님
+  REFUNDED_AMOUNT_MISMATCH      // refundedAmount 불일치
+  WALLET_NEGATIVE               // 잔액/동결 음수
+  VERSION_CONFLICT_SPIKE        // 버전 충돌 급증
+}
+
+enum ReconciliationIssueStatus {
+  OPEN
+  ACKED       // 확인됨
+  RESOLVED
+  IGNORED
+}
+
+model ReconciliationIssue {
+  id              String                        @id @default(uuid())
+  runId           String                        @map("run_id")
+  severity        ReconciliationIssueSeverity
+  issueType       ReconciliationIssueType       @map("issue_type")
+  relatedTopupId  String?                       @map("related_topup_id")
+  relatedRefundId String?                       @map("related_refund_id")
+  relatedWalletId String?                       @map("related_wallet_id")
+  detail          Json?
+  status          ReconciliationIssueStatus     @default(OPEN)
+  resolvedBy      String?                       @map("resolved_by")
+  resolvedAt      DateTime?                     @map("resolved_at")
+  resolvedNote    String?                       @map("resolved_note")
+  createdAt       DateTime                      @default(now()) @map("created_at")
+  updatedAt       DateTime                      @updatedAt @map("updated_at")
+
+  run             ReconciliationRun             @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, severity])
+  @@index([issueType, status])
+  @@index([status, createdAt])
+  @@map("reconciliation_issues")
 }
 
 enum EscrowStatus {
@@ -1164,4 +1405,100 @@ model RedemptionOrder {
 
   @@index([userId, status, createdAt])
   @@map("redemption_orders")
+}
+
+// ============================================
+// Withdrawal System (선수 출금)
+// ============================================
+
+enum WithdrawalStatus {
+  REQUESTED       // 요청됨 (frozenAmount 증가)
+  APPROVED        // 승인됨 (은행 이체 대기)
+  REJECTED        // 거부됨 (frozenAmount 해제)
+  PAID            // 지급 완료 (은행 이체 완료)
+}
+
+enum WithdrawalBatchStatus {
+  CREATED         // 배치 생성됨
+  EXPORTED        // CSV 내보내기 완료
+  COMPLETED       // 일괄 지급 완료
+  CANCELED        // 취소됨
+}
+
+model WithdrawalBatch {
+  id                String                  @id @default(uuid())
+  status            WithdrawalBatchStatus   @default(CREATED)
+  totalAmount       Decimal                 @map("total_amount") @db.Decimal(18, 0)
+  itemCount         Int                     @map("item_count")
+  createdByAdminId  String                  @map("created_by_admin_id")
+  exportedAt        DateTime?               @map("exported_at")
+  completedAt       DateTime?               @map("completed_at")
+  proofUrl          String?                 @map("proof_url")
+  note              String?
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  withdrawals       WithdrawalRequest[]
+
+  @@index([status, createdAt])
+  @@map("withdrawal_batches")
+}
+
+model WithdrawalRequest {
+  id                String            @id @default(uuid())
+  walletId          String            @map("wallet_id")
+  athleteId         String            @map("athlete_id")
+  amount            Decimal           @db.Decimal(18, 0)
+  status            WithdrawalStatus  @default(REQUESTED)
+
+  // 은행 정보 (요청 시점의 스냅샷)
+  bankName              String            @map("bank_name")
+  bankAccountMasked     String            @map("bank_account_masked")
+  accountHolder         String            @map("account_holder")
+
+  // 암호화된 계좌 정보 (AES-256-GCM)
+  bankAccountEncrypted  String?           @map("bank_account_encrypted")
+  bankAccountIv         String?           @map("bank_account_iv")
+  bankAccountTag        String?           @map("bank_account_tag")
+  bankAccountLast4      String?           @map("bank_account_last4")
+
+  // 처리 정보
+  requestedReason   String?           @map("requested_reason")
+  adminNote         String?           @map("admin_note")
+  payoutReference   String?           @map("payout_reference")
+
+  // 증빙 정보
+  proofUrl          String?           @map("proof_url")
+  proofUploadedAt   DateTime?         @map("proof_uploaded_at")
+
+  // 처리 관리자 ID (역할별)
+  approvedByAdminId String?           @map("approved_by_admin_id")
+  rejectedByAdminId String?           @map("rejected_by_admin_id")
+  paidByAdminId     String?           @map("paid_by_admin_id")
+
+  // 배치 연결
+  batchId           String?           @map("batch_id")
+
+  // 멱등성
+  idempotencyKey    String?           @unique @map("idempotency_key")
+
+  // 타임스탬프
+  approvedAt        DateTime?         @map("approved_at")
+  rejectedAt        DateTime?         @map("rejected_at")
+  paidAt            DateTime?         @map("paid_at")
+  processedBy       String?           @map("processed_by")
+
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  wallet            Wallet            @relation(fields: [walletId], references: [id])
+  athlete           Athlete           @relation(fields: [athleteId], references: [id])
+  batch             WithdrawalBatch?  @relation(fields: [batchId], references: [id])
+
+  @@index([walletId, status, createdAt])
+  @@index([athleteId, status])
+  @@index([status, createdAt])
+  @@index([batchId])
+  @@map("withdrawal_requests")
 }

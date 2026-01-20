@@ -141,6 +141,21 @@ export class AthleteController {
       next(error);
     }
   }
+
+  /**
+   * ★ Phase 9-3: 선수의 서명 대기 계약 목록
+   */
+  async getPendingSignatures(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.athleteId) {
+        throw new Error('No athlete associated with this user');
+      }
+      const contracts = await athleteService.getPendingSignatures(req.user.athleteId);
+      sendSuccess(res, contracts);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const athleteController = new AthleteController();

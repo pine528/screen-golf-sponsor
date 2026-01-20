@@ -136,6 +136,21 @@ export class AuctionController {
       next(error);
     }
   }
+
+  /**
+   * ★ Phase 9-3: 경매 요약 정보 (폴링용)
+   * - 인증 선택적 (로그인 시 myIsHighest 포함)
+   */
+  async getSummary(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const brandId = req.user?.brandId;
+      const summary = await auctionService.getSummary(id, brandId);
+      sendSuccess(res, summary);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const auctionController = new AuctionController();

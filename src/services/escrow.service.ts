@@ -264,11 +264,13 @@ export class EscrowService {
       // 브랜드 지갑 가져오기
       const brandWallet = await this.walletService.getOrCreateWallet('BRAND', contract.brandId, tx);
       const currentBalance = toNumber(brandWallet.balance);
+      const currentFrozen = toNumber(brandWallet.frozenAmount);
+      const currentAvailable = currentBalance - currentFrozen;
 
-      // 데모용: 잔액 부족 시 자동 충전
+      // 데모용: available 잔액 부족 시 자동 충전
       let walletToUse = brandWallet;
-      if (currentBalance < grossAmount) {
-        const chargeAmount = grossAmount - currentBalance + 1000000;
+      if (currentAvailable < grossAmount) {
+        const chargeAmount = grossAmount - currentAvailable + 1000000;
         const newBalance = toDecimal(currentBalance + chargeAmount);
 
         walletToUse = await tx.wallet.update({
@@ -299,10 +301,14 @@ export class EscrowService {
         }
       }
 
-      // 지갑에서 차감 + 동결
+      // ★ Phase 9-2.1: available 잔액 검증 (balance - frozenAmount)
+      // 경매 입찰 동결, Direct Buy 동결 등이 이미 있을 수 있음
       const walletBalance = toNumber(walletToUse.balance);
-      if (walletBalance < grossAmount) {
-        throw new BadRequestError('Insufficient brand wallet balance');
+      const walletFrozen = toNumber(walletToUse.frozenAmount);
+      const availableBalance = walletBalance - walletFrozen;
+
+      if (availableBalance < grossAmount) {
+        throw new BadRequestError('Insufficient available balance for escrow');
       }
 
       const newBalance = toDecimal(walletBalance - grossAmount);

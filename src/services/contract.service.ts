@@ -4,6 +4,7 @@ import { NotFoundError, BadRequestError, ConflictError, ForbiddenError } from '.
 import { ContractStatus, AssetStatus, VerificationStatus } from '@prisma/client';
 import { escrowService, IdempotentResult, toNumber } from './escrow.service';
 import { notificationService } from './notification.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * 에스크로 작업의 멱등성 결과를 안전하게 처리하는 헬퍼
@@ -77,6 +78,10 @@ export class ContractService {
     // Calculate asset deadline (T+24h)
     const assetDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    // ★ Phase 9-2: 경매 낙찰 시 브랜드 자동 서명 + 예약 만료 시간 설정
+    const now = new Date();
+    const reservedUntil = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h
+
     const contract = await prisma.contract.create({
       data: {
         auctionId,
@@ -84,6 +89,8 @@ export class ContractService {
         athleteId: auction.slotInstance.athleteId,
         priceFinal: auction.currentPrice,
         status: 'PENDING_SIGNATURE',
+        brandSignedAt: now,        // ★ 낙찰로 브랜드 자동 서명
+        reservedUntil,             // ★ 24시간 내 선수 서명 필요
         assetDeadline,
       },
       include: {
@@ -219,6 +226,11 @@ export class ContractService {
       throw new BadRequestError('Contract is not pending signature');
     }
 
+    // ★ Phase 9-1.1: 예약 만료 체크 (Direct Buy의 경우)
+    if (contract.reservedUntil && new Date() > contract.reservedUntil) {
+      throw new BadRequestError('Reservation expired. The purchase period has ended. Please try again.');
+    }
+
     // 양쪽 서명 로직: 브랜드/선수 각각 서명 시간 기록
     const now = new Date();
     const updateData: any = {};
@@ -256,13 +268,132 @@ export class ContractService {
       },
     });
 
-    // 양쪽 서명 완료 시 에스크로 홀드 (멱등성 보장)
+    // 양쪽 서명 완료 시 처리
     if (willBothSign) {
+      // ★ Phase 9-2.1: 순서 변경 - 먼저 예약 해제 → 그 다음 HOLD
+      // 이렇게 해야 available 잔액이 확보된 후 HOLD 진행 가능
+
+      // 1. 먼저 예약 동결 해제 (경매 낙찰 or Direct Buy)
+      if (contract.reservedUntil) {
+        try {
+          // ★ Phase 9-2.1: 명시적 경매/Direct Buy 구분 (frozenAmount 유무가 아닌 auction.status 기준)
+          const contractWithAuctionBid = await prisma.contract.findUnique({
+            where: { id },
+            include: {
+              auction: {
+                include: {
+                  bids: {
+                    where: { isWinning: true },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          });
+
+          const auction = contractWithAuctionBid?.auction;
+          const winningBid = auction?.bids[0];
+          const isAuctionWin = auction?.status === 'ENDED' && !!winningBid;
+
+          const brandWallet = await prisma.wallet.findFirst({
+            where: { ownerType: 'BRAND', ownerId: contract.brandId },
+          });
+
+          if (brandWallet) {
+            if (isAuctionWin) {
+              // ★ 경매 낙찰: winningBid.frozenAmount 해제 (없으면 currentPrice fallback)
+              const amountToRelease = winningBid.frozenAmount
+                ? new Decimal(winningBid.frozenAmount)
+                : new Decimal(auction.currentPrice);
+
+              await prisma.$transaction(async (tx) => {
+                await tx.wallet.update({
+                  where: { id: brandWallet.id },
+                  data: {
+                    frozenAmount: { decrement: amountToRelease },
+                    version: { increment: 1 },
+                  },
+                });
+
+                await tx.ledgerTx.create({
+                  data: {
+                    walletId: brandWallet.id,
+                    type: 'AUCTION_BID_RESERVE_RELEASE',
+                    amount: amountToRelease.negated(),
+                    balanceAfter: brandWallet.balance,
+                    refType: 'CONTRACT',
+                    refId: id,
+                    description: 'Auction won - contract signed, frozen released',
+                  },
+                });
+
+                // Bid의 frozenAmount 초기화
+                if (winningBid.frozenAmount) {
+                  await tx.bid.update({
+                    where: { id: winningBid.id },
+                    data: { frozenAmount: null },
+                  });
+                }
+              });
+
+              console.log(`[Contract] Auction bid reserve released for contract ${id}, amount: ${amountToRelease}`);
+            } else {
+              // ★ Direct Buy (Phase 9-1.1): priceFinal 기준 해제
+              const price = new Decimal(contract.priceFinal);
+
+              await prisma.$transaction(async (tx) => {
+                await tx.wallet.update({
+                  where: { id: brandWallet.id },
+                  data: {
+                    frozenAmount: { decrement: price },
+                    version: { increment: 1 },
+                  },
+                });
+
+                await tx.ledgerTx.create({
+                  data: {
+                    walletId: brandWallet.id,
+                    type: 'DIRECT_BUY_RESERVE_RELEASE',
+                    amount: price.negated(),
+                    balanceAfter: brandWallet.balance,
+                    refType: 'CONTRACT',
+                    refId: id,
+                    description: 'Direct buy reservation released - contract signed',
+                  },
+                });
+              });
+
+              console.log(`[Contract] Direct buy reserve released for contract ${id}, amount: ${price}`);
+            }
+          }
+        } catch (e) {
+          console.error(`[Contract] Failed to release reserve for contract ${id}:`, e);
+        }
+      }
+
+      // 2. 그 다음 에스크로 홀드 (멱등성 보장)
       await safeEscrowOperation(
         () => escrowService.holdFromContract(id),
         'holdFromContract',
         id
       );
+
+      // 3. 슬롯 상태 업데이트: RESERVED → SOLD
+      try {
+        const contractWithAuction = await prisma.contract.findUnique({
+          where: { id },
+          include: { auction: { include: { slotInstance: true } } },
+        });
+        if (contractWithAuction?.auction?.slotInstance?.status === 'RESERVED') {
+          await prisma.slotInstance.update({
+            where: { id: contractWithAuction.auction.slotInstanceId },
+            data: { status: 'SOLD' },
+          });
+          console.log(`[Contract] Slot ${contractWithAuction.auction.slotInstanceId} status updated to SOLD`);
+        }
+      } catch (e) {
+        console.error(`[Contract] Failed to update slot status for contract ${id}:`, e);
+      }
     }
 
     return updatedContract;
@@ -391,6 +522,171 @@ export class ContractService {
     }
 
     return expired.length;
+  }
+
+  /**
+   * ★ Phase 9-1.1: 만료된 Direct Buy 예약 처리
+   * - PENDING_SIGNATURE 상태 + athleteSignedAt null + reservedUntil 만료
+   * - Contract → CANCELLED, Slot → OPEN, frozenAmount 해제
+   */
+  async processExpiredReservations(): Promise<number> {
+    const now = new Date();
+
+    // 만료된 예약 조회 (경매 낙찰 + Direct Buy 모두 포함)
+    const expiredContracts = await prisma.contract.findMany({
+      where: {
+        status: 'PENDING_SIGNATURE',
+        athleteSignedAt: null,
+        reservedUntil: { lt: now },
+      },
+      include: {
+        auction: {
+          include: {
+            slotInstance: true,
+            bids: {
+              where: { isWinning: true },
+              take: 1,
+            },
+          },
+        },
+        brand: { include: { user: true } },
+      },
+    });
+
+    let count = 0;
+    for (const contract of expiredContracts) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          // 1. Contract → CANCELLED
+          await tx.contract.update({
+            where: { id: contract.id },
+            data: { status: 'CANCELLED' },
+          });
+
+          // 2. Slot → OPEN
+          if (contract.auction?.slotInstance) {
+            await tx.slotInstance.update({
+              where: { id: contract.auction.slotInstanceId },
+              data: { status: 'OPEN' },
+            });
+          }
+
+          // 3. frozenAmount 해제
+          const wallet = await tx.wallet.findFirst({
+            where: { ownerType: 'BRAND', ownerId: contract.brandId },
+          });
+
+          // ★ Phase 9-2.1: 명시적 경매/Direct Buy 구분 (frozenAmount 유무가 아닌 auction.status 기준)
+          const auction = contract.auction;
+          const winningBid = auction?.bids?.[0];
+          const isAuctionWin = auction?.status === 'ENDED' && !!winningBid;
+
+          if (wallet) {
+            if (isAuctionWin) {
+              // ★ Phase 9-2: 경매 낙찰 - winningBid.frozenAmount 해제 (없으면 currentPrice fallback)
+              const amountToRelease = winningBid.frozenAmount
+                ? new Decimal(winningBid.frozenAmount)
+                : new Decimal(auction.currentPrice);
+
+              await tx.wallet.update({
+                where: { id: wallet.id },
+                data: {
+                  frozenAmount: { decrement: amountToRelease },
+                  version: { increment: 1 },
+                },
+              });
+
+              await tx.ledgerTx.create({
+                data: {
+                  walletId: wallet.id,
+                  type: 'AUCTION_BID_RESERVE_RELEASE',
+                  amount: amountToRelease.negated(),
+                  balanceAfter: wallet.balance,
+                  refType: 'CONTRACT',
+                  refId: contract.id,
+                  description: 'Auction reservation expired',
+                },
+              });
+
+              // Bid의 frozenAmount 초기화
+              if (winningBid.frozenAmount) {
+                await tx.bid.update({
+                  where: { id: winningBid.id },
+                  data: { frozenAmount: null },
+                });
+              }
+            } else {
+              // ★ Phase 9-1.1: Direct Buy - priceFinal 해제
+              const price = new Decimal(contract.priceFinal);
+
+              await tx.wallet.update({
+                where: { id: wallet.id },
+                data: {
+                  frozenAmount: { decrement: price },
+                  version: { increment: 1 },
+                },
+              });
+
+              await tx.ledgerTx.create({
+                data: {
+                  walletId: wallet.id,
+                  type: 'DIRECT_BUY_RESERVE_RELEASE',
+                  amount: price.negated(),
+                  balanceAfter: wallet.balance,
+                  refType: 'CONTRACT',
+                  refId: contract.id,
+                  description: 'Direct buy reservation expired',
+                },
+              });
+            }
+          }
+
+          // 4. 알림 발송
+          if (contract.brand?.user) {
+            const isAuction = isAuctionWin;
+            await tx.notification.create({
+              data: {
+                userId: contract.brand.user.id,
+                type: 'CONTRACT_CREATED',
+                title: isAuction ? '경매 낙찰 예약 만료' : '즉시구매 만료',
+                message: '선수가 24시간 내 서명하지 않아 예약이 취소되었습니다. 동결된 금액이 해제되었습니다.',
+                data: {
+                  contractId: contract.id,
+                  reason: 'RESERVATION_EXPIRED',
+                  type: isAuction ? 'AUCTION' : 'DIRECT_BUY',
+                },
+              },
+            });
+          }
+
+          // 5. AuditLog 기록
+          await tx.auditLog.create({
+            data: {
+              action: isAuctionWin ? 'AUCTION_RESERVATION_EXPIRED' : 'DIRECT_BUY_EXPIRED',
+              entityType: 'CONTRACT',
+              entityId: contract.id,
+              newValue: {
+                brandId: contract.brandId,
+                athleteId: contract.athleteId,
+                price: contract.priceFinal,
+                frozenAmount: isAuctionWin
+                  ? (winningBid?.frozenAmount?.toString() || auction?.currentPrice?.toString())
+                  : contract.priceFinal.toString(),
+                reservedUntil: contract.reservedUntil,
+                expiredAt: now.toISOString(),
+              },
+            },
+          });
+        });
+
+        count++;
+        console.log(`[Contract] Expired reservation processed: ${contract.id}`);
+      } catch (error) {
+        console.error(`[Contract] Failed to process expired reservation ${contract.id}:`, error);
+      }
+    }
+
+    return count;
   }
 }
 

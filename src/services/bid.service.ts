@@ -4,11 +4,16 @@ import { NotFoundError, BadRequestError, ConflictError, ForbiddenError } from '.
 import { BidResult } from '../types';
 import { auctionService } from './auction.service';
 import { socketService } from './socket.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export class BidService {
   /**
    * Place a bid with proxy/auto-bid support
-   * Implements 2nd-price auction logic and anti-sniping
+   * Implements 2nd-price auction logic, anti-sniping, and frozenAmount management
+   *
+   * Phase 9-2: 최고 입찰자만 frozenAmount 동결
+   * - 새 최고 입찰자: frozenAmount += maxBid
+   * - 이전 최고 입찰자 (outbid): frozenAmount -= previousFrozenAmount
    */
   async placeBid(
     auctionId: string,
@@ -54,6 +59,30 @@ export class BidService {
       throw new ForbiddenError('KYC approval required to place bids');
     }
 
+    // ★ Phase 9-2: 지갑 잔액 검증 (available = balance - frozenAmount >= maxBid)
+    const brandWallet = await prisma.wallet.findFirst({
+      where: { ownerType: 'BRAND', ownerId: brandId },
+    });
+    if (!brandWallet) {
+      throw new BadRequestError('Brand wallet not found. Please contact support.');
+    }
+
+    const available = new Decimal(brandWallet.balance).minus(brandWallet.frozenAmount);
+
+    // 기존 입찰이 있으면, 이미 동결된 금액을 고려 (증가분만 추가 동결)
+    const existingBidForBalance = auction.bids.find((b) => b.brandId === brandId);
+    const alreadyFrozen = existingBidForBalance?.frozenAmount
+      ? new Decimal(existingBidForBalance.frozenAmount)
+      : new Decimal(0);
+    const additionalRequired = new Decimal(maxBid).minus(alreadyFrozen);
+
+    if (additionalRequired.gt(0) && available.lt(additionalRequired)) {
+      throw new BadRequestError(
+        `Insufficient available balance. Required: ${additionalRequired.toNumber()}, Available: ${available.toNumber()}`,
+        'INSUFFICIENT_BALANCE'
+      );
+    }
+
     // Check category exclusivity/conflict
     const athlete = auction.slotInstance.athlete;
     if (athlete.blockedCategories.includes(brand.category)) {
@@ -97,6 +126,15 @@ export class BidService {
     let bidResult: BidResult;
 
     await prisma.$transaction(async (tx) => {
+      // ★ Phase 9-2: 이전 최고 입찰자 찾기 (현재 isWinning=true && 다른 브랜드)
+      const previousWinner = await tx.bid.findFirst({
+        where: {
+          auctionId,
+          isWinning: true,
+          brandId: { not: brandId },
+        },
+      });
+
       let bid;
 
       if (existingBid) {
@@ -126,12 +164,112 @@ export class BidService {
         });
       }
 
-      // Process auto-bid competition
+      // Process auto-bid competition (determines winner)
       const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
         tx,
         auctionId,
         auction.minBidIncrement
       );
+
+      // ★ Phase 9-2: frozenAmount 처리
+      const isNewWinner = winningBidId === bid.id;
+      const maxBidDecimal = new Decimal(maxBid);
+
+      if (isNewWinner) {
+        // 새 최고 입찰자가 된 경우
+
+        // 1. 이전 최고 입찰자의 frozenAmount 해제 (다른 브랜드인 경우)
+        if (previousWinner && previousWinner.frozenAmount) {
+          const prevWallet = await tx.wallet.findFirst({
+            where: { ownerType: 'BRAND', ownerId: previousWinner.brandId },
+          });
+          if (prevWallet) {
+            await tx.wallet.update({
+              where: { id: prevWallet.id },
+              data: {
+                frozenAmount: { decrement: previousWinner.frozenAmount },
+                version: { increment: 1 },
+              },
+            });
+            await tx.ledgerTx.create({
+              data: {
+                walletId: prevWallet.id,
+                type: 'AUCTION_BID_RESERVE_RELEASE',
+                amount: new Decimal(previousWinner.frozenAmount).negated(),
+                balanceAfter: prevWallet.balance,
+                refType: 'BID',
+                refId: previousWinner.id,
+                description: `Outbid - auction ${auctionId}`,
+              },
+            });
+            // 이전 입찰자의 frozenAmount 초기화
+            await tx.bid.update({
+              where: { id: previousWinner.id },
+              data: { frozenAmount: null, isWinning: false },
+            });
+          }
+        }
+
+        // 2. 새 입찰자의 frozenAmount 동결 (증가분만)
+        const currentFrozen = existingBid?.frozenAmount
+          ? new Decimal(existingBid.frozenAmount)
+          : new Decimal(0);
+        const incrementAmount = maxBidDecimal.minus(currentFrozen);
+
+        if (incrementAmount.gt(0)) {
+          await tx.wallet.update({
+            where: { id: brandWallet.id },
+            data: {
+              frozenAmount: { increment: incrementAmount },
+              version: { increment: 1 },
+            },
+          });
+          await tx.ledgerTx.create({
+            data: {
+              walletId: brandWallet.id,
+              type: 'AUCTION_BID_RESERVE',
+              amount: incrementAmount,
+              balanceAfter: brandWallet.balance,
+              refType: 'BID',
+              refId: bid.id,
+              description: `Auction bid freeze - auction ${auctionId}`,
+            },
+          });
+        }
+
+        // 3. 새 입찰의 frozenAmount 업데이트
+        await tx.bid.update({
+          where: { id: bid.id },
+          data: { frozenAmount: maxBidDecimal, isWinning: true },
+        });
+      } else {
+        // 최고 입찰자가 아닌 경우 (outbid 당함)
+        // 이미 동결된 금액이 있다면 해제
+        if (existingBid?.frozenAmount) {
+          await tx.wallet.update({
+            where: { id: brandWallet.id },
+            data: {
+              frozenAmount: { decrement: existingBid.frozenAmount },
+              version: { increment: 1 },
+            },
+          });
+          await tx.ledgerTx.create({
+            data: {
+              walletId: brandWallet.id,
+              type: 'AUCTION_BID_RESERVE_RELEASE',
+              amount: new Decimal(existingBid.frozenAmount).negated(),
+              balanceAfter: brandWallet.balance,
+              refType: 'BID',
+              refId: bid.id,
+              description: `Outbid - auction ${auctionId}`,
+            },
+          });
+        }
+        await tx.bid.update({
+          where: { id: bid.id },
+          data: { frozenAmount: null, isWinning: false },
+        });
+      }
 
       // Update auction current price
       await tx.auction.update({
@@ -167,8 +305,8 @@ export class BidService {
         brandId,
         maxBid: finalBid!.maxBid,
         effectiveCurrentPrice: newCurrentPrice,
-        rank: winningBidId === bid.id ? 1 : 2,
-        isWinning: winningBidId === bid.id,
+        rank: isNewWinner ? 1 : 2,
+        isWinning: isNewWinner,
       };
     });
 
@@ -395,6 +533,33 @@ export class BidService {
 
     // Deleting bid triggers recalculation
     await prisma.$transaction(async (tx) => {
+      // ★ Phase 9-2: 동결된 금액이 있으면 해제
+      if (bid.frozenAmount) {
+        const wallet = await tx.wallet.findFirst({
+          where: { ownerType: 'BRAND', ownerId: brandId },
+        });
+        if (wallet) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: {
+              frozenAmount: { decrement: bid.frozenAmount },
+              version: { increment: 1 },
+            },
+          });
+          await tx.ledgerTx.create({
+            data: {
+              walletId: wallet.id,
+              type: 'AUCTION_BID_RESERVE_RELEASE',
+              amount: new Decimal(bid.frozenAmount).negated(),
+              balanceAfter: wallet.balance,
+              refType: 'BID',
+              refId: bidId,
+              description: `Bid deleted - auction ${bid.auctionId}`,
+            },
+          });
+        }
+      }
+
       await tx.bid.delete({ where: { id: bidId } });
 
       // Recalculate current price
@@ -404,11 +569,44 @@ export class BidService {
       });
 
       if (remainingBids.length > 0) {
-        const { newCurrentPrice } = await this.processAutoBidCompetition(
+        const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
           tx,
           bid.auctionId,
           bid.auction.minBidIncrement
         );
+
+        // ★ Phase 9-2: 새 최고 입찰자에게 frozenAmount 설정
+        const newWinner = remainingBids.find(b => b.id === winningBidId);
+        if (newWinner && !newWinner.frozenAmount) {
+          const winnerWallet = await tx.wallet.findFirst({
+            where: { ownerType: 'BRAND', ownerId: newWinner.brandId },
+          });
+          if (winnerWallet) {
+            const freezeAmount = new Decimal(newWinner.maxBid);
+            await tx.wallet.update({
+              where: { id: winnerWallet.id },
+              data: {
+                frozenAmount: { increment: freezeAmount },
+                version: { increment: 1 },
+              },
+            });
+            await tx.ledgerTx.create({
+              data: {
+                walletId: winnerWallet.id,
+                type: 'AUCTION_BID_RESERVE',
+                amount: freezeAmount,
+                balanceAfter: winnerWallet.balance,
+                refType: 'BID',
+                refId: newWinner.id,
+                description: `New winning bid after deletion - auction ${bid.auctionId}`,
+              },
+            });
+            await tx.bid.update({
+              where: { id: newWinner.id },
+              data: { frozenAmount: freezeAmount, isWinning: true },
+            });
+          }
+        }
 
         await tx.auction.update({
           where: { id: bid.auctionId },
