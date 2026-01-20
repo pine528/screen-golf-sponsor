@@ -311,14 +311,14 @@ export class TopupController {
       const brandId = req.user!.brandId;
 
       if (!brandId) {
-        return res.status(403).json({ error: '브랜드만 충전할 수 있습니다' });
+        return res.status(403).json({ message: '브랜드만 충전할 수 있습니다' });
       }
 
       const { amount } = req.body;
       const topupAmount = Number(amount);
 
       if (!topupAmount || topupAmount < 1000 || topupAmount > 100000000) {
-        return res.status(400).json({ error: '충전 금액은 1,000원 ~ 1억원 사이여야 합니다' });
+        return res.status(400).json({ message: '충전 금액은 1,000원 ~ 1억원 사이여야 합니다' });
       }
 
       // 직접 지갑에 충전 (트랜잭션)
