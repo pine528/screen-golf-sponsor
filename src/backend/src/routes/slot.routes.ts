@@ -147,6 +147,8 @@ router.patch(
 /**
  * @route POST /slots/instances/:id/buy-now
  * @desc Direct buy a slot - Brand only
+ * - 브랜드 잔액 검증 후 계약 생성 (브랜드 선서명)
+ * - 선수 서명 후 에스크로 HOLD
  */
 router.post(
   '/instances/:id/buy-now',
@@ -160,12 +162,12 @@ router.post(
       // Get brand ID from user
       const brand = await brandService.findByUserId(userId);
 
-      const contract = await slotInstanceService.processBuyNow(id, brand.id);
+      const contract = await slotInstanceService.processBuyNow(id, brand.id, userId);
 
       res.json({
         success: true,
         data: contract,
-        message: 'Slot purchased successfully. Contract created.',
+        message: 'Slot purchased successfully. Contract created. Waiting for athlete signature.',
       });
     } catch (error) {
       next(error);

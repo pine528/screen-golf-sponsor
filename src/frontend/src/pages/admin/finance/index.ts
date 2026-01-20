@@ -5,3 +5,7 @@ export { default as FinanceWallets } from './FinanceWallets';
 export { default as FinanceWalletDetail } from './FinanceWalletDetail';
 export { default as FinancePayouts } from './FinancePayouts';
 export { default as FinancePayoutDetail } from './FinancePayoutDetail';
+export { default as FinanceWithdrawals } from './FinanceWithdrawals';
+export { default as FinanceWithdrawalDetail } from './FinanceWithdrawalDetail';
+export { default as FinanceWithdrawalBatches } from './FinanceWithdrawalBatches';
+export { default as FinanceWithdrawalBatchDetail } from './FinanceWithdrawalBatchDetail';

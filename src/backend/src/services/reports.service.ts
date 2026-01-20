@@ -4,6 +4,7 @@
  */
 
 import prisma from '../models/prisma';
+import { withdrawalService } from './withdrawal.service';
 
 interface Anomaly {
   type: string;
@@ -192,6 +193,122 @@ export class ReportsService {
     alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
     return alerts;
+  }
+
+  /**
+   * 출금 관련 이상징후 감지
+   * - 승인 후 지급 대기 과다
+   * - 일일 지급 급증
+   * - 배치 실패율 높음
+   * - 동결금액 정합성 오류
+   * - 장기 미승인 건 과다
+   */
+  async detectWithdrawalAnomalies(): Promise<Anomaly[]> {
+    const alerts: Anomaly[] = [];
+    const now = new Date();
+
+    // 메트릭 조회
+    const metrics = await withdrawalService.getMetrics();
+
+    // 규칙 1: 승인 후 지급 대기 과다 (> 50건)
+    const pendingApprovedCount = metrics.pending.approved.count;
+    if (pendingApprovedCount > 50) {
+      alerts.push({
+        type: 'WITHDRAWAL_PENDING_HIGH',
+        severity: pendingApprovedCount > 100 ? 'high' : 'medium',
+        title: '출금 지급 대기 과다',
+        detail: `승인 후 지급 대기 중인 출금이 ${pendingApprovedCount}건입니다. 배치 처리가 필요합니다.`,
+        value: pendingApprovedCount,
+        threshold: 50,
+        createdAt: now.toISOString(),
+      });
+    }
+
+    // 규칙 2: 일일 지급 급증 (7일 평균 대비 2배 이상)
+    const todayPaidCount = metrics.today.paid.count;
+    const avg7d = await withdrawalService.getAvgPaidLast7Days();
+    if (todayPaidCount > avg7d * 2 && avg7d > 0 && todayPaidCount >= 5) {
+      alerts.push({
+        type: 'WITHDRAWAL_PAID_SPIKE',
+        severity: 'medium',
+        title: '출금 지급 급증',
+        detail: `오늘 지급 완료 ${todayPaidCount}건이 7일 일평균 ${avg7d.toFixed(1)}건 대비 급증했습니다.`,
+        value: todayPaidCount,
+        threshold: avg7d * 2,
+        createdAt: now.toISOString(),
+      });
+    }
+
+    // 규칙 3: 배치 실패율 높음 (> 10%)
+    // 배치에 포함되어 있지만 여전히 APPROVED 상태인 건 / 전체 배치 포함 건
+    const failedLast24h = metrics.failed.last24h;
+    const batchTotalToday = metrics.batch.todayCompleted > 0
+      ? await this.getBatchItemCountLast24h()
+      : 0;
+
+    if (batchTotalToday > 0) {
+      const failRate = failedLast24h / batchTotalToday;
+      if (failRate > 0.1) {
+        alerts.push({
+          type: 'WITHDRAWAL_BATCH_FAIL_RATE',
+          severity: 'high',
+          title: '배치 처리 실패율 높음',
+          detail: `최근 24시간 배치 처리 실패율이 ${(failRate * 100).toFixed(1)}%입니다. (실패 ${failedLast24h}건 / 총 ${batchTotalToday}건)`,
+          value: failRate * 100,
+          threshold: 10,
+          createdAt: now.toISOString(),
+        });
+      }
+    }
+
+    // 규칙 4: 동결금액 정합성 오류 (frozen < 0 OR frozen > balance)
+    const frozenAnomalies = await withdrawalService.checkFrozenIntegrity();
+    if (frozenAnomalies.length > 0) {
+      alerts.push({
+        type: 'WITHDRAWAL_FROZEN_ANOMALY',
+        severity: 'critical',
+        title: '동결금액 정합성 오류',
+        detail: `${frozenAnomalies.length}개 지갑에서 동결금액 정합성 오류 발견. ` +
+          `문제: ${frozenAnomalies.map(a => `${a.ownerId}(${a.issue})`).slice(0, 3).join(', ')}${frozenAnomalies.length > 3 ? ' 외' : ''}`,
+        value: frozenAnomalies.length,
+        threshold: 0,
+        createdAt: now.toISOString(),
+      });
+    }
+
+    // 규칙 5: 장기 미승인 건 과다 (3일 이상 REQUESTED 상태 > 10건)
+    const longPendingCount = await withdrawalService.getLongPendingCount(3);
+    if (longPendingCount > 10) {
+      alerts.push({
+        type: 'WITHDRAWAL_LONG_PENDING',
+        severity: longPendingCount > 30 ? 'high' : 'medium',
+        title: '장기 미승인 출금',
+        detail: `3일 이상 승인 대기 중인 출금 요청이 ${longPendingCount}건입니다. 검토가 필요합니다.`,
+        value: longPendingCount,
+        threshold: 10,
+        createdAt: now.toISOString(),
+      });
+    }
+
+    // severity 순으로 정렬
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+    return alerts;
+  }
+
+  /**
+   * 최근 24시간 배치에 포함된 총 출금 건수
+   */
+  private async getBatchItemCountLast24h(): Promise<number> {
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result = await prisma.withdrawalRequest.count({
+      where: {
+        batchId: { not: null },
+        updatedAt: { gte: last24h },
+      },
+    });
+    return result;
   }
 }
 

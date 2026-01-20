@@ -19,6 +19,7 @@ import AdminVoteEvents from './pages/admin/AdminVoteEvents';
 import AdminPayments from './pages/admin/AdminPayments';
 import AdminReports from './pages/admin/AdminReports';
 import AdminEntities from './pages/admin/AdminEntities';
+import AdminEntityDetail from './pages/admin/AdminEntityDetail';
 import {
   FinanceDashboard,
   FinanceEscrows,
@@ -27,14 +28,22 @@ import {
   FinanceWalletDetail,
   FinancePayouts,
   FinancePayoutDetail,
+  FinanceWithdrawals,
+  FinanceWithdrawalDetail,
+  FinanceWithdrawalBatches,
+  FinanceWithdrawalBatchDetail,
 } from './pages/admin/finance';
+import AthleteWithdrawals from './pages/athlete/Withdrawals';
+import AthletePendingSignatures from './pages/athlete/PendingSignatures';
 import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
+import BrandWallet from './pages/brand/BrandWallet';
 import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister, Shop, ShopDetail, Orders } from './pages/fan';
 import FanVoteCreate from './pages/fan/FanVoteCreate';
 import MyFanVotes from './pages/fan/MyFanVotes';
 import FanVoteResult from './pages/fan/FanVoteResult';
 import { AdminBrandRegistrations } from './pages/admin/AdminBrandRegistrations';
+import AdminOps from './pages/admin/AdminOps';
 import AdminFanVotes from './pages/admin/AdminFanVotes';
 import AdminFanVoteSettle from './pages/admin/AdminFanVoteSettle';
 import { Inventory } from './pages/Inventory';
@@ -204,10 +213,34 @@ function App() {
         }
       />
       <Route
+        path="/athlete/withdrawals"
+        element={
+          <ProtectedRoute>
+            <AthleteWithdrawals />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/athlete/pending-signatures"
+        element={
+          <ProtectedRoute>
+            <AthletePendingSignatures />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/campaigns"
         element={
           <ProtectedRoute>
             <BrandCampaigns />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brand/wallet"
+        element={
+          <ProtectedRoute>
+            <BrandWallet />
           </ProtectedRoute>
         }
       />
@@ -404,6 +437,14 @@ function App() {
         }
       />
       <Route
+        path="/admin/entities/:type/:id"
+        element={
+          <ProtectedRoute>
+            <AdminEntityDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/brand-registrations"
         element={
           <ProtectedRoute>
@@ -424,6 +465,14 @@ function App() {
         element={
           <ProtectedRoute>
             <AdminFanVoteSettle />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/ops"
+        element={
+          <ProtectedRoute>
+            <AdminOps />
           </ProtectedRoute>
         }
       />
@@ -482,6 +531,38 @@ function App() {
         element={
           <ProtectedRoute>
             <FinancePayoutDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/finance/withdrawals"
+        element={
+          <ProtectedRoute>
+            <FinanceWithdrawals />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/finance/withdrawals/:id"
+        element={
+          <ProtectedRoute>
+            <FinanceWithdrawalDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/finance/withdrawals/batches"
+        element={
+          <ProtectedRoute>
+            <FinanceWithdrawalBatches />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/finance/withdrawals/batches/:id"
+        element={
+          <ProtectedRoute>
+            <FinanceWithdrawalBatchDetail />
           </ProtectedRoute>
         }
       />

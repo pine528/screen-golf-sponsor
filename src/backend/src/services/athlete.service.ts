@@ -243,6 +243,77 @@ export class AthleteService {
       },
     });
   }
+
+  /**
+   * ★ Phase 9-3: 선수의 서명 대기 계약 목록
+   * - brandSignedAt 있고 athleteSignedAt 없는 계약
+   * - 60분 이하면 urgent 표시
+   */
+  async getPendingSignatures(athleteId: string) {
+    const now = new Date();
+    const urgentThreshold = 60 * 60 * 1000; // 60분
+
+    const contracts = await prisma.contract.findMany({
+      where: {
+        athleteId,
+        status: 'PENDING_SIGNATURE',
+        brandSignedAt: { not: null },
+        athleteSignedAt: null,
+      },
+      orderBy: [
+        { reservedUntil: 'asc' }, // 만료 임박순
+        { createdAt: 'desc' },
+      ],
+      include: {
+        brand: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+          },
+        },
+        auction: {
+          include: {
+            slotInstance: {
+              include: {
+                event: { select: { id: true, name: true } },
+                slotTemplate: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return contracts.map((contract) => {
+      const slot = contract.auction.slotInstance;
+      const reservedUntil = contract.reservedUntil || new Date(0);
+      const remainingMs = reservedUntil.getTime() - now.getTime();
+      const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+      const isUrgent = remainingMs > 0 && remainingMs <= urgentThreshold;
+
+      // Auction 낙찰인지 Direct Buy인지 판단
+      const isAuctionWin = contract.auction.status === 'ENDED' && contract.auction.winningBidId !== null;
+
+      return {
+        id: contract.id,
+        slotId: slot.id,
+        slotName: slot.slotTemplate.name,
+        brandId: contract.brand.id,
+        brandName: contract.brand.name,
+        brandCategory: contract.brand.category,
+        eventName: slot.event.name,
+        eventId: slot.event.id,
+        price: contract.priceFinal,
+        reservedUntil,
+        remainingSeconds,
+        type: isAuctionWin ? 'AUCTION' : 'DIRECT_BUY',
+        createdAt: contract.createdAt,
+        isUrgent,
+        isExpired: remainingSeconds === 0,
+      };
+    });
+  }
 }
 
 export const athleteService = new AthleteService();

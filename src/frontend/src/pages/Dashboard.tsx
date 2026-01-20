@@ -21,20 +21,54 @@ export function Dashboard() {
 }
 
 function BrandDashboard() {
-  const { data: stats } = useQuery({
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
     queryKey: ['brand-stats'],
     queryFn: () => api.getMyBrandStats(),
+    retry: 1,
   });
 
-  const { data: liveAuctions } = useQuery({
+  const { data: liveAuctions, isLoading: auctionsLoading } = useQuery({
     queryKey: ['live-auctions'],
     queryFn: () => api.getLiveAuctions(),
+    retry: 1,
   });
 
-  const { data: upcomingEvents } = useQuery({
+  const { data: upcomingEvents, isLoading: eventsLoading } = useQuery({
     queryKey: ['upcoming-events'],
     queryFn: () => api.getUpcomingEvents(5),
+    retry: 1,
   });
+
+  const isLoading = statsLoading || auctionsLoading || eventsLoading;
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+            <p className="mt-4 text-slate-600">로딩 중...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (statsError) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p className="text-red-600 text-lg font-medium">브랜드 정보를 불러오는데 실패했습니다</p>
+            <p className="mt-2 text-slate-600">브랜드 등록이 완료되었는지 확인해주세요.</p>
+            <Link to="/profile" className="mt-4 inline-block btn btn-primary">
+              프로필 확인
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

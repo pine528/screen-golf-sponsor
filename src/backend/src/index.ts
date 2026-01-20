@@ -20,9 +20,27 @@ import { socketService } from './services/socket.service';
 import { escrowService } from './services/escrow.service';
 import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
+import { reconciliationService } from './services/reconciliation.service';
+import { validateEncryptionKey } from './utils/crypto';
 
 // Sentry 초기화 (가장 먼저)
 initSentry();
+
+// 암호화 키 검증 (출금 계좌 암호화용)
+// 프로덕션에서는 키가 없으면 서버 부팅 실패
+if (config.nodeEnv === 'production') {
+  if (!validateEncryptionKey()) {
+    console.error('[FATAL] 암호화 키 검증 실패. 서버를 종료합니다.');
+    process.exit(1);
+  }
+} else {
+  // 개발/테스트 환경에서는 경고만 출력
+  if (!process.env.BANK_ACCOUNT_ENC_KEY) {
+    console.warn('[WARN] BANK_ACCOUNT_ENC_KEY가 설정되지 않았습니다. 계좌 암호화가 작동하지 않습니다.');
+  } else {
+    validateEncryptionKey();
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -150,6 +168,71 @@ cron.schedule('5 9 * * *', async () => {
     }
   } catch (error) {
     console.error('[Cron] Anomaly detection error:', error);
+  }
+}, cronOptions);
+
+// Withdrawal anomaly detection daily at 9:10 AM KST
+cron.schedule('10 9 * * *', async () => {
+  try {
+    console.log('[Cron] 출금 정합성 검사 시작...');
+    const alerts = await reportsService.detectWithdrawalAnomalies();
+    if (alerts.length > 0) {
+      const notified = await notificationService.notifyAdminAlert(alerts);
+      console.log(`[Cron] 출금 이상징후 ${alerts.length}건 감지, ${notified}명 관리자에게 알림`);
+    } else {
+      console.log('[Cron] 출금 정합성 정상');
+    }
+  } catch (error) {
+    console.error('[Cron] 출금 정합성 검사 실패:', error);
+  }
+}, cronOptions);
+
+// ★ Phase 9-1.1: Process expired Direct Buy reservations every 10 minutes
+cron.schedule('*/10 * * * *', async () => {
+  try {
+    const count = await contractService.processExpiredReservations();
+    if (count > 0) {
+      console.log(`[Cron] Direct Buy: ${count} expired reservations released`);
+    }
+  } catch (error) {
+    console.error('[Cron] Direct Buy reservation expiry error:', error);
+  }
+}, cronOptions);
+
+// ★ Phase 10-3: Reconciliation - Daily Full at 9:20 AM KST
+cron.schedule('20 9 * * *', async () => {
+  try {
+    console.log('[Cron] 결제/환불 대사 시작 (Full)...');
+
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const now = new Date();
+
+    const result = await reconciliationService.runReconciliation('FULL', yesterday, now);
+
+    console.log(`[Cron] 대사 완료: ${result.totalChecked}건 검사, ${result.issuesFound}건 이상 발견`);
+
+    // HIGH+ 이슈 발견 시 관리자 알림
+    const highOrCritical =
+      (result.issuesBySeverity['HIGH'] || 0) +
+      (result.issuesBySeverity['CRITICAL'] || 0);
+
+    if (highOrCritical > 0) {
+      const alerts = [
+        {
+          type: 'RECONCILIATION_ISSUES',
+          severity: result.issuesBySeverity['CRITICAL'] ? 'critical' : 'high',
+          title: '결제/환불 정합성 이상 발견',
+          detail: `${result.issuesFound}건의 정합성 이상 발견 (CRITICAL: ${result.issuesBySeverity['CRITICAL'] || 0}, HIGH: ${result.issuesBySeverity['HIGH'] || 0})`,
+          value: result.issuesFound,
+          threshold: 0,
+        },
+      ];
+
+      const notified = await notificationService.notifyAdminAlert(alerts as any);
+      console.log(`[Cron] 관리자에게 대사 이상 알림 발송: ${notified}명`);
+    }
+  } catch (error) {
+    console.error('[Cron] 결제/환불 대사 실패:', error);
   }
 }, cronOptions);
 

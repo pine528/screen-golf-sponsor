@@ -158,6 +158,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/inventory', label: '인벤토리', icon: Calendar },
     { path: '/auctions', label: '경매', icon: Gavel },
     { path: '/contracts', label: '계약 관리', icon: FileText },
+    { path: '/brand/wallet', label: '지갑', icon: Wallet },
     { path: '/campaigns', label: '캠페인', icon: Megaphone },
     { path: '/votes', label: '투표', icon: Vote },
     { path: '/profile', label: '프로필', icon: User },

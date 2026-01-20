@@ -255,6 +255,32 @@ class ApiService {
     return response.data;
   }
 
+  async getMyBrandWallet() {
+    const response = await this.client.get<ApiResponse<any>>('/brands/me/wallet');
+    return response.data;
+  }
+
+  // Brand Topup (지갑 충전)
+  async createTopup(data: { amount: number; provider: 'TOSS' | 'STRIPE' }) {
+    const response = await this.client.post<ApiResponse<any>>('/brand/topups', data);
+    return response.data;
+  }
+
+  async confirmTopup(topupId: string, paymentKey: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/brand/topups/${topupId}/confirm`, { paymentKey });
+    return response.data;
+  }
+
+  async getMyTopups(params?: { status?: string; limit?: number; offset?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/brand/topups/my', { params });
+    return response.data;
+  }
+
+  async getMyTopup(topupId: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/brand/topups/my/${topupId}`);
+    return response.data;
+  }
+
   // Athlete
   async getMyAthlete() {
     const response = await this.client.get<ApiResponse<any>>('/athletes/me');
@@ -858,6 +884,16 @@ class ApiService {
     return response.data;
   }
 
+  async getAdminAthlete(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/entities/athletes/${id}`);
+    return response.data;
+  }
+
+  async getAdminBrand(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/entities/brands/${id}`);
+    return response.data;
+  }
+
   // ============================================
   // Fan Favorites API
   // ============================================
@@ -1196,6 +1232,227 @@ class ApiService {
   // Admin: 주문 처리 완료
   async fulfillRedemptionOrder(id: string, memo?: string) {
     const response = await this.client.post<ApiResponse<any>>(`/shop/admin/orders/${id}/fulfill`, { memo });
+    return response.data;
+  }
+
+  // ============================================
+  // Withdrawal (선수 출금)
+  // ============================================
+
+  // Athlete: 출금 가능 잔액 조회
+  async getWithdrawalAvailableBalance() {
+    const response = await this.client.get<ApiResponse<{
+      balance: number;
+      frozenAmount: number;
+      available: number;
+    }>>('/withdrawals/available-balance');
+    return response.data;
+  }
+
+  // Athlete: 출금 요청 생성
+  async createWithdrawalRequest(
+    data: {
+      amount: number;
+      bankName: string;
+      bankAccountNumber: string;
+      accountHolder: string;
+      reason?: string;
+    },
+    idempotencyKey?: string
+  ) {
+    const response = await this.client.post<ApiResponse<any>>('/withdrawals', data, {
+      headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {},
+    });
+    return response.data;
+  }
+
+  // Athlete: 내 출금 요청 목록
+  async getMyWithdrawals(params?: { page?: number; pageSize?: number; status?: string }) {
+    const response = await this.client.get<ApiResponse<any>>('/withdrawals/my', { params });
+    return response.data;
+  }
+
+  // Athlete: 내 출금 요청 상세
+  async getMyWithdrawal(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/withdrawals/my/${id}`);
+    return response.data;
+  }
+
+  // Admin: 출금 요청 목록
+  async getAdminWithdrawals(params?: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/withdrawals', { params });
+    return response.data;
+  }
+
+  // Admin: 출금 요청 상세
+  async getAdminWithdrawal(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/finance/withdrawals/${id}`);
+    return response.data;
+  }
+
+  // Admin: 출금 통계 요약
+  async getAdminWithdrawalSummary() {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/withdrawals/summary');
+    return response.data;
+  }
+
+  // Admin: 출금 CSV 다운로드
+  async downloadWithdrawalsCsv(params?: { status?: string; from?: string; to?: string }) {
+    const response = await this.client.get('/admin/finance/withdrawals.csv', {
+      params,
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  // Admin: 출금 승인
+  async approveWithdrawal(id: string, data: { confirmText: string; reason?: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/finance/withdrawals/${id}/approve`, data);
+    return response.data;
+  }
+
+  // Admin: 출금 거부
+  async rejectWithdrawal(id: string, data: { confirmText: string; reason: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/finance/withdrawals/${id}/reject`, data);
+    return response.data;
+  }
+
+  // Admin: 출금 지급 완료
+  async markWithdrawalPaid(id: string, data: { confirmText: string; payoutReference: string; reason?: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/finance/withdrawals/${id}/paid`, data);
+    return response.data;
+  }
+
+  // ========================================
+  // 출금 배치 관리
+  // ========================================
+
+  // Admin: 출금 배치 목록
+  async getWithdrawalBatches(params?: { status?: string; page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/withdrawals/batches', { params });
+    return response.data;
+  }
+
+  // Admin: 출금 배치 생성
+  async createWithdrawalBatch(data: { withdrawalIds: string[]; note?: string }) {
+    const response = await this.client.post<ApiResponse<any>>('/admin/finance/withdrawals/batches', data);
+    return response.data;
+  }
+
+  // Admin: 출금 배치 상세
+  async getWithdrawalBatch(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/finance/withdrawals/batches/${id}`);
+    return response.data;
+  }
+
+  // Admin: 출금 배치 CSV 내보내기
+  async downloadWithdrawalBatchCsv(batchId: string) {
+    const response = await this.client.get(`/admin/finance/withdrawals/batches/${batchId}/export.csv`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  // Admin: 출금 배치 일괄 지급 완료
+  async completeWithdrawalBatch(id: string, data: { confirmText: string; reason: string; proofUrl?: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/finance/withdrawals/batches/${id}/complete`, data);
+    return response.data;
+  }
+
+  // Admin: 출금 배치 취소
+  async cancelWithdrawalBatch(id: string, data: { confirmText: string; reason: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/finance/withdrawals/batches/${id}/cancel`, data);
+    return response.data;
+  }
+
+  // Admin: 출금 메트릭
+  async getWithdrawalMetrics() {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/withdrawals/metrics');
+    return response.data;
+  }
+
+  // ============================================
+  // Phase 9-3: Brand Dashboard API
+  // ============================================
+
+  // Brand: 내 예약 목록 (Direct Buy + Auction 낙찰)
+  async getMyReservations() {
+    const response = await this.client.get<ApiResponse<any[]>>('/brands/me/reservations');
+    return response.data;
+  }
+
+  // Brand: 내 입찰 목록
+  async getMyAuctionBids() {
+    const response = await this.client.get<ApiResponse<any[]>>('/brands/me/bids');
+    return response.data;
+  }
+
+  // Brand: 내 낙찰 목록
+  async getMyWins() {
+    const response = await this.client.get<ApiResponse<any[]>>('/brands/me/wins');
+    return response.data;
+  }
+
+  // ============================================
+  // Phase 9-3: Athlete Dashboard API
+  // ============================================
+
+  // Athlete: 서명 대기 계약 목록
+  async getPendingSignatures() {
+    const response = await this.client.get<ApiResponse<any[]>>('/athletes/me/pending-signatures');
+    return response.data;
+  }
+
+  // ============================================
+  // Phase 9-3: Auction Summary API (Polling)
+  // ============================================
+
+  // Auction: 요약 정보 (폴링용)
+  async getAuctionSummary(auctionId: string) {
+    const response = await this.client.get<ApiResponse<{
+      id: string;
+      currentPrice: number;
+      bidCount: number;
+      remainingSeconds: number;
+      status: string;
+      endAt: string;
+      myIsHighest?: boolean;
+    }>>(`/auctions/${auctionId}/summary`);
+    return response.data;
+  }
+
+  // ============================================
+  // Phase 9-3: Admin Operations API
+  // ============================================
+
+  // Admin Ops: 계약 조회
+  async getOpsContract(contractId: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/ops/contracts/${contractId}`);
+    return response.data;
+  }
+
+  // Admin Ops: 예약 강제 해제
+  async releaseReservation(contractId: string, data: { reason: string; confirmText: string; idempotencyKey?: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/ops/contracts/${contractId}/release-reservation`, data);
+    return response.data;
+  }
+
+  // Admin Ops: 경매 조회
+  async getOpsAuction(auctionId: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/ops/auctions/${auctionId}`);
+    return response.data;
+  }
+
+  // Admin Ops: 경매 강제 종료
+  async forceCloseAuction(auctionId: string, data: { reason: string; confirmText: string; idempotencyKey?: string }) {
+    const response = await this.client.post<ApiResponse<any>>(`/admin/ops/auctions/${auctionId}/force-close`, data);
     return response.data;
   }
 }

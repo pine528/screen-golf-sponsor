@@ -2,6 +2,7 @@ import prisma from '../models/prisma';
 import { NotFoundError, ConflictError, BadRequestError, ForbiddenError } from '../utils/errors';
 import { BodyPart, MaterialRule, SlotStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { notificationService } from './notification.service';
 
 export class SlotTemplateService {
   async create(data: {
@@ -378,43 +379,101 @@ export class SlotInstanceService {
 
   /**
    * Process direct buy (즉시구매)
+   * - 브랜드가 즉시구매 시 계약 생성 (브랜드 선서명)
+   * - 선수 서명 후 에스크로 HOLD (기존 sign() 흐름 활용)
    */
-  async processBuyNow(slotId: string, brandId: string) {
-    return await prisma.$transaction(async (tx) => {
-      // Get slot with lock
-      const slot = await tx.slotInstance.findUnique({
-        where: { id: slotId },
-        include: {
-          event: true,
-          athlete: true,
-          slotTemplate: true,
+  async processBuyNow(slotId: string, brandId: string, brandUserId: string) {
+    // 트랜잭션 외부에서 먼저 기본 검증 수행
+    const slot = await prisma.slotInstance.findUnique({
+      where: { id: slotId },
+      include: {
+        event: true,
+        athlete: { include: { user: true } },
+        slotTemplate: true,
+      },
+    });
+
+    if (!slot) {
+      throw new NotFoundError('Slot not found');
+    }
+
+    if (!slot.enableDirectBuy) {
+      throw new BadRequestError('Direct buy is not enabled for this slot');
+    }
+
+    if (!slot.directBuyPrice) {
+      throw new BadRequestError('Direct buy price not set');
+    }
+
+    if (slot.status !== 'OPEN') {
+      throw new ConflictError('Slot is no longer available for purchase');
+    }
+
+    // Get brand
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+    });
+
+    if (!brand) {
+      throw new NotFoundError('Brand not found');
+    }
+
+    // 잔액 검증: 가용 잔액 >= directBuyPrice
+    const brandWallet = await prisma.wallet.findUnique({
+      where: {
+        ownerType_ownerId: {
+          ownerType: 'BRAND',
+          ownerId: brandId,
+        },
+      },
+    });
+
+    if (!brandWallet) {
+      throw new BadRequestError('Wallet not found. Please deposit first.');
+    }
+
+    const available = new Decimal(brandWallet.balance).minus(brandWallet.frozenAmount);
+    if (available.lt(slot.directBuyPrice)) {
+      throw new BadRequestError(
+        `Insufficient balance. Available: ${available.toString()}, Required: ${slot.directBuyPrice.toString()}`
+      );
+    }
+
+    // 활성 계약 존재 여부 확인 (슬롯당 1개 제한)
+    const existingContract = await prisma.contract.findFirst({
+      where: {
+        auction: { slotInstanceId: slotId },
+        status: { notIn: ['CANCELLED', 'COMPLETED'] },
+      },
+    });
+    if (existingContract) {
+      throw new ConflictError('Slot already has an active contract');
+    }
+
+    // 트랜잭션으로 원자적 처리
+    const contract = await prisma.$transaction(async (tx) => {
+      // 동시성 방어: 상태 조건부 업데이트
+      const updateResult = await tx.slotInstance.updateMany({
+        where: { id: slotId, status: 'OPEN' },
+        data: { status: 'RESERVED' },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ConflictError('Slot already purchased by another buyer');
+      }
+
+      // ★ Phase 9-1.1: frozenAmount 증가 (예약 동결)
+      const price = slot.directBuyPrice!;
+      await tx.wallet.update({
+        where: { id: brandWallet.id },
+        data: {
+          frozenAmount: { increment: price },
+          version: { increment: 1 },
         },
       });
 
-      if (!slot) {
-        throw new NotFoundError('Slot not found');
-      }
-
-      if (!slot.enableDirectBuy) {
-        throw new BadRequestError('Direct buy is not enabled for this slot');
-      }
-
-      if (!slot.directBuyPrice) {
-        throw new BadRequestError('Direct buy price not set');
-      }
-
-      if (slot.status !== 'OPEN') {
-        throw new ConflictError('Slot is no longer available for purchase');
-      }
-
-      // Get brand
-      const brand = await tx.brand.findUnique({
-        where: { id: brandId },
-      });
-
-      if (!brand) {
-        throw new NotFoundError('Brand not found');
-      }
+      // ★ Phase 9-1.1: LedgerTx 기록 (감사 목적)
+      // 먼저 Contract를 생성해야 refId로 사용 가능하므로 아래에서 처리
 
       // Create a dummy auction record for contract linkage
       const now = new Date();
@@ -429,20 +488,19 @@ export class SlotInstanceService {
         },
       });
 
-      // Update slot status
-      await tx.slotInstance.update({
-        where: { id: slotId },
-        data: { status: 'SOLD' },
-      });
+      // ★ Phase 9-1.1: reservedUntil = now + 24시간
+      const reservedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      // Create contract
-      const contract = await tx.contract.create({
+      // Create contract with brand pre-signed
+      const createdContract = await tx.contract.create({
         data: {
           auctionId: auction.id,
           brandId,
           athleteId: slot.athleteId,
           priceFinal: Number(slot.directBuyPrice),
           status: 'PENDING_SIGNATURE',
+          brandSignedAt: now, // 브랜드 선서명
+          reservedUntil, // ★ Phase 9-1.1: 예약 만료 시간
           assetDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         },
         include: {
@@ -461,71 +519,59 @@ export class SlotInstanceService {
         },
       });
 
-      // Get or create brand wallet
-      let brandWallet = await tx.wallet.findUnique({
-        where: {
-          ownerType_ownerId: {
-            ownerType: 'BRAND',
-            ownerId: brandId,
-          },
-        },
-      });
-
-      if (!brandWallet) {
-        brandWallet = await tx.wallet.create({
-          data: {
-            ownerType: 'BRAND',
-            ownerId: brandId,
-            balance: 0,
-          },
-        });
-      }
-
-      // Calculate fees
-      const grossAmount = Number(slot.directBuyPrice);
-      const platformFeeRate = 0.1; // 10%
-      const platformFee = Math.floor(grossAmount * platformFeeRate);
-      const athletePayout = grossAmount - platformFee;
-
-      // Create escrow
-      await tx.escrow.create({
-        data: {
-          contractId: contract.id,
-          brandId,
-          athleteId: slot.athleteId,
-          grossAmount: new Decimal(grossAmount),
-          platformFee: new Decimal(platformFee),
-          platformFeeRate: new Decimal(platformFeeRate),
-          athletePayout: new Decimal(athletePayout),
-          status: 'HELD',
-        },
-      });
-
-      // Create ledger transaction for escrow hold
-      const newBalance = new Decimal(brandWallet.balance).minus(grossAmount);
+      // ★ Phase 9-1.1: LedgerTx 기록 (DIRECT_BUY_RESERVE)
       await tx.ledgerTx.create({
         data: {
           walletId: brandWallet.id,
-          type: 'ESCROW_HOLD',
-          amount: new Decimal(-grossAmount),
-          balanceAfter: newBalance,
+          type: 'DIRECT_BUY_RESERVE',
+          amount: price, // 동결 금액 (양수로 기록 - balance는 변경 없음)
+          balanceAfter: brandWallet.balance, // balance는 그대로
           refType: 'CONTRACT',
-          refId: contract.id,
-          description: `Direct buy: ${slot.slotTemplate.name} - ${slot.event.name}`,
+          refId: createdContract.id,
+          description: `Direct buy reserve for slot ${slotId}`,
         },
       });
 
-      // Update wallet balance
-      await tx.wallet.update({
-        where: { id: brandWallet.id },
+      // AuditLog 기록
+      await tx.auditLog.create({
         data: {
-          balance: newBalance,
-          frozenAmount: new Decimal(brandWallet.frozenAmount).plus(grossAmount),
+          userId: brandUserId,
+          action: 'DIRECT_BUY_RESERVE',
+          entityType: 'CONTRACT',
+          entityId: createdContract.id,
+          newValue: {
+            slotId,
+            brandId,
+            athleteId: slot.athleteId,
+            price: Number(slot.directBuyPrice),
+            reservedUntil: reservedUntil.toISOString(),
+          },
         },
       });
 
-      return contract;
+      return createdContract;
     });
+
+    // 선수에게 알림 발송 (트랜잭션 외부)
+    try {
+      await notificationService.create({
+        userId: slot.athlete.user.id,
+        type: 'CONTRACT_CREATED',
+        title: '즉시구매 계약 생성',
+        message: `${brand.name}님이 ${slot.slotTemplate.name} 슬롯을 즉시구매했습니다. 24시간 내 서명을 완료해주세요.`,
+        data: {
+          contractId: contract.id,
+          slotName: slot.slotTemplate.name,
+          eventName: slot.event.name,
+          brandName: brand.name,
+          price: Number(slot.directBuyPrice),
+        },
+      });
+    } catch (e) {
+      console.error('Failed to send direct buy notification:', e);
+    }
+
+    return contract;
   }
 }
 

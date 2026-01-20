@@ -11,20 +11,27 @@ function formatNumber(value: string | number): string {
 
 export default function FinanceDashboard() {
   const [summary, setSummary] = useState<any>(null);
+  const [withdrawalMetrics, setWithdrawalMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadSummary();
+    loadData();
   }, []);
 
-  const loadSummary = async () => {
+  const loadData = async () => {
     try {
-      const res = await api.getFinanceSummary();
-      if (res.success) {
-        setSummary(res.data);
+      const [summaryRes, metricsRes] = await Promise.all([
+        api.getFinanceSummary(),
+        api.getWithdrawalMetrics(),
+      ]);
+      if (summaryRes.success) {
+        setSummary(summaryRes.data);
+      }
+      if (metricsRes.success) {
+        setWithdrawalMetrics(metricsRes.data);
       }
     } catch (error) {
-      console.error('Failed to load finance summary:', error);
+      console.error('Failed to load finance data:', error);
     } finally {
       setLoading(false);
     }
@@ -76,6 +83,91 @@ export default function FinanceDashboard() {
           })}
         </div>
       </div>
+
+      {/* 출금 현황 */}
+      {withdrawalMetrics && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">출금 현황</h2>
+            <Link to="/admin/finance/withdrawals" className="text-blue-600 hover:underline text-sm">
+              전체 보기 →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* 오늘 출금 요청 */}
+            <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+              <div className="text-sm text-blue-600">오늘 출금 요청</div>
+              <div className="text-2xl font-bold text-blue-800">
+                {withdrawalMetrics.today?.requested?.count || 0}건
+              </div>
+              <div className="text-sm text-blue-600">
+                ₩{formatNumber(withdrawalMetrics.today?.requested?.amount || 0)}
+              </div>
+            </div>
+
+            {/* 지급 대기 (승인됨) */}
+            <div className="p-4 rounded-lg border bg-orange-50 border-orange-200">
+              <div className="text-sm text-orange-600">지급 대기 (승인)</div>
+              <div className="text-2xl font-bold text-orange-800">
+                {withdrawalMetrics.pending?.approved?.count || 0}건
+              </div>
+              <div className="text-sm text-orange-600">
+                ₩{formatNumber(withdrawalMetrics.pending?.approved?.amount || 0)}
+              </div>
+            </div>
+
+            {/* 오늘 지급 완료 */}
+            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
+              <div className="text-sm text-green-600">오늘 지급 완료</div>
+              <div className="text-2xl font-bold text-green-800">
+                {withdrawalMetrics.today?.paid?.count || 0}건
+              </div>
+              <div className="text-sm text-green-600">
+                ₩{formatNumber(withdrawalMetrics.today?.paid?.amount || 0)}
+              </div>
+            </div>
+
+            {/* 처리 실패 (24h) */}
+            <div className={`p-4 rounded-lg border ${
+              (withdrawalMetrics.failed?.last24h || 0) > 0
+                ? 'bg-red-50 border-red-200'
+                : 'bg-gray-50 border-gray-200'
+            }`}>
+              <div className={`text-sm ${
+                (withdrawalMetrics.failed?.last24h || 0) > 0 ? 'text-red-600' : 'text-gray-600'
+              }`}>처리 실패 (24h)</div>
+              <div className={`text-2xl font-bold ${
+                (withdrawalMetrics.failed?.last24h || 0) > 0 ? 'text-red-800' : 'text-gray-800'
+              }`}>
+                {withdrawalMetrics.failed?.last24h || 0}건
+              </div>
+              <div className="text-sm text-gray-500">
+                배치 대기: {(withdrawalMetrics.batch?.pendingExport || 0) + (withdrawalMetrics.batch?.pendingComplete || 0)}건
+              </div>
+            </div>
+          </div>
+
+          {/* 추가 통계 */}
+          <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap gap-4 text-sm text-gray-600">
+            <div>
+              <span className="font-medium">총 동결금액:</span>{' '}
+              ₩{formatNumber(withdrawalMetrics.totalFrozenAmount || 0)}
+            </div>
+            <div>
+              <span className="font-medium">평균 승인 소요:</span>{' '}
+              {withdrawalMetrics.avgApprovalDays?.toFixed(1) || '0'}일
+            </div>
+            <div>
+              <span className="font-medium">승인 대기:</span>{' '}
+              {withdrawalMetrics.pending?.requested?.count || 0}건
+            </div>
+            <div>
+              <span className="font-medium">오늘 배치:</span>{' '}
+              생성 {withdrawalMetrics.batch?.todayCreated || 0} / 완료 {withdrawalMetrics.batch?.todayCompleted || 0}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 지갑 현황 */}
       <div className="bg-white rounded-lg shadow p-6">
