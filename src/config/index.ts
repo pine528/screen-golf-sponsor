@@ -13,10 +13,10 @@ const REQUIRED_ENVS = [
 
 /**
  * 운영 환경(production)에서 추가로 필요한 환경변수
+ * PortOne V2는 시크릿 키 하나만 사용
  */
 const PRODUCTION_REQUIRED_ENVS = [
-  'PORTONE_API_KEY',
-  'PORTONE_API_SECRET',
+  'PORTONE_SECRET',  // V2 시크릿 키 (store-xxx 형식)
 ];
 
 /**
