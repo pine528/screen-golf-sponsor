@@ -325,13 +325,16 @@ export class TopupController {
       const result = await prisma.$transaction(async (tx) => {
         // 지갑 조회/생성
         let wallet = await tx.wallet.findFirst({
-          where: { brandId },
+          where: {
+            ownerType: 'BRAND',
+            ownerId: brandId,
+          },
         });
 
         if (!wallet) {
           wallet = await tx.wallet.create({
             data: {
-              brandId,
+              ownerId: brandId,
               ownerType: 'BRAND',
               balance: 0,
               frozenAmount: 0,
@@ -356,8 +359,8 @@ export class TopupController {
             amount: topupAmount,
             balanceAfter: updatedWallet.balance,
             description: '테스트 충전 (Mock)',
-            referenceType: 'MOCK_TOPUP',
-            referenceId: `mock_${Date.now()}`,
+            refType: 'MOCK_TOPUP',
+            refId: `mock_${Date.now()}`,
           },
         });
 
