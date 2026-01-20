@@ -937,6 +937,235 @@ export class FanVoteService {
 
     return { closedCount: closedIds.length, closedIds };
   }
+
+  // ============================================
+  // Phase G: 투표 스폰서십
+  // ============================================
+
+  /**
+   * 브랜드가 투표 후원
+   */
+  async sponsorVote(
+    brandId: string,
+    eventId: string,
+    data: {
+      contributionAmount: number;
+      bannerUrl?: string;
+      logoUrl?: string;
+      message?: string;
+      linkUrl?: string;
+    }
+  ) {
+    // prisma generate 전까지 타입 우회
+    const db = prisma as any;
+
+    const event = await db.fanVoteEvent.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    // 이미 종료된 투표는 후원 불가
+    if (['CLOSED', 'SETTLED'].includes(event.status)) {
+      throw new BadRequestError('종료된 투표는 후원할 수 없습니다');
+    }
+
+    // 이미 다른 브랜드가 후원 중인 경우
+    if (event.sponsorBrandId && event.sponsorBrandId !== brandId) {
+      throw new ConflictError('이미 다른 브랜드가 후원 중인 투표입니다');
+    }
+
+    // 브랜드 포인트 잔액 확인
+    const brand = await db.brand.findUnique({
+      where: { id: brandId },
+      include: {
+        user: {
+          include: {
+            pointWallet: true,
+          },
+        },
+      },
+    });
+
+    if (!brand) {
+      throw new NotFoundError('브랜드를 찾을 수 없습니다');
+    }
+
+    const currentBalance = brand.user?.pointWallet?.balance || new Prisma.Decimal(0);
+    if (currentBalance.lessThan(data.contributionAmount)) {
+      throw new BadRequestError('포인트가 부족합니다');
+    }
+
+    // 트랜잭션으로 후원 처리
+    const result = await db.$transaction(async (tx: any) => {
+      // 이벤트 업데이트
+      const updatedEvent = await tx.fanVoteEvent.update({
+        where: { id: eventId },
+        data: {
+          sponsorBrandId: brandId,
+          sponsorContribution: data.contributionAmount,
+          sponsorBannerUrl: data.bannerUrl,
+          sponsorLogoUrl: data.logoUrl,
+          sponsorMessage: data.message,
+          sponsorLinkUrl: data.linkUrl,
+        },
+      });
+
+      // 포인트 차감
+      await pointService.adjustPoints(
+        brand.userId,
+        -data.contributionAmount,
+        'VOTE_ENTRY_FEE' as any, // 기존 reason 활용
+        'FAN_VOTE_SPONSOR',
+        eventId,
+        `투표 후원: ${event.title} (${data.contributionAmount}P)`
+      );
+
+      // SponsorEngagement 생성
+      await tx.sponsorEngagement.upsert({
+        where: { eventId },
+        create: {
+          eventId,
+          bannerImpressions: 0,
+          bannerClicks: 0,
+          linkClicks: 0,
+        },
+        update: {},
+      });
+
+      return updatedEvent;
+    });
+
+    return result;
+  }
+
+  /**
+   * 브랜드가 후원한 투표 목록
+   */
+  async getSponsoredVotes(brandId: string, options: { page?: number; pageSize?: number } = {}) {
+    const db = prisma as any;
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const [events, total] = await Promise.all([
+      db.fanVoteEvent.findMany({
+        where: { sponsorBrandId: brandId },
+        include: {
+          _count: {
+            select: { entries: true },
+          },
+          sponsorEngagement: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      db.fanVoteEvent.count({ where: { sponsorBrandId: brandId } }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  /**
+   * 스폰서 노출/클릭 추적
+   */
+  async trackEngagement(
+    eventId: string,
+    type: 'banner_impression' | 'banner_click' | 'link_click'
+  ) {
+    const db = prisma as any;
+
+    const event = await db.fanVoteEvent.findUnique({
+      where: { id: eventId },
+      select: { sponsorBrandId: true },
+    });
+
+    if (!event?.sponsorBrandId) {
+      // 스폰서가 없으면 무시
+      return { success: false, reason: 'no_sponsor' };
+    }
+
+    const updateData: any = {};
+    if (type === 'banner_impression') {
+      updateData.bannerImpressions = { increment: 1 };
+    } else if (type === 'banner_click') {
+      updateData.bannerClicks = { increment: 1 };
+    } else if (type === 'link_click') {
+      updateData.linkClicks = { increment: 1 };
+    }
+
+    await db.sponsorEngagement.upsert({
+      where: { eventId },
+      create: {
+        eventId,
+        bannerImpressions: type === 'banner_impression' ? 1 : 0,
+        bannerClicks: type === 'banner_click' ? 1 : 0,
+        linkClicks: type === 'link_click' ? 1 : 0,
+      },
+      update: updateData,
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * 스폰서 노출 통계 조회 (브랜드용)
+   */
+  async getSponsorEngagementStats(brandId: string) {
+    const db = prisma as any;
+
+    const events = await db.fanVoteEvent.findMany({
+      where: { sponsorBrandId: brandId },
+      include: {
+        sponsorEngagement: true,
+        _count: {
+          select: { entries: true },
+        },
+      },
+    });
+
+    const totals = events.reduce(
+      (acc: any, event: any) => {
+        const eng = event.sponsorEngagement;
+        if (eng) {
+          acc.totalBannerImpressions += eng.bannerImpressions;
+          acc.totalBannerClicks += eng.bannerClicks;
+          acc.totalLinkClicks += eng.linkClicks;
+        }
+        acc.totalContribution = acc.totalContribution.plus(
+          event.sponsorContribution || new Prisma.Decimal(0)
+        );
+        acc.totalParticipants += event._count.entries;
+        return acc;
+      },
+      {
+        totalBannerImpressions: 0,
+        totalBannerClicks: 0,
+        totalLinkClicks: 0,
+        totalContribution: new Prisma.Decimal(0),
+        totalParticipants: 0,
+      }
+    );
+
+    return {
+      sponsoredEventsCount: events.length,
+      ...totals,
+      ctr: totals.totalBannerImpressions > 0
+        ? (totals.totalBannerClicks / totals.totalBannerImpressions * 100).toFixed(2)
+        : '0.00',
+    };
+  }
 }
 
 export const fanVoteService = new FanVoteService();

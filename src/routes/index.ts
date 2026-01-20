@@ -23,6 +23,11 @@ import shopRoutes from './shop.routes';
 import withdrawalRoutes from './withdrawal.routes';
 import { brandTopupRoutes, webhookRoutes, adminTopupRoutes } from './topup.routes';
 import adminReconciliationRoutes from './admin.reconciliation.routes';
+import faqRoutes from './faq.routes';
+import adminPenaltyRoutes from './admin.penalty.routes';
+import reportRoutes from './report.routes';
+import exposureRoutes from './exposure.routes';
+import seasonRoutes from './season.routes';
 
 const router = Router();
 
@@ -58,6 +63,11 @@ router.use('/brand/topups', brandTopupRoutes);
 router.use('/payments/webhook', webhookRoutes);
 router.use('/admin/finance/topups', adminTopupRoutes);
 router.use('/admin/reconciliation', adminReconciliationRoutes);
+router.use('/faq', faqRoutes);
+router.use('/admin/penalties', adminPenaltyRoutes);
+router.use('/reports', reportRoutes);
+router.use('/exposure', exposureRoutes);
+router.use('/seasons', seasonRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

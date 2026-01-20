@@ -1,8 +1,20 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { contractController, settlementController } from '../controllers/contract.controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, requireRole } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { uploadAssetSchema, submitVerificationSchema } from '../utils/validation';
+import { fulfillmentService } from '../services/fulfillment.service';
+import { AuthRequest } from '../types';
+import { z } from 'zod';
+
+// FulfillmentStatus type (will be available after prisma generate)
+type FulfillmentStatus =
+  | 'NOT_STARTED'
+  | 'DESIGNING'
+  | 'PRODUCING'
+  | 'SHIPPING'
+  | 'DELIVERED'
+  | 'ATTACHED';
 
 const router = Router();
 
@@ -187,6 +199,235 @@ router.post(
   authenticate,
   authorize('ADMIN'),
   settlementController.processPayment
+);
+
+// ============================================
+// Fulfillment (이행 추적)
+// ============================================
+
+const fulfillmentStatusEnum = z.enum([
+  'NOT_STARTED',
+  'DESIGNING',
+  'PRODUCING',
+  'SHIPPING',
+  'DELIVERED',
+  'ATTACHED',
+]);
+
+const updateStatusSchema = z.object({
+  status: fulfillmentStatusEnum,
+  notes: z.string().optional(),
+});
+
+const updateShippingSchema = z.object({
+  carrier: z.string().min(1, '택배사를 입력하세요'),
+  trackingNumber: z.string().min(1, '운송장 번호를 입력하세요'),
+});
+
+const addAttachmentSchema = z.object({
+  photoUrls: z.array(z.string().url()).min(1, '사진 URL을 입력하세요'),
+  notes: z.string().optional(),
+});
+
+const updateNotesSchema = z.object({
+  notes: z.string(),
+});
+
+/**
+ * GET /contracts/:id/fulfillment
+ * 계약 이행 상태 조회
+ */
+router.get(
+  '/:id/fulfillment',
+  authenticate,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.getOrCreateFulfillment(req.params.id);
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /contracts/:id/fulfillment/status
+ * 이행 상태 업데이트 (Brand/Admin)
+ */
+router.patch(
+  '/:id/fulfillment/status',
+  authenticate,
+  authorize('BRAND', 'ADMIN'),
+  validate(updateStatusSchema),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.updateStatus(
+        req.params.id,
+        req.body.status as FulfillmentStatus,
+        req.user!.id,
+        req.body.notes
+      );
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /contracts/:id/fulfillment/shipping
+ * 배송 정보 업데이트 (Brand)
+ */
+router.patch(
+  '/:id/fulfillment/shipping',
+  authenticate,
+  authorize('BRAND', 'ADMIN'),
+  validate(updateShippingSchema),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.updateShipping(
+        req.params.id,
+        {
+          carrier: req.body.carrier,
+          trackingNumber: req.body.trackingNumber,
+        },
+        req.user!.id
+      );
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /contracts/:id/fulfillment/delivered
+ * 배송 완료 처리 (Athlete/Admin)
+ */
+router.post(
+  '/:id/fulfillment/delivered',
+  authenticate,
+  authorize('ATHLETE', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.markDelivered(
+        req.params.id,
+        req.user!.id
+      );
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /contracts/:id/fulfillment/attachment
+ * 부착 사진 등록 (Athlete)
+ */
+router.post(
+  '/:id/fulfillment/attachment',
+  authenticate,
+  authorize('ATHLETE', 'ADMIN'),
+  validate(addAttachmentSchema),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.addAttachmentPhotos(
+        req.params.id,
+        req.body.photoUrls,
+        req.user!.id,
+        req.body.notes
+      );
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /contracts/:id/fulfillment/notes
+ * 메모 업데이트 (Brand/Admin)
+ */
+router.patch(
+  '/:id/fulfillment/notes',
+  authenticate,
+  authorize('BRAND', 'ADMIN'),
+  validate(updateNotesSchema),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const fulfillment = await fulfillmentService.updateNotes(
+        req.params.id,
+        req.body.notes,
+        req.user!.id
+      );
+      res.json({ success: true, data: fulfillment });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /contracts/:id/fulfillment/history
+ * 이행 이력 조회
+ */
+router.get(
+  '/:id/fulfillment/history',
+  authenticate,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const history = await fulfillmentService.getHistory(req.params.id);
+      res.json({ success: true, data: history });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// ============================================
+// Admin Fulfillment Routes
+// ============================================
+
+/**
+ * GET /contracts/fulfillments/list
+ * Admin: 이행 현황 목록 조회
+ */
+router.get(
+  '/fulfillments/list',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const filters = {
+        status: req.query.status as FulfillmentStatus | undefined,
+        brandId: req.query.brandId as string | undefined,
+        athleteId: req.query.athleteId as string | undefined,
+      };
+      const fulfillments = await fulfillmentService.getFulfillments(filters);
+      res.json({ success: true, data: fulfillments });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /contracts/fulfillments/stats
+ * Admin: 이행 통계 조회
+ */
+router.get(
+  '/fulfillments/stats',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const stats = await fulfillmentService.getStats();
+      res.json({ success: true, data: stats });
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 export default router;

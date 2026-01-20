@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { fanVoteController } from '../controllers/fanVote.controller';
-import { authenticate, optionalAuth, requireRole } from '../middleware/auth';
+import { authenticate, optionalAuth, requireRole, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { z } from 'zod';
+import { AuthRequest } from '../types';
+import { Decimal } from '@prisma/client/runtime/library';
 
 const router = Router();
 
@@ -152,6 +154,38 @@ router.post(
   requireRole('ADMIN'),
   validate(settleSchema),
   fanVoteController.settleEvent.bind(fanVoteController)
+);
+
+// ============================================
+// Brand Sponsor Routes (BRAND 권한 필요)
+// ============================================
+
+// 투표 후원
+const sponsorSchema = z.object({
+  contributionAmount: z.number().int().min(1, '후원 금액은 1 이상이어야 합니다'),
+  bannerUrl: z.string().url().optional(),
+  logoUrl: z.string().url().optional(),
+  message: z.string().max(200).optional(),
+  linkUrl: z.string().url().optional(),
+});
+
+router.post(
+  '/:id/sponsor',
+  authenticate,
+  authorize('BRAND'),
+  validate(sponsorSchema),
+  fanVoteController.sponsorVote.bind(fanVoteController)
+);
+
+// 스폰서 노출/클릭 추적 (Public - 인증 불필요)
+const trackEngagementSchema = z.object({
+  type: z.enum(['banner_impression', 'banner_click', 'link_click']),
+});
+
+router.post(
+  '/:id/track-engagement',
+  validate(trackEngagementSchema),
+  fanVoteController.trackEngagement.bind(fanVoteController)
 );
 
 export default router;

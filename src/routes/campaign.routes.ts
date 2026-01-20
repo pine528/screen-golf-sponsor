@@ -1,6 +1,8 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import { campaignController } from '../controllers/campaign.controller';
 import { authenticate, authorize } from '../middleware/auth';
+import { campaignService } from '../services/campaign.service';
+import { AuthRequest } from '../types';
 
 const router = Router();
 
@@ -60,5 +62,150 @@ router.post('/:id/activate', authorize('BRAND'), campaignController.activate);
  * @desc Pause campaign (Brand only)
  */
 router.post('/:id/pause', authorize('BRAND'), campaignController.pause);
+
+// ====================================
+// Phase E: Enhanced Campaign Features
+// ====================================
+
+/**
+ * GET /campaigns/:id/performance
+ * 캠페인 성과 조회
+ */
+router.get(
+  '/:id/performance',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const performance = await campaignService.getPerformance(req.params.id);
+      res.json({ success: true, data: performance });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /campaigns/:id/kpi
+ * KPI/예산 설정 업데이트
+ */
+router.patch(
+  '/:id/kpi',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await import('../models/prisma').then(m =>
+        m.default.brand.findUnique({ where: { userId: req.user!.id } })
+      );
+      if (!brand) {
+        return res.status(403).json({ success: false, message: 'Brand not found' });
+      }
+
+      const campaign = await campaignService.updateKpiAndBudget(
+        req.params.id,
+        brand.id,
+        req.body
+      );
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /campaigns/:id/contracts
+ * 캠페인에 계약 연결
+ */
+router.post(
+  '/:id/contracts',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await import('../models/prisma').then(m =>
+        m.default.brand.findUnique({ where: { userId: req.user!.id } })
+      );
+      if (!brand) {
+        return res.status(403).json({ success: false, message: 'Brand not found' });
+      }
+
+      const { contractId, allocatedBudget } = req.body;
+      const campaignContract = await campaignService.addContract(
+        req.params.id,
+        brand.id,
+        contractId,
+        allocatedBudget
+      );
+      res.status(201).json({ success: true, data: campaignContract });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /campaigns/:id/contracts/:contractId
+ * 캠페인에서 계약 제거
+ */
+router.delete(
+  '/:id/contracts/:contractId',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await import('../models/prisma').then(m =>
+        m.default.brand.findUnique({ where: { userId: req.user!.id } })
+      );
+      if (!brand) {
+        return res.status(403).json({ success: false, message: 'Brand not found' });
+      }
+
+      await campaignService.removeContract(
+        req.params.id,
+        brand.id,
+        req.params.contractId
+      );
+      res.json({ success: true, message: 'Contract removed from campaign' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /campaigns/recommended-athletes
+ * 추천 선수 조회
+ */
+router.get(
+  '/recommended-athletes',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await import('../models/prisma').then(m =>
+        m.default.brand.findUnique({ where: { userId: req.user!.id } })
+      );
+      if (!brand) {
+        return res.status(403).json({ success: false, message: 'Brand not found' });
+      }
+
+      const tours = req.query.tours
+        ? (req.query.tours as string).split(',')
+        : undefined;
+      const minRating = req.query.minRating
+        ? parseFloat(req.query.minRating as string)
+        : undefined;
+      const limit = req.query.limit
+        ? parseInt(req.query.limit as string, 10)
+        : 10;
+
+      const athletes = await campaignService.getRecommendedAthletes(brand.id, {
+        tours,
+        minRating,
+        limit,
+      });
+      res.json({ success: true, data: athletes });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default router;
