@@ -3,6 +3,7 @@ import { adminService } from '../services/admin.service';
 import { slotTemplateService } from '../services/slot.service';
 import { sendSuccess, sendPaginated } from '../utils/response';
 import { AuthRequest } from '../types';
+import { extractAndValidateDangerZone, getRoleChangeConfirmText } from '../utils/dangerZone';
 
 export class AdminController {
   // Dashboard
@@ -241,6 +242,77 @@ export class AdminController {
       const { id } = req.params;
       const { adminNote } = req.body;
       const result = await adminService.rejectBrandRegistration(id, req.user!.id, adminNote);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // Admin Management (RBAC)
+  // ============================================
+
+  /**
+   * 관리자 목록 조회
+   */
+  async getAdmins(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { page = 1, limit = 20 } = req.query;
+      const { admins, total } = await adminService.getAdmins({
+        page: Number(page),
+        limit: Number(limit),
+      });
+      sendPaginated(res, admins, Number(page), Number(limit), total);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 관리자 역할 변경 (Danger Zone)
+   */
+  async changeAdminRole(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { adminId } = req.params;
+      const { role, confirmText, reason } = req.body;
+
+      // 대상 관리자 정보 조회
+      const targetAdmin = await adminService.getAdminById(adminId);
+      const expectedConfirmText = getRoleChangeConfirmText(targetAdmin.user.email);
+
+      // Danger Zone 검증
+      extractAndValidateDangerZone({ confirmText, reason }, expectedConfirmText);
+
+      const result = await adminService.changeAdminRole(
+        adminId,
+        role,
+        req.user!.id,
+        reason
+      );
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 관리자 권한 변경
+   */
+  async updateAdminPermissions(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { adminId } = req.params;
+      const { permissions, reason } = req.body;
+
+      if (!reason || reason.length < 10) {
+        throw new Error('사유는 최소 10자 이상 입력해주세요');
+      }
+
+      const result = await adminService.updateAdminPermissions(
+        adminId,
+        permissions,
+        req.user!.id,
+        reason
+      );
       sendSuccess(res, result);
     } catch (error) {
       next(error);

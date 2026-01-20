@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
 
-import config from './config';
+import config, { validateEnv } from './config';
 import routes from './routes';
 import metricsRoutes from './routes/metrics.routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -25,7 +25,10 @@ import { fanVoteService } from './services/fanVote.service';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
-// Sentry 초기화 (가장 먼저)
+// 환경변수 검증 (가장 먼저)
+validateEnv();
+
+// Sentry 초기화
 initSentry();
 
 // 암호화 키 검증 (출금 계좌 암호화용)

@@ -1,6 +1,6 @@
 import prisma from '../models/prisma';
-import { NotFoundError } from '../utils/errors';
-import { KycStatus } from '@prisma/client';
+import { NotFoundError, BadRequestError } from '../utils/errors';
+import { KycStatus, UserRole } from '@prisma/client';
 import { emailService } from './email.service';
 import { settingsService } from './settings.service';
 
@@ -517,6 +517,186 @@ export class AdminService {
       });
 
       return updatedRequest;
+    });
+
+    return result;
+  }
+
+  // ============================================
+  // Admin Management (RBAC)
+  // ============================================
+
+  /**
+   * 관리자 목록 조회
+   */
+  async getAdmins(filters: { page?: number; limit?: number }) {
+    const { page = 1, limit = 20 } = filters;
+
+    const where = {
+      role: { in: ['ADMIN', 'FINANCE', 'SUPPORT', 'AUDITOR'] as UserRole[] },
+    };
+
+    const [admins, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          admin: {
+            select: {
+              id: true,
+              name: true,
+              department: true,
+              permissions: true,
+            },
+          },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return { admins, total };
+  }
+
+  /**
+   * 관리자 ID로 조회
+   */
+  async getAdminById(adminId: string) {
+    const admin = await prisma.admin.findUnique({
+      where: { id: adminId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundError('관리자를 찾을 수 없습니다');
+    }
+
+    return admin;
+  }
+
+  /**
+   * 관리자 역할 변경
+   */
+  async changeAdminRole(
+    adminId: string,
+    newRole: UserRole,
+    actorUserId: string,
+    reason: string
+  ) {
+    const admin = await this.getAdminById(adminId);
+    const oldRole = admin.user.role;
+
+    // 유효한 관리자 역할인지 확인
+    const validAdminRoles: UserRole[] = ['ADMIN', 'FINANCE', 'SUPPORT', 'AUDITOR'];
+    if (!validAdminRoles.includes(newRole)) {
+      throw new BadRequestError('유효하지 않은 관리자 역할입니다');
+    }
+
+    // 자기 자신의 역할은 변경 불가
+    if (admin.userId === actorUserId) {
+      throw new BadRequestError('자신의 역할은 변경할 수 없습니다');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update user role
+      const updatedUser = await tx.user.update({
+        where: { id: admin.userId },
+        data: { role: newRole },
+      });
+
+      // 2. Create admin action log
+      await tx.adminActionLog.create({
+        data: {
+          actorId: actorUserId,
+          action: 'ADMIN_ROLE_CHANGE',
+          targetType: 'USER',
+          targetId: admin.userId,
+          requestBody: { oldRole, newRole, reason },
+          result: { success: true },
+          reason,
+        },
+      });
+
+      // 3. Create audit log
+      await tx.auditLog.create({
+        data: {
+          userId: actorUserId,
+          action: 'ADMIN_ROLE_CHANGE',
+          entityType: 'User',
+          entityId: admin.userId,
+          oldValue: { role: oldRole },
+          newValue: { role: newRole },
+          metadata: { reason },
+        },
+      });
+
+      return updatedUser;
+    });
+
+    return result;
+  }
+
+  /**
+   * 관리자 권한 변경
+   */
+  async updateAdminPermissions(
+    adminId: string,
+    permissions: string[],
+    actorUserId: string,
+    reason: string
+  ) {
+    const admin = await this.getAdminById(adminId);
+    const oldPermissions = (admin.permissions as string[]) || [];
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update admin permissions
+      const updatedAdmin = await tx.admin.update({
+        where: { id: adminId },
+        data: { permissions },
+      });
+
+      // 2. Create admin action log
+      await tx.adminActionLog.create({
+        data: {
+          actorId: actorUserId,
+          action: 'ADMIN_PERMISSIONS_CHANGE',
+          targetType: 'ADMIN',
+          targetId: adminId,
+          requestBody: { oldPermissions, newPermissions: permissions, reason },
+          result: { success: true },
+          reason,
+        },
+      });
+
+      // 3. Create audit log
+      await tx.auditLog.create({
+        data: {
+          userId: actorUserId,
+          action: 'ADMIN_PERMISSIONS_CHANGE',
+          entityType: 'Admin',
+          entityId: adminId,
+          oldValue: { permissions: oldPermissions },
+          newValue: { permissions },
+          metadata: { reason },
+        },
+      });
+
+      return updatedAdmin;
     });
 
     return result;
