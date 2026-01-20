@@ -725,4 +725,92 @@ router.patch('/brands/:id/toggle-active', async (req: AuthRequest, res: Response
   }
 });
 
+/**
+ * @route DELETE /admin/entities/brands/:id
+ * @desc Delete brand and associated user (only if no contracts/bids)
+ */
+router.delete('/brands/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const brand = await prisma.brand.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        _count: { select: { contracts: true, bids: true } },
+      },
+    });
+
+    if (!brand) {
+      return res.status(404).json({ success: false, error: 'Brand not found' });
+    }
+
+    // Check if brand has contracts or bids
+    if (brand._count.contracts > 0 || brand._count.bids > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete brand with existing contracts or bids',
+      });
+    }
+
+    // Delete brand and user in transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete wallet if exists
+      await tx.wallet.deleteMany({ where: { ownerType: 'BRAND', ownerId: id } });
+      // Delete brand
+      await tx.brand.delete({ where: { id } });
+      // Delete user
+      await tx.user.delete({ where: { id: brand.userId } });
+    });
+
+    res.json({ success: true, message: 'Brand deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route DELETE /admin/entities/athletes/:id
+ * @desc Delete athlete and associated user (only if no contracts/slots)
+ */
+router.delete('/athletes/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const athlete = await prisma.athlete.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        _count: { select: { contracts: true, slotInstances: true } },
+      },
+    });
+
+    if (!athlete) {
+      return res.status(404).json({ success: false, error: 'Athlete not found' });
+    }
+
+    // Check if athlete has contracts or slots
+    if (athlete._count.contracts > 0 || athlete._count.slotInstances > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete athlete with existing contracts or slots',
+      });
+    }
+
+    // Delete athlete and user in transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete wallet if exists
+      await tx.wallet.deleteMany({ where: { ownerType: 'ATHLETE', ownerId: id } });
+      // Delete athlete
+      await tx.athlete.delete({ where: { id } });
+      // Delete user
+      await tx.user.delete({ where: { id: athlete.userId } });
+    });
+
+    res.json({ success: true, message: 'Athlete deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
