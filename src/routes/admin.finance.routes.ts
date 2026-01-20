@@ -346,19 +346,30 @@ router.get('/wallets', async (req: Request, res: Response) => {
       skip,
       take: limit,
       orderBy: { updatedAt: 'desc' },
-      include: {
-        brand: {
-          select: { id: true, name: true },
-        },
-        athlete: {
-          select: { id: true, name: true },
-        },
-      },
     }),
     prisma.wallet.count({ where }),
   ]);
 
-  sendPaginated(res, wallets, pageNum, limit, total);
+  // Fetch owner info separately based on ownerType
+  const walletsWithOwner = await Promise.all(
+    wallets.map(async (wallet) => {
+      let owner = null;
+      if (wallet.ownerType === 'BRAND') {
+        owner = await prisma.brand.findUnique({
+          where: { id: wallet.ownerId },
+          select: { id: true, name: true },
+        });
+      } else if (wallet.ownerType === 'ATHLETE') {
+        owner = await prisma.athlete.findUnique({
+          where: { id: wallet.ownerId },
+          select: { id: true, name: true },
+        });
+      }
+      return { ...wallet, owner };
+    })
+  );
+
+  sendPaginated(res, walletsWithOwner, pageNum, limit, total);
 });
 
 // =========================================
@@ -384,7 +395,7 @@ router.get('/wallets/:id/ledger', async (req: Request, res: Response) => {
   if (refType) where.refType = refType as string;
   if (refId) where.refId = refId as string;
 
-  const [transactions, total, wallet] = await Promise.all([
+  const [transactions, total, walletData] = await Promise.all([
     prisma.ledgerTx.findMany({
       where,
       skip,
@@ -394,19 +405,30 @@ router.get('/wallets/:id/ledger', async (req: Request, res: Response) => {
     prisma.ledgerTx.count({ where }),
     prisma.wallet.findUnique({
       where: { id },
-      include: {
-        brand: { select: { id: true, name: true } },
-        athlete: { select: { id: true, name: true } },
-      },
     }),
   ]);
 
-  if (!wallet) {
+  if (!walletData) {
     return res.status(404).json({
       success: false,
       error: { code: 'NOT_FOUND', message: 'Wallet not found' },
     });
   }
+
+  // Fetch owner info separately
+  let owner = null;
+  if (walletData.ownerType === 'BRAND') {
+    owner = await prisma.brand.findUnique({
+      where: { id: walletData.ownerId },
+      select: { id: true, name: true },
+    });
+  } else if (walletData.ownerType === 'ATHLETE') {
+    owner = await prisma.athlete.findUnique({
+      where: { id: walletData.ownerId },
+      select: { id: true, name: true },
+    });
+  }
+  const wallet = { ...walletData, owner };
 
   sendSuccess(res, {
     wallet,

@@ -191,28 +191,36 @@ router.get('/wallets', authenticate, authorize('ADMIN'), async (req: Request, re
   });
 
   // 잔액 상위 10 브랜드
-  const topBrands = await prisma.wallet.findMany({
+  const topBrandWallets = await prisma.wallet.findMany({
     where: { ownerType: 'BRAND' },
     orderBy: { balance: 'desc' },
     take: 10,
-    include: {
-      brand: {
-        select: { id: true, name: true },
-      },
-    },
   });
 
   // 잔액 상위 10 선수
-  const topAthletes = await prisma.wallet.findMany({
+  const topAthleteWallets = await prisma.wallet.findMany({
     where: { ownerType: 'ATHLETE' },
     orderBy: { balance: 'desc' },
     take: 10,
-    include: {
-      athlete: {
-        select: { id: true, name: true },
-      },
-    },
   });
+
+  // Fetch brand/athlete names separately
+  const brandIds = topBrandWallets.map(w => w.ownerId);
+  const athleteIds = topAthleteWallets.map(w => w.ownerId);
+
+  const [brands, athletes] = await Promise.all([
+    prisma.brand.findMany({
+      where: { id: { in: brandIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.athlete.findMany({
+      where: { id: { in: athleteIds } },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  const brandMap = new Map(brands.map(b => [b.id, b.name]));
+  const athleteMap = new Map(athletes.map(a => [a.id, a.name]));
 
   sendSuccess(res, {
     byType: walletStats.map(w => ({
@@ -225,15 +233,15 @@ router.get('/wallets', authenticate, authorize('ADMIN'), async (req: Request, re
       balance: platformWallet.balance.toString(),
       frozenAmount: platformWallet.frozenAmount.toString(),
     } : null,
-    topBrands: topBrands.map(w => ({
+    topBrands: topBrandWallets.map(w => ({
       brandId: w.ownerId,
-      brandName: (w as any).brand?.name || 'Unknown',
+      brandName: brandMap.get(w.ownerId) || 'Unknown',
       balance: w.balance.toString(),
       frozenAmount: w.frozenAmount.toString(),
     })),
-    topAthletes: topAthletes.map(w => ({
+    topAthletes: topAthleteWallets.map(w => ({
       athleteId: w.ownerId,
-      athleteName: (w as any).athlete?.name || 'Unknown',
+      athleteName: athleteMap.get(w.ownerId) || 'Unknown',
       balance: w.balance.toString(),
     })),
   });
