@@ -22,6 +22,7 @@ import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
 import { validateEncryptionKey } from './utils/crypto';
+import prisma from './models/prisma';
 
 // Sentry 초기화 (가장 먼저)
 initSentry();
@@ -236,9 +237,31 @@ cron.schedule('20 9 * * *', async () => {
   }
 }, cronOptions);
 
+// Startup migration: Remove wallet FK constraints if they exist
+async function runStartupMigrations() {
+  try {
+    console.log('[Startup] Checking wallet FK constraints...');
+
+    // Try to drop the FK constraints (will silently fail if they don't exist)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "wallets" DROP CONSTRAINT IF EXISTS "wallet_athlete_fk";
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "wallets" DROP CONSTRAINT IF EXISTS "wallet_brand_fk";
+    `);
+
+    console.log('[Startup] Wallet FK constraints removed (if existed)');
+  } catch (error) {
+    console.warn('[Startup] Could not remove FK constraints (may not exist):', error);
+  }
+}
+
 // Start server
 const PORT = config.port;
-httpServer.listen(PORT, () => {
+
+// Run startup migrations then start server
+runStartupMigrations().then(() => {
+  httpServer.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
@@ -250,6 +273,7 @@ httpServer.listen(PORT, () => {
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
   `);
+  });
 });
 
 export { app, httpServer, socketService };
