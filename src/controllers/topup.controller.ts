@@ -323,24 +323,18 @@ export class TopupController {
 
       // 직접 지갑에 충전 (트랜잭션)
       const result = await prisma.$transaction(async (tx) => {
-        // 지갑 조회/생성
-        let wallet = await tx.wallet.findFirst({
-          where: {
+        // 지갑 조회/생성 (upsert 사용)
+        const wallet = await tx.wallet.upsert({
+          where: { ownerType_ownerId: { ownerType: 'BRAND', ownerId: brandId } },
+          create: {
             ownerType: 'BRAND',
             ownerId: brandId,
+            balance: 0,
+            frozenAmount: 0,
+            version: 0,
           },
+          update: {},
         });
-
-        if (!wallet) {
-          wallet = await tx.wallet.create({
-            data: {
-              ownerId: brandId,
-              ownerType: 'BRAND',
-              balance: 0,
-              frozenAmount: 0,
-            },
-          });
-        }
 
         // 잔액 업데이트
         const updatedWallet = await tx.wallet.update({
