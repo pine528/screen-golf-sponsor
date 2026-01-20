@@ -4,6 +4,7 @@ import { NotFoundError, BadRequestError, ConflictError, ForbiddenError } from '.
 import { BidResult } from '../types';
 import { auctionService } from './auction.service';
 import { socketService } from './socket.service';
+import { conflictService } from './conflict.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export class BidService {
@@ -83,11 +84,14 @@ export class BidService {
       );
     }
 
-    // Check category exclusivity/conflict
-    const athlete = auction.slotInstance.athlete;
-    if (athlete.blockedCategories.includes(brand.category)) {
-      throw new ConflictError('Brand category is blocked by athlete', 'CATEGORY_BLOCKED');
-    }
+    // ★ 충돌룰: 카테고리 충돌 전체 검사
+    await conflictService.checkCategoryConflict({
+      eventId: auction.slotInstance.eventId,
+      athleteId: auction.slotInstance.athleteId,
+      brandId,
+      brandCategory: brand.category,
+      excludeAuctionId: auctionId, // 현재 경매는 제외
+    });
 
     // Check for existing brand bids in same auction
     const existingBid = auction.bids.find((b) => b.brandId === brandId);
@@ -118,9 +122,6 @@ export class BidService {
         'BELOW_MINIMUM'
       );
     }
-
-    // Check exclusivity conflict (same event, same category)
-    await this.checkExclusivityConflict(auction.id, brandId, brand.category);
 
     // Process the bid
     let bidResult: BidResult;
@@ -403,55 +404,6 @@ export class BidService {
       newCurrentPrice,
       winningBidId: highestBid.id,
     };
-  }
-
-  /**
-   * Check for category exclusivity conflicts
-   */
-  private async checkExclusivityConflict(
-    auctionId: string,
-    brandId: string,
-    category: string
-  ): Promise<void> {
-    // Get the slot's event
-    const auction = await prisma.auction.findUnique({
-      where: { id: auctionId },
-      include: {
-        slotInstance: {
-          include: {
-            event: true,
-            slotTemplate: true,
-          },
-        },
-      },
-    });
-
-    if (!auction) return;
-
-    // Find any winning bids by same-category brands in same event
-    const conflictingContracts = await prisma.contract.findMany({
-      where: {
-        auction: {
-          slotInstance: {
-            eventId: auction.slotInstance.eventId,
-            athleteId: auction.slotInstance.athleteId,
-          },
-          status: { in: ['ENDED'] },
-        },
-        brand: {
-          category,
-          id: { not: brandId },
-        },
-        status: { not: 'CANCELLED' },
-      },
-    });
-
-    if (conflictingContracts.length > 0) {
-      throw new ConflictError(
-        'Category exclusivity conflict: Another brand in the same category has already won a slot for this athlete in this event',
-        'EXCLUSIVITY_CONFLICT'
-      );
-    }
   }
 
   async getBidsByAuction(auctionId: string) {
