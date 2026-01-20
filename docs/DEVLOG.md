@@ -32,6 +32,112 @@
 
 ---
 
+## [2026-01-20] 네비게이션 메뉴 누락 항목 추가
+
+### 변경 사항
+- Layout.tsx에 라우트는 존재하지만 네비게이션에 없던 메뉴 항목들 추가
+- **ADMIN**: 재무콘솔, FAQ관리, 페널티, 분쟁관리, 시즌관리, 노출관리, 운영도구 (7개)
+- **BRAND**: 후원투표, ROI리포트 (2개)
+- **ATHLETE**: 서명대기, 출금관리 (2개)
+- **FAN**: 내투표, 내뱃지 (2개)
+- Home.tsx 푸터에 FAQ 링크 연결 (`/faq`)
+
+### 영향받는 파일
+- `src/frontend/src/components/Layout.tsx` - 10개 아이콘 import + 13개 nav 항목 추가
+- `src/frontend/src/pages/Home.tsx` - FAQ 링크 `<a href="#">` → `<Link to="/faq">`
+
+### 참고
+- 상세 페이지 (`:id` 라우트)는 리스트에서 접근하므로 네비게이션에서 제외
+- 기존 라우트와 페이지는 모두 구현되어 있었음 (메뉴 연결만 누락)
+
+---
+
+## [2026-01-20] Phase E-F Frontend - 캠페인 상세 & 노출/ROI 대시보드
+
+### 변경 사항
+- **Phase E-FE**: 캠페인 상세 페이지 (KPI 진행률, 연결된 계약, 추천 선수)
+- **Phase F-FE**: AdminExposure (노출 기록 관리, 미디어밸류 요율, 리포트)
+- **Phase F-FE**: BrandROIDashboard (브랜드 ROI 대시보드)
+- **api.ts 확장**: getCampaignPerformance, getRecommendedAthletes, getBrandExposureReport 등
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - Phase E, F API 메서드 추가
+- `src/frontend/src/pages/brand/CampaignDetail.tsx` (신규) - 캠페인 상세
+- `src/frontend/src/pages/admin/AdminExposure.tsx` (신규) - 노출 관리
+- `src/frontend/src/pages/brand/BrandROIDashboard.tsx` (신규) - ROI 대시보드
+- `src/frontend/src/App.tsx` - 라우트 등록
+
+### 라우트 추가
+- `/brand/campaigns/:id` → CampaignDetail
+- `/admin/exposure` → AdminExposure
+- `/brand/reports/roi` → BrandROIDashboard
+
+### 참고
+- Backend는 이미 구현됨 (Phase E, F 완료)
+- DOCX 검증 후 누락된 Frontend 구현
+
+---
+
+## [2026-01-20] Phase H - 시즌 리워드
+
+### 변경 사항
+- **스키마 추가**: Season, SeasonParticipant, SeasonBadge, SeasonBadgeAward 모델
+- **enum 추가**: SeasonStatus, BadgeType
+- **season.service.ts 신규**: 시즌 CRUD, 리더보드, 참여 기록, 뱃지, 보상 배포
+- **season.routes.ts 신규**: Public/Authenticated/Admin 라우트 분리
+- **프론트엔드**: SeasonLeaderboard.tsx, MyBadges.tsx, AdminSeasons.tsx
+
+### Backend 파일
+- `src/backend/prisma/schema.prisma` - Season 관련 모델 추가
+- `src/backend/src/services/season.service.ts` (신규) - 시즌 비즈니스 로직
+- `src/backend/src/routes/season.routes.ts` (신규) - 시즌 API 라우트
+- `src/backend/src/routes/index.ts` - 라우트 등록
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - 시즌 API 메서드 추가
+- `src/frontend/src/pages/fan/SeasonLeaderboard.tsx` (신규)
+- `src/frontend/src/pages/fan/MyBadges.tsx` (신규)
+- `src/frontend/src/pages/admin/AdminSeasons.tsx` (신규)
+- `src/frontend/src/App.tsx` - 라우트 등록
+
+### 주요 기능
+- 시즌 생명주기: DRAFT → UPCOMING → ACTIVE → ENDED → REWARDS_DISTRIBUTED
+- 리더보드: 참여횟수, 적중횟수, 총 포인트 기준 순위
+- 뱃지 시스템: SEASON_GOLD/SILVER/BRONZE, TOP10, TOP100 등
+- 보상 배포: rewardTiers 기준 포인트 지급 + 뱃지 수여
+
+---
+
+## [2026-01-20] Phase G - 투표 스폰서십
+
+### 변경 사항
+- **스키마 확장**: FanVoteEvent에 sponsor 필드 추가, SponsorEngagement 모델 추가
+- **fanVote.service.ts 확장**: sponsorVote, getSponsoredVotes, trackEngagement, getSponsorEngagementStats
+- **fanVote.controller.ts 확장**: 스폰서 관련 컨트롤러 메서드
+- **fanVote.routes.ts 확장**: POST /:id/sponsor, POST /:id/track-engagement
+- **brand.routes.ts 확장**: GET /me/sponsored-votes, GET /me/sponsor-stats
+- **프론트엔드**: SponsorBanner.tsx 컴포넌트, BrandSponsoredVotes.tsx 페이지
+
+### Backend 파일
+- `src/backend/prisma/schema.prisma` - sponsor 필드, SponsorEngagement 모델
+- `src/backend/src/services/fanVote.service.ts` - 스폰서 메서드 추가
+- `src/backend/src/controllers/fanVote.controller.ts` - 스폰서 컨트롤러
+- `src/backend/src/routes/fanVote.routes.ts` - 스폰서 라우트
+- `src/backend/src/routes/brand.routes.ts` - 브랜드 스폰서 조회 API
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - 스폰서 API 메서드
+- `src/frontend/src/components/SponsorBanner.tsx` (신규) - 스폰서 배너 + 노출 추적
+- `src/frontend/src/pages/brand/BrandSponsoredVotes.tsx` (신규) - 브랜드 후원 관리
+- `src/frontend/src/App.tsx` - 라우트 등록
+
+### 주요 기능
+- 브랜드가 투표 후원 (contributionAmount, bannerUrl, logoUrl, message, linkUrl)
+- 스폰서 배너 노출/클릭 추적 (impressions, bannerClicks, linkClicks)
+- 브랜드 후원 통계 집계
+
+---
+
 ## [2026-01-20] Phase 10-3 - Reconciliation/Data Integrity Checking (결제/환불 대사)
 
 ### 변경 사항
