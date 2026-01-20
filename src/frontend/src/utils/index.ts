@@ -19,43 +19,63 @@ export function formatNumber(num: number): string {
   return new Intl.NumberFormat('ko-KR').format(num);
 }
 
-export function formatDate(dateString: string): string {
-  return format(parseISO(dateString), 'yyyy년 M월 d일', { locale: ko });
+export function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return '-';
+  try {
+    return format(parseISO(dateString), 'yyyy년 M월 d일', { locale: ko });
+  } catch {
+    return '-';
+  }
 }
 
-export function formatDateTime(dateString: string): string {
-  return format(parseISO(dateString), 'yyyy년 M월 d일 HH:mm', { locale: ko });
+export function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return '-';
+  try {
+    return format(parseISO(dateString), 'yyyy년 M월 d일 HH:mm', { locale: ko });
+  } catch {
+    return '-';
+  }
 }
 
-export function formatTimeRemaining(endAt: string): string {
-  const end = parseISO(endAt);
-  const now = new Date();
-  const diff = end.getTime() - now.getTime();
+export function formatTimeRemaining(endAt: string | null | undefined): string {
+  if (!endAt) return '-';
+  try {
+    const end = parseISO(endAt);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
 
-  if (diff <= 0) return '종료됨';
+    if (diff <= 0) return '종료됨';
 
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-  if (hours > 24) {
-    const days = Math.floor(hours / 24);
-    return `${days}일 ${hours % 24}시간`;
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}일 ${hours % 24}시간`;
+    }
+
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분`;
+    }
+
+    if (minutes > 0) {
+      return `${minutes}분 ${seconds}초`;
+    }
+
+    return `${seconds}초`;
+  } catch {
+    return '-';
   }
-
-  if (hours > 0) {
-    return `${hours}시간 ${minutes}분`;
-  }
-
-  if (minutes > 0) {
-    return `${minutes}분 ${seconds}초`;
-  }
-
-  return `${seconds}초`;
 }
 
-export function formatRelativeTime(dateString: string): string {
-  return formatDistanceToNow(parseISO(dateString), { addSuffix: true, locale: ko });
+export function formatRelativeTime(dateString: string | null | undefined): string {
+  if (!dateString) return '-';
+  try {
+    return formatDistanceToNow(parseISO(dateString), { addSuffix: true, locale: ko });
+  } catch {
+    return '-';
+  }
 }
 
 export function getStatusColor(status: string): string {

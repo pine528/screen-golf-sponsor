@@ -3,6 +3,7 @@ import { NotFoundError, ConflictError, BadRequestError, ForbiddenError } from '.
 import { BodyPart, MaterialRule, SlotStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { notificationService } from './notification.service';
+import { conflictService } from './conflict.service';
 
 export class SlotTemplateService {
   async create(data: {
@@ -438,6 +439,15 @@ export class SlotInstanceService {
         `Insufficient balance. Available: ${available.toString()}, Required: ${slot.directBuyPrice.toString()}`
       );
     }
+
+    // ★ 충돌룰: 카테고리 충돌 전체 검사
+    await conflictService.checkCategoryConflict({
+      eventId: slot.eventId,
+      athleteId: slot.athleteId,
+      brandId,
+      brandCategory: brand.category,
+      excludeSlotId: slotId, // 현재 슬롯은 제외
+    });
 
     // 활성 계약 존재 여부 확인 (슬롯당 1개 제한)
     const existingContract = await prisma.contract.findFirst({

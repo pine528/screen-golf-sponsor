@@ -265,6 +265,99 @@ export class FanVoteController {
       next(error);
     }
   }
+
+  // ============================================
+  // Phase G: 투표 스폰서십
+  // ============================================
+
+  /**
+   * POST /api/fan-votes/:id/sponsor
+   * 브랜드가 투표 후원
+   */
+  async sponsorVote(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const { contributionAmount, bannerUrl, logoUrl, message, linkUrl } = req.body;
+
+      const event = await fanVoteService.sponsorVote(brandId, id, {
+        contributionAmount,
+        bannerUrl,
+        logoUrl,
+        message,
+        linkUrl,
+      });
+
+      sendSuccess(res, event);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/brands/me/sponsored-votes
+   * 브랜드가 후원한 투표 목록
+   */
+  async getSponsoredVotes(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 20;
+
+      const result = await fanVoteService.getSponsoredVotes(brandId, { page, pageSize });
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/fan-votes/:id/track-engagement
+   * 스폰서 노출/클릭 추적
+   */
+  async trackEngagement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { type } = req.body;
+
+      const result = await fanVoteService.trackEngagement(id, type);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/brands/me/sponsor-stats
+   * 브랜드 스폰서 노출 통계
+   */
+  async getSponsorStats(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const stats = await fanVoteService.getSponsorEngagementStats(brandId);
+      sendSuccess(res, stats);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const fanVoteController = new FanVoteController();

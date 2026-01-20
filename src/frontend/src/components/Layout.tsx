@@ -27,6 +27,16 @@ import {
   Building2,
   Gift,
   ShoppingBag,
+  HelpCircle,
+  AlertTriangle,
+  Flag,
+  Eye,
+  Wrench,
+  TrendingUp,
+  PenLine,
+  Banknote,
+  Award,
+  ListChecks,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils';
@@ -160,6 +170,8 @@ export function Layout({ children }: LayoutProps) {
     { path: '/contracts', label: '계약 관리', icon: FileText },
     { path: '/brand/wallet', label: '지갑', icon: Wallet },
     { path: '/campaigns', label: '캠페인', icon: Megaphone },
+    { path: '/brand/sponsored-votes', label: '후원 투표', icon: Heart },
+    { path: '/brand/reports/roi', label: 'ROI 리포트', icon: TrendingUp },
     { path: '/votes', label: '투표', icon: Vote },
     { path: '/profile', label: '프로필', icon: User },
   ];
@@ -168,7 +180,9 @@ export function Layout({ children }: LayoutProps) {
     { path: '/dashboard', label: '대시보드', icon: Home },
     { path: '/my-slots', label: '슬롯 관리', icon: Calendar },
     { path: '/contracts', label: '계약/오퍼', icon: FileText },
+    { path: '/athlete/pending-signatures', label: '서명 대기', icon: PenLine },
     { path: '/settlements', label: '정산', icon: Wallet },
+    { path: '/athlete/withdrawals', label: '출금 관리', icon: Banknote },
     { path: '/votes', label: '투표', icon: Vote },
     { path: '/profile', label: '프로필', icon: User },
   ];
@@ -183,6 +197,13 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin/reviews', label: '검수 관리', icon: FileText },
     { path: '/admin/votes', label: '투표 이벤트', icon: Vote },
     { path: '/admin/payments', label: '결제 관리', icon: CreditCard },
+    { path: '/admin/finance', label: '재무 콘솔', icon: Wallet },
+    { path: '/admin/faq', label: 'FAQ 관리', icon: HelpCircle },
+    { path: '/admin/penalties', label: '페널티', icon: AlertTriangle },
+    { path: '/admin/disputes', label: '분쟁 관리', icon: Flag },
+    { path: '/admin/seasons', label: '시즌 관리', icon: Trophy },
+    { path: '/admin/exposure', label: '노출 관리', icon: Eye },
+    { path: '/admin/ops', label: '운영 도구', icon: Wrench },
     { path: '/admin/reports', label: '통합 리포트', icon: BarChart3 },
     { path: '/admin/settings', label: '설정', icon: Settings },
   ];
@@ -190,6 +211,8 @@ export function Layout({ children }: LayoutProps) {
   const fanNavItems = [
     { path: '/fan', label: '홈', icon: Home },
     { path: '/votes', label: '투표', icon: Vote },
+    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
+    { path: '/fan/badges', label: '내 뱃지', icon: Award },
     { path: '/points', label: '내 포인트', icon: Trophy },
     { path: '/shop', label: '포인트샵', icon: Gift },
     { path: '/orders', label: '교환내역', icon: ShoppingBag },

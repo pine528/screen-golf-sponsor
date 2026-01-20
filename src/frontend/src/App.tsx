@@ -37,15 +37,27 @@ import AthleteWithdrawals from './pages/athlete/Withdrawals';
 import AthletePendingSignatures from './pages/athlete/PendingSignatures';
 import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
+import CampaignDetail from './pages/brand/CampaignDetail';
 import BrandWallet from './pages/brand/BrandWallet';
+import BrandSponsoredVotes from './pages/brand/BrandSponsoredVotes';
+import BrandROIDashboard from './pages/brand/BrandROIDashboard';
 import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister, Shop, ShopDetail, Orders } from './pages/fan';
 import FanVoteCreate from './pages/fan/FanVoteCreate';
 import MyFanVotes from './pages/fan/MyFanVotes';
 import FanVoteResult from './pages/fan/FanVoteResult';
+import SeasonLeaderboard from './pages/fan/SeasonLeaderboard';
+import MyBadges from './pages/fan/MyBadges';
 import { AdminBrandRegistrations } from './pages/admin/AdminBrandRegistrations';
 import AdminOps from './pages/admin/AdminOps';
 import AdminFanVotes from './pages/admin/AdminFanVotes';
 import AdminFanVoteSettle from './pages/admin/AdminFanVoteSettle';
+import AdminFaq from './pages/admin/AdminFaq';
+import AdminPenalties from './pages/admin/AdminPenalties';
+import AdminDisputes from './pages/admin/AdminDisputes';
+import AdminDisputeDetail from './pages/admin/AdminDisputeDetail';
+import AdminSeasons from './pages/admin/AdminSeasons';
+import AdminExposure from './pages/admin/AdminExposure';
+import Faq from './pages/Faq';
 import { Inventory } from './pages/Inventory';
 import { Contracts } from './pages/Contracts';
 import { Profile } from './pages/Profile';
@@ -134,6 +146,7 @@ function App() {
       <Route path="/features" element={<Features />} />
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/for-who" element={<ForWho />} />
+      <Route path="/faq" element={<Faq />} />
 
       {/* Fan Auth Routes (Public) */}
       <Route path="/fan/login" element={<FanLogin />} />
@@ -244,6 +257,30 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/brand/sponsored-votes"
+        element={
+          <ProtectedRoute>
+            <BrandSponsoredVotes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brand/campaigns/:id"
+        element={
+          <ProtectedRoute>
+            <CampaignDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brand/reports/roi"
+        element={
+          <ProtectedRoute>
+            <BrandROIDashboard />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Fan Routes */}
       <Route
@@ -351,6 +388,22 @@ function App() {
         element={
           <ProtectedRoute>
             <FanVoteResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/seasons/:id/leaderboard"
+        element={
+          <ProtectedRoute>
+            <SeasonLeaderboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fan/badges"
+        element={
+          <ProtectedRoute>
+            <MyBadges />
           </ProtectedRoute>
         }
       />
@@ -473,6 +526,54 @@ function App() {
         element={
           <ProtectedRoute>
             <AdminOps />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/faq"
+        element={
+          <ProtectedRoute>
+            <AdminFaq />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/penalties"
+        element={
+          <ProtectedRoute>
+            <AdminPenalties />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/disputes"
+        element={
+          <ProtectedRoute>
+            <AdminDisputes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/disputes/:id"
+        element={
+          <ProtectedRoute>
+            <AdminDisputeDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/seasons"
+        element={
+          <ProtectedRoute>
+            <AdminSeasons />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exposure"
+        element={
+          <ProtectedRoute>
+            <AdminExposure />
           </ProtectedRoute>
         }
       />

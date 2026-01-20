@@ -21,25 +21,26 @@ export function Dashboard() {
 }
 
 function BrandDashboard() {
-  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery({
+  const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrorData } = useQuery({
     queryKey: ['brand-stats'],
     queryFn: () => api.getMyBrandStats(),
     retry: 1,
   });
 
-  const { data: liveAuctions, isLoading: auctionsLoading } = useQuery({
+  const { data: liveAuctions, isLoading: auctionsLoading, isError: auctionsError } = useQuery({
     queryKey: ['live-auctions'],
     queryFn: () => api.getLiveAuctions(),
     retry: 1,
   });
 
-  const { data: upcomingEvents, isLoading: eventsLoading } = useQuery({
+  const { data: upcomingEvents, isLoading: eventsLoading, isError: eventsError } = useQuery({
     queryKey: ['upcoming-events'],
     queryFn: () => api.getUpcomingEvents(5),
     retry: 1,
   });
 
   const isLoading = statsLoading || auctionsLoading || eventsLoading;
+  const hasAnyError = statsError || auctionsError || eventsError;
 
   if (isLoading) {
     return (
@@ -54,16 +55,29 @@ function BrandDashboard() {
     );
   }
 
-  if (statsError) {
+  if (hasAnyError) {
+    const errorMessage = (statsErrorData as any)?.response?.data?.message
+      || (statsErrorData as any)?.message
+      || '데이터를 불러오는데 실패했습니다';
+
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <p className="text-red-600 text-lg font-medium">브랜드 정보를 불러오는데 실패했습니다</p>
-            <p className="mt-2 text-slate-600">브랜드 등록이 완료되었는지 확인해주세요.</p>
-            <Link to="/profile" className="mt-4 inline-block btn btn-primary">
-              프로필 확인
-            </Link>
+            <p className="mt-2 text-slate-600">{errorMessage}</p>
+            <p className="mt-2 text-slate-500 text-sm">브랜드 등록이 완료되었는지 확인해주세요.</p>
+            <div className="mt-4 flex gap-2 justify-center">
+              <Link to="/profile" className="btn btn-primary">
+                프로필 확인
+              </Link>
+              <button
+                onClick={() => window.location.reload()}
+                className="btn btn-secondary"
+              >
+                다시 시도
+              </button>
+            </div>
           </div>
         </div>
       </Layout>

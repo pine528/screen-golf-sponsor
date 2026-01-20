@@ -1,6 +1,6 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-01-20 (Phase 10-3 - Reconciliation/Data Integrity)
+> 최종 업데이트: 2026-01-20 (Phase H - Season Rewards)
 
 ---
 
@@ -385,6 +385,14 @@
 | GET /api/fan-votes/:id/result | 결과 조회 |
 | POST /api/fan-votes/admin/:id/approve | 관리자 승인 |
 | POST /api/fan-votes/admin/:id/settle | 관리자 정산 |
+| POST /api/fan-votes/:id/sponsor | 브랜드 투표 후원 |
+| POST /api/fan-votes/:id/track-engagement | 스폰서 노출/클릭 추적 |
+
+**투표 스폰서십 (Phase G)**:
+- 브랜드가 투표 후원 가능 (contributionAmount, bannerUrl, logoUrl, message, linkUrl)
+- `SponsorEngagement`: 배너 노출(impressions), 배너 클릭(bannerClicks), 링크 클릭(linkClicks) 추적
+- GET /api/brands/me/sponsored-votes: 브랜드 후원 투표 목록
+- GET /api/brands/me/sponsor-stats: 후원 통계 집계
 
 ### 2.3 포인트샵
 - **모델**: `ShopItem`, `RedemptionOrder`
@@ -414,6 +422,27 @@
 | POST /api/fan/favorites/athlete/:id | 선수 즐겨찾기 토글 |
 | POST /api/fan/favorites/brand/:id | 브랜드 즐겨찾기 토글 |
 | GET /api/fan/favorites | 내 즐겨찾기 목록 |
+
+### 2.6 시즌 리워드 (Phase H)
+- **모델**: `Season`, `SeasonParticipant`, `SeasonBadge`, `SeasonBadgeAward`
+- **상태**: DRAFT → UPCOMING → ACTIVE → ENDED → REWARDS_DISTRIBUTED
+
+| API | 설명 |
+|-----|------|
+| GET /api/seasons/current | 현재 활성 시즌 |
+| GET /api/seasons | 시즌 목록 |
+| GET /api/seasons/:id | 시즌 상세 |
+| GET /api/seasons/:id/leaderboard | 리더보드 (순위, 참여, 적중, 포인트) |
+| GET /api/seasons/my/participation | 내 시즌 참여 현황 |
+| GET /api/seasons/my/badges | 내 뱃지 목록 |
+| POST /api/admin/seasons | 시즌 생성 (rewardTiers, participationBonus) |
+| PATCH /api/admin/seasons/:id | 시즌 수정 |
+| POST /api/admin/seasons/:id/activate | 시즌 활성화 |
+| POST /api/admin/seasons/:id/end | 시즌 종료 |
+| POST /api/admin/seasons/:id/distribute-rewards | 보상 배포 |
+| POST /api/admin/seasons/:id/update-rankings | 랭킹 수동 업데이트 |
+
+**뱃지 타입**: SEASON_GOLD (1위), SEASON_SILVER (2위), SEASON_BRONZE (3위), SEASON_TOP10, SEASON_TOP100, PARTICIPATION, VOTE_MASTER, SHOP_VIP, STREAK
 
 ---
 
@@ -452,7 +481,12 @@ PointWallet, PointLedgerTx
 
 ### 팬 투표 관련
 ```
-FanVoteEvent, FanVoteEntry, FanVoteSettlement, FanVoteWinner
+FanVoteEvent, FanVoteEntry, FanVoteSettlement, FanVoteWinner, SponsorEngagement
+```
+
+### 시즌 관련
+```
+Season, SeasonParticipant, SeasonBadge, SeasonBadgeAward
 ```
 
 ### 포인트샵 관련
@@ -489,6 +523,13 @@ Notification (NotificationType enum)
 | /athlete/pending-signatures | PendingSignatures | 선수 서명 대기 계약 |
 | /admin/ops | AdminOps | 운영 도구 (예약 해제/경매 종료) |
 | /brand/wallet | BrandWallet | 브랜드 지갑 충전/조회 |
+| /brand/sponsored-votes | BrandSponsoredVotes | 브랜드 후원 투표 관리 |
+| /brand/campaigns/:id | CampaignDetail | 캠페인 상세 (KPI 진행률) |
+| /brand/reports/roi | BrandROIDashboard | 브랜드 ROI 대시보드 |
+| /admin/exposure | AdminExposure | 노출 기록 관리 |
+| /seasons/:id/leaderboard | SeasonLeaderboard | 시즌 리더보드 |
+| /fan/badges | MyBadges | 내 뱃지 컬렉션 |
+| /admin/seasons | AdminSeasons | 시즌 관리 |
 
 ---
 

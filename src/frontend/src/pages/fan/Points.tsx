@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { Coins, TrendingUp, TrendingDown, Calendar, Filter } from 'lucide-react';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 const REASON_LABELS: Record<string, string> = {
   ADMIN_GRANT: '관리자 지급',
@@ -13,9 +15,18 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 export default function Points() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [selectedReason, setSelectedReason] = useState<string>('');
   const pageSize = 20;
+
+  // FAN이 아닌 사용자는 대시보드로 리다이렉트
+  useEffect(() => {
+    if (user && user.role !== 'FAN') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   // 포인트 잔액 조회
   const { data: balanceData } = useQuery({

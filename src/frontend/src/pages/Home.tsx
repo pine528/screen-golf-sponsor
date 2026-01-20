@@ -687,7 +687,7 @@ export function Home() {
               <h4 className="text-slate-900 font-semibold mb-3 sm:mb-4 text-sm sm:text-base">지원</h4>
               <ul className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-slate-500">
                 <li><a href="#" className="hover:text-slate-900 transition-colors">이용가이드</a></li>
-                <li><a href="#" className="hover:text-slate-900 transition-colors">자주 묻는 질문</a></li>
+                <li><Link to="/faq" className="hover:text-slate-900 transition-colors">자주 묻는 질문</Link></li>
                 <li><a href="#" className="hover:text-slate-900 transition-colors">고객센터</a></li>
               </ul>
             </div>
