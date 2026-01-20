@@ -78,7 +78,19 @@ export class EventService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { dateStart: 'asc' },
-        include: {
+        select: {
+          id: true,
+          tour: true,
+          name: true,
+          description: true,
+          dateStart: true,
+          dateEnd: true,
+          broadcastEpisode: true,
+          multiplier: true,
+          venue: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
           _count: {
             select: {
               slotInstances: true,
