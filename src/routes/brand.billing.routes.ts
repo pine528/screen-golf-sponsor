@@ -69,4 +69,24 @@ router.get('/statements/export.csv', authenticate, authorize('BRAND'), billingCo
  */
 router.get('/statements/export.pdf', authenticate, authorize('BRAND'), billingController.exportStatementPdf);
 
+// ============================================
+// Tax Invoice
+// ============================================
+
+/**
+ * @route POST /brand/billing/tax-invoices/request
+ * @desc 세금계산서 발행 요청
+ * @body billingProfileId, from, to, idempotencyKey
+ */
+router.post('/tax-invoices/request', authenticate, authorize('BRAND'), billingController.requestTaxInvoice);
+
+/**
+ * @route GET /brand/billing/tax-invoices/my
+ * @desc 내 세금계산서 요청 목록
+ * @query status?: REQUESTED | APPROVED | ISSUED | REJECTED
+ * @query page?: number
+ * @query pageSize?: number
+ */
+router.get('/tax-invoices/my', authenticate, authorize('BRAND'), billingController.getMyTaxInvoices);
+
 export default router;
