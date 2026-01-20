@@ -91,7 +91,6 @@ model Brand {
   sponsoredVoteEvents VoteEvent[]
   sponsoredFanVotes FanVoteEvent[] @relation("SponsoredVotes")
   payments        Payment[]
-  wallets         Wallet[]
   favoritedBy     FavoriteBrand[]
 
   @@map("brands")
@@ -124,7 +123,6 @@ model Athlete {
   contracts            Contract[]
   eventParticipations  EventParticipation[]
   votePoints           AthleteVotePoint[]
-  wallets              Wallet[]
   payoutItems          PayoutItem[]
   favoritedBy          FavoriteAthlete[]
   withdrawalRequests   WithdrawalRequest[]
@@ -1141,9 +1139,8 @@ model Wallet {
   withdrawalRequests   WithdrawalRequest[]
   topupPayments        TopupPayment[]
   refundRequests       RefundRequest[]
-  // Virtual relations for admin queries (no FK constraint)
-  brand       Brand?          @relation(fields: [ownerId], references: [id], map: "wallet_brand_fk")
-  athlete     Athlete?        @relation(fields: [ownerId], references: [id], map: "wallet_athlete_fk")
+  // Note: ownerId references Brand or Athlete depending on ownerType
+  // No FK constraint - polymorphic relation handled in application code
 
   @@unique([ownerType, ownerId])
   @@map("wallets")
