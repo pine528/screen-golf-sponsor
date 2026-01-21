@@ -11,6 +11,9 @@ const router = Router();
 // 활성화된 투표 이벤트 목록 (누구나 조회 가능)
 router.get('/active', voteController.listActiveVoteEvents.bind(voteController));
 
+// 종료된 투표 이벤트 목록 (누구나 조회 가능)
+router.get('/ended', voteController.listEndedVoteEvents.bind(voteController));
+
 // 투표 이벤트 상세 조회
 router.get('/events/:id', voteController.getVoteEvent.bind(voteController));
 

@@ -137,6 +137,35 @@ export class VoteService {
     return { voteEvents, total };
   }
 
+  async listEndedVoteEvents(page: number = 1, limit: number = 20) {
+    const [voteEvents, total] = await Promise.all([
+      prisma.voteEvent.findMany({
+        where: {
+          status: { in: ['CLOSED', 'SETTLED'] },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { endAt: 'desc' },
+        include: {
+          event: true,
+          sponsorBrand: {
+            select: { id: true, name: true },
+          },
+          _count: {
+            select: { votes: true },
+          },
+        },
+      }),
+      prisma.voteEvent.count({
+        where: {
+          status: { in: ['CLOSED', 'SETTLED'] },
+        },
+      }),
+    ]);
+
+    return { voteEvents, total };
+  }
+
   async updateVoteEvent(id: string, data: {
     title?: string;
     description?: string;

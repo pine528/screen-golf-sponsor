@@ -95,6 +95,28 @@ export class VoteController {
     }
   }
 
+  async listEndedVoteEvents(req: Request, res: Response, next: NextFunction) {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const result = await voteService.listEndedVoteEvents(page, limit);
+
+      res.json({
+        success: true,
+        data: result.voteEvents,
+        pagination: {
+          page,
+          limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateVoteEvent(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const voteEvent = await voteService.updateVoteEvent(req.params.id, {
