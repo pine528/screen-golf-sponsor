@@ -289,18 +289,31 @@ export class SlotInstanceService {
       where: { id: { in: templateIds }, isActive: true },
     });
 
-    const instances = await Promise.all(
-      templates.map((template) =>
-        this.create({
-          eventId,
-          athleteId,
-          slotTemplateId: template.id,
-          reservePrice: template.defaultReservePrice,
-        }).catch((e) => null) // Ignore duplicates
-      )
+    const results = await Promise.all(
+      templates.map(async (template) => {
+        try {
+          const instance = await this.create({
+            eventId,
+            athleteId,
+            slotTemplateId: template.id,
+            reservePrice: template.defaultReservePrice,
+          });
+          return { success: true, data: instance, templateId: template.id, templateName: template.name };
+        } catch (e: any) {
+          return {
+            success: false,
+            error: e.message || 'Unknown error',
+            templateId: template.id,
+            templateName: template.name
+          };
+        }
+      })
     );
 
-    return instances.filter((i) => i !== null);
+    const created = results.filter((r) => r.success).map((r) => r.data);
+    const failed = results.filter((r) => !r.success);
+
+    return { created, failed, total: templates.length };
   }
 
   /**
