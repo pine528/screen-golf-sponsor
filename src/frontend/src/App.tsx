@@ -39,9 +39,11 @@ import FinanceReports from './pages/admin/reports/ReportsDashboard';
 import BrandCampaigns from './pages/brand/Campaigns';
 import CampaignDetail from './pages/brand/CampaignDetail';
 import BrandWallet from './pages/brand/BrandWallet';
+import BrandCheckout from './pages/brand/BrandCheckout';
 import BrandSponsoredVotes from './pages/brand/BrandSponsoredVotes';
 import BrandROIDashboard from './pages/brand/BrandROIDashboard';
-import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, Points, Ranking, Favorites, BrandRegister, Shop, ShopDetail, Orders } from './pages/fan';
+import BrandBilling from './pages/brand/BrandBilling';
+import { FanHome, FanLogin, FanRegister, Votes, VoteDetail, FanVoteDetail, Points, Ranking, Favorites, BrandRegister, Shop, ShopDetail, Orders } from './pages/fan';
 import FanVoteCreate from './pages/fan/FanVoteCreate';
 import MyFanVotes from './pages/fan/MyFanVotes';
 import FanVoteResult from './pages/fan/FanVoteResult';
@@ -57,7 +59,14 @@ import AdminDisputes from './pages/admin/AdminDisputes';
 import AdminDisputeDetail from './pages/admin/AdminDisputeDetail';
 import AdminSeasons from './pages/admin/AdminSeasons';
 import AdminExposure from './pages/admin/AdminExposure';
+import AdminReconciliation from './pages/admin/AdminReconciliation';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminTaxInvoices from './pages/admin/AdminTaxInvoices';
 import Faq from './pages/Faq';
+import Guide from './pages/Guide';
+import Contact from './pages/Contact';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 import { Inventory } from './pages/Inventory';
 import { Contracts } from './pages/Contracts';
 import { Profile } from './pages/Profile';
@@ -147,6 +156,10 @@ function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/for-who" element={<ForWho />} />
       <Route path="/faq" element={<Faq />} />
+      <Route path="/guide" element={<Guide />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
 
       {/* Fan Auth Routes (Public) */}
       <Route path="/fan/login" element={<FanLogin />} />
@@ -161,30 +174,9 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/auctions"
-        element={
-          <ProtectedRoute>
-            <Auctions />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/auctions/:id"
-        element={
-          <ProtectedRoute>
-            <AuctionDetail />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/inventory"
-        element={
-          <ProtectedRoute>
-            <Inventory />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/auctions" element={<Auctions />} />
+      <Route path="/auctions/:id" element={<AuctionDetail />} />
+      <Route path="/inventory" element={<Inventory />} />
       <Route
         path="/contracts"
         element={
@@ -250,6 +242,14 @@ function App() {
         }
       />
       <Route
+        path="/brand/wallet/checkout"
+        element={
+          <ProtectedRoute>
+            <BrandCheckout />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/brand/wallet"
         element={
           <ProtectedRoute>
@@ -278,6 +278,14 @@ function App() {
         element={
           <ProtectedRoute>
             <BrandROIDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brand/billing"
+        element={
+          <ProtectedRoute>
+            <BrandBilling />
           </ProtectedRoute>
         }
       />
@@ -380,6 +388,14 @@ function App() {
         element={
           <ProtectedRoute>
             <MyFanVotes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fan-votes/:id"
+        element={
+          <ProtectedRoute>
+            <FanVoteDetail />
           </ProtectedRoute>
         }
       />
@@ -574,6 +590,30 @@ function App() {
         element={
           <ProtectedRoute>
             <AdminExposure />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reconciliation"
+        element={
+          <ProtectedRoute>
+            <AdminReconciliation />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/finance/tax-invoices"
+        element={
+          <ProtectedRoute>
+            <AdminTaxInvoices />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <AdminUsers />
           </ProtectedRoute>
         }
       />

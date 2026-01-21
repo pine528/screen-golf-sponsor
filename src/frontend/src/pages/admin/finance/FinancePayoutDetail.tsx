@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Layout } from '../../../components/Layout';
 import { api } from '../../../services/api';
 
 function formatNumber(value: string | number): string {
@@ -53,26 +54,31 @@ export default function FinancePayoutDetail() {
 
   if (loading) {
     return (
+      <Layout>
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
+      </Layout>
     );
   }
 
   if (!data?.batch) {
     return (
+      <Layout>
       <div className="text-center py-12">
         <p className="text-gray-500">정산 배치를 찾을 수 없습니다.</p>
         <Link to="/admin/finance/payouts" className="text-blue-600 hover:underline mt-2 inline-block">
           ← 목록으로
         </Link>
       </div>
+      </Layout>
     );
   }
 
   const { batch, totalAmount } = data;
 
   return (
+    <Layout>
     <div className="space-y-6">
       {/* 헤더 */}
       <div className="flex justify-between items-center">
@@ -181,5 +187,6 @@ export default function FinancePayoutDetail() {
         </div>
       </div>
     </div>
+    </Layout>
   );
 }

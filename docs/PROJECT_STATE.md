@@ -1,6 +1,6 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-01-20 (Phase H - Season Rewards)
+> 최종 업데이트: 2026-01-21 (Phase 11-2A - 브랜드 청구/명세서)
 
 ---
 
@@ -78,6 +78,28 @@
 - GitHub Actions: typecheck, lint, migrations check, e2e
 - docker-compose.prod.yml + smoke-test.sh
 - Render(Backend) + Vercel(Frontend)
+
+### 1.6.1 백업/복구 (DR) - Phase 11-2B
+
+**스크립트**:
+| 스크립트 | 위치 | 설명 |
+|---------|------|------|
+| backup.sh | scripts/db/ | PostgreSQL 일일 백업 (pg_dump + gzip + S3) |
+| restore.sh | scripts/db/ | 복구 (S3/로컬, 확인 텍스트 필요) |
+| verify-backup.sh | scripts/db/ | 백업 검증 (임시 컨테이너 복구) |
+| preflight.sh | scripts/release/ | 배포 전 사전 점검 |
+| rollback.sh | scripts/release/ | 롤백 절차 안내 |
+
+**백업 정책**:
+- 일일 03:30 KST 자동 백업 (GitHub Actions)
+- 보관: 일일 14일, 주간 8주, 월간 12개월
+- 검증: 매주 일요일 자동 실행
+
+**핵심 테이블 (돈 데이터)**:
+- `wallet`, `ledger_tx`, `escrow`, `topup_payments`, `refund_requests`, `withdrawal_requests`
+- **LedgerTx**: 절대 DELETE/UPDATE 금지 (불변 원장)
+
+**문서**: [DR_RUNBOOK.md](./DR_RUNBOOK.md) 참조
 
 ### 1.7 보안 정책 (계좌 암호화)
 - **암호화**: AES-256-GCM (IV + Auth Tag)
@@ -356,6 +378,81 @@
 | PATCH /api/admin/reconciliation/issues/:id/status | 이슈 상태 변경 (ACKED/RESOLVED/IGNORED) |
 | GET /api/admin/reconciliation/issues.csv | CSV Export |
 
+**프론트엔드**: `/admin/reconciliation` (AdminReconciliation.tsx) - KPI 카드, 이슈/실행기록 탭, 상태변경, CSV 내보내기
+
+### 1.15 RBAC 세분화 - Phase 11-1
+
+**새 역할 추가**:
+- `SUPPORT`: 고객지원 (읽기 전용 - user/transaction/issue 조회)
+- `AUDITOR`: 감사 (읽기 전용 - audit/report/reconciliation 조회)
+
+**역할별 권한 매트릭스**:
+| 기능 | ADMIN | FINANCE | SUPPORT | AUDITOR |
+|------|-------|---------|---------|---------|
+| 전체 관리 기능 | O | X | X | X |
+| 환불 승인/정산 실행 | O | O | X | X |
+| 감사로그 조회 | O | X | X | O |
+| 리포트 조회 | O | O | X | O |
+| 역할 변경 | O | X | X | X |
+
+**관리자 관리 API**:
+| API | 설명 |
+|-----|------|
+| GET /api/admin/admins | 관리자 목록 |
+| PATCH /api/admin/admins/:id/role | 역할 변경 (Danger Zone) |
+| PATCH /api/admin/admins/:id/permissions | 권한 변경 |
+
+**Danger Zone 패턴**:
+- confirmText: `CHANGE_ROLE_{email}` 형식 입력 필수
+- reason: 최소 10자 이상 사유 입력 필수
+- AdminActionLog + AuditLog 자동 기록
+
+**ENV 필수값 검증**: 서버 시작 시 `DATABASE_URL`, `JWT_SECRET` 필수. 프로덕션에서 `PORTONE_*` 추가 필수.
+
+**프론트엔드**: `/admin/users` (AdminUsers.tsx) - 관리자 목록, 역할 변경 모달 (Danger Zone)
+
+### 1.16 브랜드 청구/명세서/세금계산서 - Phase 11-2A
+
+**모델**:
+- `BillingProfile`: 브랜드 사업자 정보 (세금계산서 발행용)
+- `DocumentExportLog`: 문서 내보내기 감사 로그
+- `TaxInvoiceRequest`: 세금계산서 발행 요청
+
+**Brand API**:
+| API | 설명 |
+|-----|------|
+| GET /api/brand/billing/profile | 청구 프로필 조회 |
+| POST /api/brand/billing/profile | 청구 프로필 생성 |
+| PATCH /api/brand/billing/profile | 청구 프로필 수정 |
+| GET /api/brand/billing/statements/summary | 기간별 요약 (from, to) |
+| GET /api/brand/billing/statements/items | 거래 내역 (페이지네이션) |
+| GET /api/brand/billing/statements/export.csv | CSV 내보내기 |
+| GET /api/brand/billing/statements/export.pdf | PDF 내보내기 |
+| POST /api/brand/billing/tax-invoices/request | 세금계산서 발행 요청 |
+| GET /api/brand/billing/tax-invoices/my | 내 세금계산서 요청 목록 |
+
+**Admin Tax Invoice API**:
+| API | 설명 |
+|-----|------|
+| GET /api/admin/finance/tax-invoices | 세금계산서 요청 목록 |
+| GET /api/admin/finance/tax-invoices/stats | 세금계산서 통계 |
+| POST /api/admin/finance/tax-invoices/:id/approve | 승인 |
+| POST /api/admin/finance/tax-invoices/:id/reject | 거부 (reason 10자+) |
+| POST /api/admin/finance/tax-invoices/:id/issue | 발행 (Danger Zone: confirmText="ISSUE") |
+
+**세금계산서 상태**: REQUESTED → APPROVED → ISSUED (또는 REJECTED)
+
+**요약 항목**: 총 충전, 총 환불, 에스크로 홀드/릴리즈/환불, 플랫폼 수수료, 순 지출
+
+**CSV/PDF 내보내기**:
+- 수식 주입 방어: `=`, `+`, `-`, `@` 시작 시 `'` 접두어
+- UTF-8 BOM 추가
+- DocumentExportLog에 감사 기록
+
+**프론트엔드**:
+- `/brand/billing` (BrandBilling.tsx) - 거래명세서/청구정보/세금계산서 탭
+- `/admin/finance/tax-invoices` (AdminTaxInvoices.tsx) - 관리자 세금계산서 관리
+
 ---
 
 ## 2. FAN 기능
@@ -530,6 +627,10 @@ Notification (NotificationType enum)
 | /seasons/:id/leaderboard | SeasonLeaderboard | 시즌 리더보드 |
 | /fan/badges | MyBadges | 내 뱃지 컬렉션 |
 | /admin/seasons | AdminSeasons | 시즌 관리 |
+| /admin/reconciliation | AdminReconciliation | 대사 관리 (결제/환불 정합성) |
+| /admin/users | AdminUsers | 관리자 관리 (RBAC) |
+| /admin/finance/tax-invoices | AdminTaxInvoices | 세금계산서 관리 |
+| /brand/billing | BrandBilling | 브랜드 청구/명세서/세금계산서 |
 
 ---
 

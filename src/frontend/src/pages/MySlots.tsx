@@ -18,6 +18,9 @@ import {
   ShoppingCart,
   ToggleLeft,
   ToggleRight,
+  Plus,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '../utils';
 
@@ -27,10 +30,25 @@ export function MySlots() {
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  // Get athlete profile to get athlete ID
+  const { data: athleteData } = useQuery({
+    queryKey: ['my-athlete'],
+    queryFn: () => api.getMyAthlete(),
+  });
 
   const { data: eventsData } = useQuery({
     queryKey: ['events'],
     queryFn: () => api.getEvents(),
+  });
+
+  // Get slot templates
+  const { data: templatesData } = useQuery({
+    queryKey: ['slot-templates'],
+    queryFn: () => api.getSlotTemplates(),
   });
 
   const { data: slotsData, isLoading } = useQuery({
@@ -43,9 +61,11 @@ export function MySlots() {
     queryFn: () => api.getMyAthleteStats(),
   });
 
+  const athlete = athleteData?.data;
   const events = eventsData?.data || [];
   const slots = slotsData?.data || [];
   const stats = statsData?.data || {};
+  const templates = templatesData?.data || [];
 
   const filteredSlots = slots
     .filter((slot: any) => {
@@ -81,8 +101,6 @@ export function MySlots() {
     });
   };
 
-  const queryClient = useQueryClient();
-
   const getSlotStatus = (slot: any) => {
     if (slot.contract) {
       return { label: '계약됨', style: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
@@ -110,9 +128,18 @@ export function MySlots() {
     <Layout>
       <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">슬롯 관리</h1>
-          <p className="text-sm sm:text-base text-slate-600 mt-1">내 광고 슬롯을 관리합니다</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">슬롯 관리</h1>
+            <p className="text-sm sm:text-base text-slate-600 mt-1">내 광고 슬롯을 관리합니다</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn btn-primary inline-flex items-center gap-2 text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            슬롯 추가
+          </button>
         </div>
 
         {/* Stats */}
@@ -372,6 +399,21 @@ export function MySlots() {
           formatCurrency={formatCurrency}
           formatDate={formatDate}
           onUpdate={() => queryClient.invalidateQueries({ queryKey: ['my-athlete-slots'] })}
+        />
+      )}
+
+      {/* Create Slot Modal */}
+      {showCreateModal && athlete && (
+        <CreateSlotModal
+          athleteId={athlete.id}
+          events={events}
+          templates={templates}
+          existingSlots={slots}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ['my-athlete-slots'] });
+            setShowCreateModal(false);
+          }}
         />
       )}
     </Layout>
@@ -802,6 +844,244 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
         <div className="p-4 sm:p-6 border-t border-slate-200">
           <button onClick={onClose} className="btn btn-secondary w-full text-sm sm:text-base">
             닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface CreateSlotModalProps {
+  athleteId: string;
+  events: any[];
+  templates: any[];
+  existingSlots: any[];
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function CreateSlotModal({
+  athleteId,
+  events,
+  templates,
+  existingSlots,
+  onClose,
+  onCreated,
+}: CreateSlotModalProps) {
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [error, setError] = useState('');
+
+  const createSlotsMutation = useMutation({
+    mutationFn: () => api.bulkCreateSlotInstances(selectedEventId, athleteId, selectedTemplateIds),
+    onSuccess: () => {
+      onCreated();
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error?.message || '슬롯 생성에 실패했습니다');
+    },
+  });
+
+  // Filter out templates that already have slots for this event
+  const availableTemplates = templates.filter((template: any) => {
+    if (!selectedEventId) return true;
+    return !existingSlots.some(
+      (slot: any) =>
+        slot.eventId === selectedEventId && slot.slotTemplateId === template.id
+    );
+  });
+
+  const handleTemplateToggle = (templateId: string) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(templateId)
+        ? prev.filter((id) => id !== templateId)
+        : [...prev, templateId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const availableIds = availableTemplates.map((t: any) => t.id);
+    const allSelected = availableIds.every((id: string) => selectedTemplateIds.includes(id));
+    if (allSelected) {
+      setSelectedTemplateIds([]);
+    } else {
+      setSelectedTemplateIds(availableIds);
+    }
+  };
+
+  const handleSubmit = () => {
+    setError('');
+    if (!selectedEventId) {
+      setError('이벤트를 선택해주세요');
+      return;
+    }
+    if (selectedTemplateIds.length === 0) {
+      setError('최소 하나의 슬롯 유형을 선택해주세요');
+      return;
+    }
+    createSlotsMutation.mutate();
+  };
+
+  // Sort events by date (future first, then past)
+  const sortedEvents = [...events].sort((a: any, b: any) => {
+    const dateA = new Date(a.dateEnd || a.endDate || 0);
+    const dateB = new Date(b.dateEnd || b.endDate || 0);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  // Check if event is active (end date in future)
+  const isEventActive = (event: any) => {
+    const endDate = new Date(event.dateEnd || event.endDate);
+    return endDate >= new Date();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-xl sm:mx-4 max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-slate-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900">슬롯 추가</h2>
+              <p className="text-sm text-slate-600 mt-1">이벤트에 광고 슬롯을 등록합니다</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          {events.length === 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+              등록된 이벤트가 없습니다. 관리자에게 이벤트 등록을 요청하세요.
+            </div>
+          )}
+
+          {/* Event Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              이벤트 선택
+            </label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => {
+                setSelectedEventId(e.target.value);
+                setSelectedTemplateIds([]);
+              }}
+              className="input w-full"
+            >
+              <option value="">이벤트를 선택하세요</option>
+              {sortedEvents.map((event: any) => {
+                const active = isEventActive(event);
+                return (
+                  <option key={event.id} value={event.id}>
+                    {!active ? '[종료] ' : ''}{event.name} ({new Date(event.dateStart || event.startDate).toLocaleDateString('ko-KR')})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Template Selection */}
+          {selectedEventId && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  슬롯 유형 선택
+                </label>
+                <button
+                  onClick={handleSelectAll}
+                  className="text-xs text-emerald-600 hover:text-emerald-700"
+                >
+                  {availableTemplates.length > 0 &&
+                  availableTemplates.every((t: any) => selectedTemplateIds.includes(t.id))
+                    ? '전체 해제'
+                    : '전체 선택'}
+                </button>
+              </div>
+              {availableTemplates.length === 0 ? (
+                <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-500 text-sm">
+                  이 이벤트에 등록 가능한 슬롯이 없습니다
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {availableTemplates.map((template: any) => (
+                    <label
+                      key={template.id}
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors',
+                        selectedTemplateIds.includes(template.id)
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTemplateIds.includes(template.id)}
+                        onChange={() => handleTemplateToggle(template.id)}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 text-sm">{template.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {template.bodyPart} · {template.code}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-emerald-600">
+                          {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(
+                            template.defaultReservePrice || 0
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500">최소가</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected Count */}
+          {selectedTemplateIds.length > 0 && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <p className="text-sm text-emerald-700">
+                <span className="font-medium">{selectedTemplateIds.length}개</span> 슬롯이 선택됨
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 sm:p-6 border-t border-slate-200 flex gap-3">
+          <button onClick={onClose} className="btn btn-secondary flex-1">
+            취소
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={createSlotsMutation.isPending || !selectedEventId || selectedTemplateIds.length === 0}
+            className="btn btn-primary flex-1 inline-flex items-center justify-center gap-2"
+          >
+            {createSlotsMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                생성 중...
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                슬롯 생성
+              </>
+            )}
           </button>
         </div>
       </div>

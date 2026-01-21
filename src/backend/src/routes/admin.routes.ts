@@ -185,4 +185,28 @@ router.post('/brand-registrations/:id/approve', adminController.approveBrandRegi
  */
 router.post('/brand-registrations/:id/reject', adminController.rejectBrandRegistration);
 
+// ============================================
+// Admin Management (RBAC)
+// ============================================
+
+/**
+ * @route GET /admin/admins
+ * @desc Get list of admin users
+ */
+router.get('/admins', adminController.getAdmins);
+
+/**
+ * @route PATCH /admin/admins/:adminId/role
+ * @desc Change admin role (Danger Zone - ADMIN only)
+ * @body { role: UserRole, confirmText: string, reason: string }
+ */
+router.patch('/admins/:adminId/role', adminController.changeAdminRole);
+
+/**
+ * @route PATCH /admin/admins/:adminId/permissions
+ * @desc Update admin permissions (ADMIN only)
+ * @body { permissions: string[], reason: string }
+ */
+router.patch('/admins/:adminId/permissions', adminController.updateAdminPermissions);
+
 export default router;

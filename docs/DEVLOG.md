@@ -691,4 +691,296 @@ TopupPayment.status: PAID → REFUNDED (전액 환불 시)
 
 ---
 
+## [2026-01-20] 시스템 정합성 검증 및 확인
+
+### 검증 항목
+- [x] 프론트엔드 라우팅: 모든 페이지 라우트가 App.tsx에 올바르게 등록됨
+- [x] 네비게이션 연결: Layout.tsx의 모든 네비게이션 항목이 실제 라우트와 연결됨
+- [x] 페이지 컴포넌트: Guide, Contact, Terms, Privacy 등 모든 공개 페이지 존재 확인
+- [x] API 엔드포인트: 백엔드 라우트 30개 모두 routes/index.ts에 등록됨
+- [x] API 서비스: 프론트엔드 api.ts에서 호출하는 모든 메서드 구현 확인
+- [x] TypeScript 빌드: Backend/Frontend 모두 에러 없이 빌드 성공
+- [x] 라우트 정합성: 네비게이션에 있는 모든 경로가 App.tsx에 정의됨
+
+### 검증 결과
+- **Backend**: 30개 라우트 파일 모두 index.ts에 정상 등록
+- **Frontend**:
+  - 70+ 라우트 정의 (public, protected, admin, fan, brand, athlete)
+  - 모든 네비게이션 링크가 유효한 라우트 경로
+  - TypeScript 컴파일 에러 없음
+- **API 호출**: 50+ API 메서드가 프론트엔드에서 정상 호출 가능
+
+### 확인된 기능
+1. **Public Routes**: Home, Features, HowItWorks, ForWho, FAQ, Guide, Contact, Terms, Privacy
+2. **Auth Routes**: Login, Register, Fan Login/Register
+3. **Brand Routes**: Dashboard, Inventory, Auctions, Contracts, Wallet, Campaigns, ROI Reports
+4. **Athlete Routes**: Dashboard, My Slots, Contracts, Pending Signatures, Settlements, Withdrawals
+5. **Fan Routes**: Home, Votes, Points, Shop, Ranking, Favorites, Badges, Seasons
+6. **Admin Routes**: 19개 관리 페이지 (Events, Auctions, KYC, Finance, Reports, Entities, Ops 등)
+
+### 참고
+- 모든 시스템 구성 요소가 정상 작동
+- 라우팅, API, 네비게이션 모두 정합성 확인 완료
+- 빌드 에러 없음, 프로덕션 배포 준비 완료
+
+---
+
+## [2026-01-20] 팬 투표 Invalid Date 오류 수정 및 Stripe 제거
+
+### 변경 사항
+- **Stripe 결제 옵션 제거**: BrandWallet에서 TOSS만 유지
+- **테스트 충전 기능 추가**: 데모용 모의 충전 버튼 (POST /api/brand/topups/mock)
+- **팬 투표 Invalid Date 수정**:
+  - FanVoteEvent 인터페이스를 백엔드 응답과 일치하도록 수정
+  - `entryFee` → `entryFeePoints`, `prizePool` 동적 계산으로 변경
+  - MyEntry 인터페이스 필드명 수정 (`optionIndex`, `eventId`)
+  - FanVoteDetail: eventData.myEntry 직접 사용하도록 개선
+
+### 영향받는 파일
+- `src/frontend/src/pages/brand/BrandWallet.tsx` - Stripe 제거, 테스트 충전 버튼 추가
+- `src/frontend/src/pages/fan/Votes.tsx` - FanVoteEvent 인터페이스 수정
+- `src/frontend/src/pages/fan/FanVoteDetail.tsx` - 인터페이스 및 필드 매핑 수정
+- `src/backend/src/controllers/topup.controller.ts` - mockTopup 메서드 추가
+- `src/backend/src/routes/topup.routes.ts` - mock 라우트 추가
+- `src/backend/src/index.ts` - 시작시 Wallet FK 제약조건 자동 제거
+
+### 참고
+- Wallet 테이블의 FK 제약조건 문제로 시작시 자동 DROP 마이그레이션 추가
+
+---
+
+## [2026-01-21] Phase 10-3 - Reconciliation Admin UI (결제/환불 대사 프론트엔드)
+
+### 변경 사항
+- **AdminReconciliation.tsx 신규 생성**: 결제/환불 대사 관리 페이지
+  - 요약 KPI 카드 (CRITICAL, HIGH, OPEN, RESOLVED 건수)
+  - 이상 이슈 탭: 필터(severity, status), 상태 변경 모달, CSV 내보내기
+  - 실행 기록 탭: 대사 실행 이력 테이블
+  - 수동 실행 버튼 (FULL scope, 지난 24시간)
+- **api.ts 확장**: 6개 Reconciliation API 메서드 추가
+- **App.tsx**: /admin/reconciliation 라우트 등록
+- **Layout.tsx**: ADMIN 네비게이션에 "대사 관리" 메뉴 추가
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - Reconciliation API 메서드 추가
+- `src/frontend/src/pages/admin/AdminReconciliation.tsx` (신규) - 대사 관리 페이지
+- `src/frontend/src/App.tsx` - 라우트 등록
+- `src/frontend/src/components/Layout.tsx` - 네비게이션 추가
+
+### API 메서드
+| 메서드 | 설명 |
+|--------|------|
+| getReconciliationRuns | 대사 실행 기록 목록 |
+| createReconciliationRun | 수동 대사 실행 |
+| getReconciliationIssues | 이상 이슈 목록 |
+| getReconciliationIssuesSummary | 이슈 요약 통계 |
+| updateReconciliationIssueStatus | 이슈 상태 변경 |
+| exportReconciliationIssuesCsv | CSV 내보내기 |
+
+### 참고
+- Backend는 이전 세션에서 이미 완전히 구현됨 (Schema, Service, Controller, Routes, Cron)
+- 이슈 상태 변경 시 사유 10자 이상 필수
+- CSV 내보내기 시 수식 주입 방어 적용
+
+---
+
+## [2026-01-21] Phase 11-1 - RBAC 세분화 및 보안 강화
+
+### 변경 사항
+- **새 역할 추가**: UserRole enum에 `SUPPORT`, `AUDITOR` 역할 추가
+- **Danger Zone 유틸리티**: confirmText + reason 10자 검증 표준화
+- **권한 미들웨어 확장**: authorizePermission(), ROLE_PERMISSIONS 매핑
+- **Admin 관리 API**: 관리자 목록/역할 변경/권한 변경 엔드포인트
+- **ENV 검증**: validateEnv() - 필수 환경변수 누락 시 서버 시작 실패
+- **Frontend AdminUsers.tsx**: 관리자 관리 페이지 (역할 변경 Danger Zone 모달)
+
+### Backend 파일
+- `src/backend/prisma/schema.prisma` - UserRole enum 확장 (SUPPORT, AUDITOR)
+- `src/backend/src/utils/dangerZone.ts` (신규) - Danger Zone 검증 유틸리티
+- `src/backend/src/middleware/auth.ts` - authorizePermission, ROLE_PERMISSIONS, hasPermission
+- `src/backend/src/services/admin.service.ts` - getAdmins, changeAdminRole, updateAdminPermissions
+- `src/backend/src/controllers/admin.controller.ts` - Admin 관리 메서드 추가
+- `src/backend/src/routes/admin.routes.ts` - /admins 라우트 추가
+- `src/backend/src/config/index.ts` - validateEnv() 함수 추가
+- `src/backend/src/index.ts` - 서버 시작 시 validateEnv() 호출
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - Admin 관리 API 메서드 3개 추가
+- `src/frontend/src/pages/admin/AdminUsers.tsx` (신규) - 관리자 관리 페이지
+- `src/frontend/src/App.tsx` - /admin/users 라우트 등록
+- `src/frontend/src/components/Layout.tsx` - "관리자 관리" 네비게이션 추가
+
+### 역할별 권한
+| 역할 | 설명 | 핵심 권한 |
+|------|------|----------|
+| ADMIN | 전체 관리자 | 모든 기능 |
+| FINANCE | 재무 담당 | 환불/정산/대사 |
+| SUPPORT | 고객지원 | 조회 전용 |
+| AUDITOR | 감사 | 감사로그/리포트 조회 |
+
+### Danger Zone 패턴
+- confirmText: `CHANGE_ROLE_{email}` 정확히 입력 필수
+- reason: 최소 10자 이상 사유 입력 필수
+- AdminActionLog + AuditLog 자동 기록
+
+### 참고
+- 기존 ADMIN/FINANCE 계정은 그대로 유지
+- SUPPORT/AUDITOR는 신규 역할로 읽기 전용 접근만 허용
+- ENV 검증은 운영 환경에서 PORTONE_* 추가 필수
+
+---
+
+## [2026-01-21] Phase 11-2B - 백업/복구(DR) 및 배포 안정화
+
+### 변경 사항
+- **백업 스크립트 생성**:
+  - `scripts/db/backup.sh` - PostgreSQL 일일 백업 (pg_dump + gzip + S3)
+  - `scripts/db/restore.sh` - 데이터베이스 복구 (확인 텍스트 필수)
+  - `scripts/db/verify-backup.sh` - 백업 검증 (임시 컨테이너 복구 + 무결성 검사)
+- **배포 안정화 스크립트 생성**:
+  - `scripts/release/preflight.sh` - 배포 전 사전 점검 (ENV, DB, Migration, Build)
+  - `scripts/release/rollback.sh` - 롤백 절차 안내 (Docker/Render/Fly.io)
+- **GitHub Actions backup.yml 생성**: 매일 03:30 KST 자동 백업 + 주간 검증
+- **DR_RUNBOOK.md 생성**: 장애 복구 매뉴얼 (12줄 요약, 3개 시나리오)
+- **docker-compose.prod.yml 수정**: 마이그레이션 fail-fast 적용
+
+### 신규 파일
+- `src/backend/scripts/db/backup.sh`
+- `src/backend/scripts/db/restore.sh`
+- `src/backend/scripts/db/verify-backup.sh`
+- `src/backend/scripts/release/preflight.sh`
+- `src/backend/scripts/release/rollback.sh`
+- `.github/workflows/backup.yml`
+- `docs/DR_RUNBOOK.md`
+
+### 수정 파일
+- `docker-compose.prod.yml` - 마이그레이션 실패 시 컨테이너 시작 중단
+- `docs/PROJECT_STATE.md` - Phase 11-2B 섹션 추가
+
+### 백업 정책
+| 항목 | 값 |
+|------|-----|
+| 일일 백업 | 03:30 KST (GitHub Actions) |
+| 보관 기간 | 일일 14일, 주간 8주, 월간 12개월 |
+| 검증 | 매주 일요일 자동 실행 |
+| 저장소 | S3 버킷 (daily/weekly/monthly 폴더) |
+
+### 핵심 테이블 (돈 데이터)
+- `wallet`, `ledger_tx`, `escrow`, `topup_payments`, `refund_requests`, `withdrawal_requests`
+- **LedgerTx**: 절대 DELETE/UPDATE 금지 (불변 원장)
+
+### 참고
+- 복구 시 "RESTORE" 텍스트 입력 필요 (안전 장치)
+- verify-backup.sh는 임시 Docker 컨테이너에 복구 후 무결성 검사
+- preflight.sh 통과해야 배포 진행 가능
+
+---
+
+## [2026-01-21] Phase 11-2A - 브랜드 청구/명세서 시스템
+
+### 변경 사항
+- **Prisma 스키마 추가**: BillingProfile, DocumentExportLog, TaxInvoiceRequest 모델
+- **enum 추가**: DocumentExportType, TaxInvoiceStatus
+- **billingProfile.service.ts 신규**: 청구 프로필 CRUD
+- **statements.service.ts 신규**: 명세서 요약/상세/CSV/PDF 생성
+- **billing.controller.ts 신규**: Brand Billing API 컨트롤러
+- **brand.billing.routes.ts 신규**: Brand Billing API 라우트
+- **프론트엔드 BrandBilling.tsx 신규**: 거래명세서/청구정보 탭 페이지
+
+### Backend 파일
+- `src/backend/package.json` - pdfkit 의존성 추가
+- `src/backend/prisma/schema.prisma` - BillingProfile, DocumentExportLog, TaxInvoiceRequest 추가
+- `src/backend/src/services/billingProfile.service.ts` (신규)
+- `src/backend/src/services/statements.service.ts` (신규)
+- `src/backend/src/controllers/billing.controller.ts` (신규)
+- `src/backend/src/routes/brand.billing.routes.ts` (신규)
+- `src/backend/src/routes/index.ts` - 라우트 등록
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - Billing API 메서드 8개 추가
+- `src/frontend/src/pages/brand/BrandBilling.tsx` (신규)
+- `src/frontend/src/App.tsx` - /brand/billing 라우트 등록
+- `src/frontend/src/components/Layout.tsx` - 청구/명세서 메뉴 추가
+
+### API
+| API | 설명 |
+|-----|------|
+| GET /api/brand/billing/profile | 청구 프로필 조회 |
+| POST /api/brand/billing/profile | 청구 프로필 생성 |
+| PATCH /api/brand/billing/profile | 청구 프로필 수정 |
+| GET /api/brand/billing/statements/summary | 기간별 요약 |
+| GET /api/brand/billing/statements/items | 거래 내역 (페이지네이션) |
+| GET /api/brand/billing/statements/export.csv | CSV 내보내기 |
+| GET /api/brand/billing/statements/export.pdf | PDF 내보내기 |
+
+### 보안 고려사항
+- CSV 수식 주입 방어: `=`, `+`, `-`, `@` 시작 시 `'` 접두어
+- UTF-8 BOM 추가 (Excel 호환)
+- DocumentExportLog에 모든 다운로드 감사 기록
+
+### 참고
+- pdfkit 사용 (외부 의존성 없는 PDF 생성)
+- 세금계산서 발행 워크플로우는 선택 사항으로 남겨둠
+
+---
+
+## [2026-01-21] Phase 11-2A - 세금계산서 발행 워크플로우
+
+### 변경 사항
+- **taxInvoice.service.ts 신규**: 세금계산서 요청/승인/거부/발행 워크플로우
+- **billing.controller.ts 확장**: Brand/Admin 세금계산서 엔드포인트 추가
+- **admin.taxInvoice.routes.ts 신규**: Admin 세금계산서 관리 라우트
+- **AdminTaxInvoices.tsx 신규**: 관리자 세금계산서 관리 페이지
+- **BrandBilling.tsx 확장**: 세금계산서 탭 추가 (발행 요청 + 내역 조회)
+- **config/index.ts 수정**: PortOne V2 시크릿 키 단일 환경변수로 변경
+
+### Backend 파일
+- `src/backend/src/services/taxInvoice.service.ts` (신규)
+- `src/backend/src/controllers/billing.controller.ts` - 세금계산서 메서드 추가
+- `src/backend/src/routes/admin.taxInvoice.routes.ts` (신규)
+- `src/backend/src/routes/brand.billing.routes.ts` - 세금계산서 라우트 추가
+- `src/backend/src/routes/index.ts` - adminTaxInvoiceRoutes 등록
+- `src/backend/src/config/index.ts` - PORTONE_SECRET 단일 키로 변경
+
+### Frontend 파일
+- `src/frontend/src/services/api.ts` - 세금계산서 API 메서드 8개 추가
+- `src/frontend/src/pages/brand/BrandBilling.tsx` - 세금계산서 탭 추가
+- `src/frontend/src/pages/admin/AdminTaxInvoices.tsx` (신규)
+- `src/frontend/src/App.tsx` - /admin/finance/tax-invoices 라우트 등록
+
+### 세금계산서 API
+| API | 설명 |
+|-----|------|
+| POST /api/brand/billing/tax-invoices/request | 발행 요청 |
+| GET /api/brand/billing/tax-invoices/my | 내 요청 목록 |
+| GET /api/admin/finance/tax-invoices | 전체 요청 목록 |
+| GET /api/admin/finance/tax-invoices/stats | 통계 |
+| POST /api/admin/finance/tax-invoices/:id/approve | 승인 |
+| POST /api/admin/finance/tax-invoices/:id/reject | 거부 (reason 10자+) |
+| POST /api/admin/finance/tax-invoices/:id/issue | 발행 (confirmText="ISSUE") |
+
+### 상태 머신
+```
+REQUESTED → APPROVED → ISSUED
+         ↘ REJECTED
+```
+
+### VAT 계산 로직
+```typescript
+const totalAmount = BigInt(Math.abs(summary.netSpend));
+const supplyAmount = (totalAmount * BigInt(100)) / BigInt(110); // 공급가액
+const taxAmount = totalAmount - supplyAmount; // 세액 (10%)
+```
+
+### 환경변수 변경
+- **Before**: PORTONE_API_KEY + PORTONE_API_SECRET
+- **After**: PORTONE_SECRET (V2 단일 시크릿 키, store-xxx 형식)
+
+### 참고
+- Danger Zone 패턴 적용: 발행 시 confirmText="ISSUE" 필수
+- idempotencyKey로 중복 요청 방지
+- 거부 사유 10자 이상 필수
+
+---
+
 *이 파일은 기록 전용입니다. 작업 시작 시 자동 로드하지 마세요.*

@@ -69,16 +69,21 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    # 운영 시작 시 마이그레이션 자동 실행
+    # 운영 시작 시 마이그레이션 자동 실행 (fail-fast)
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         echo "[Startup] Running database migrations..."
-        npx prisma migrate deploy
+        if ! npx prisma migrate deploy; then
+          echo "[ERROR] Migration FAILED! Container will NOT start."
+          echo "[ERROR] Fix the migration issue and redeploy."
+          exit 1
+        fi
+        echo "[Startup] Migrations completed successfully."
 
         if [ "$$RUN_SEED" = "true" ]; then
           echo "[Startup] Running seed (RUN_SEED=true)..."
-          npm run db:seed
+          npm run db:seed || echo "[WARN] Seed failed, continuing..."
         fi
 
         echo "[Startup] Starting server..."

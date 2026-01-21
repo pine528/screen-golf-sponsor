@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { Layout } from '../../../components/Layout';
 import { api } from '../../../services/api';
 
 function formatNumber(value: string | number): string {
@@ -105,20 +106,24 @@ export default function FinanceWalletDetail() {
 
   if (loading && !wallet) {
     return (
+      <Layout>
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
+      </Layout>
     );
   }
 
   if (!wallet) {
     return (
+      <Layout>
       <div className="text-center py-12">
         <p className="text-gray-500">지갑을 찾을 수 없습니다.</p>
         <Link to="/admin/finance/wallets" className="text-blue-600 hover:underline mt-2 inline-block">
           ← 목록으로
         </Link>
       </div>
+      </Layout>
     );
   }
 
@@ -127,6 +132,7 @@ export default function FinanceWalletDetail() {
   const available = balance - frozen;
 
   return (
+    <Layout>
     <div className="space-y-6">
       {/* 헤더 */}
       <div className="flex justify-between items-center">
@@ -297,5 +303,6 @@ export default function FinanceWalletDetail() {
         )}
       </div>
     </div>
+    </Layout>
   );
 }

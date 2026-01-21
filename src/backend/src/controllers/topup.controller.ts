@@ -302,6 +302,78 @@ export class TopupController {
     }
   }
 
+  /**
+   * POST /api/brand/topups/mock
+   * 테스트/데모용 모의 충전 (결제 없이 바로 잔액 추가)
+   */
+  async mockTopup(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        return res.status(403).json({ message: '브랜드만 충전할 수 있습니다' });
+      }
+
+      const { amount } = req.body;
+      const topupAmount = Number(amount);
+
+      if (!topupAmount || topupAmount < 1000 || topupAmount > 100000000) {
+        return res.status(400).json({ message: '충전 금액은 1,000원 ~ 1억원 사이여야 합니다' });
+      }
+
+      // 직접 지갑에 충전 (트랜잭션)
+      const result = await prisma.$transaction(async (tx) => {
+        // 지갑 조회/생성 (upsert 사용)
+        const wallet = await tx.wallet.upsert({
+          where: { ownerType_ownerId: { ownerType: 'BRAND', ownerId: brandId } },
+          create: {
+            ownerType: 'BRAND',
+            ownerId: brandId,
+            balance: 0,
+            frozenAmount: 0,
+            version: 0,
+          },
+          update: {},
+        });
+
+        // 잔액 업데이트
+        const updatedWallet = await tx.wallet.update({
+          where: { id: wallet.id },
+          data: {
+            balance: { increment: topupAmount },
+            version: { increment: 1 },
+          },
+        });
+
+        // 원장 기록
+        await tx.ledgerTx.create({
+          data: {
+            walletId: wallet.id,
+            type: 'TOPUP_DEPOSIT',
+            amount: topupAmount,
+            balanceAfter: updatedWallet.balance,
+            description: '테스트 충전 (Mock)',
+            refType: 'MOCK_TOPUP',
+            refId: `mock_${Date.now()}`,
+          },
+        });
+
+        return {
+          wallet: updatedWallet,
+          amount: topupAmount,
+        };
+      });
+
+      sendSuccess(res, {
+        message: '테스트 충전이 완료되었습니다',
+        amount: result.amount,
+        newBalance: Number(result.wallet.balance),
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // =============================================
   // Phase 10-3: WebhookEventLog Helper Methods
   // =============================================

@@ -3,9 +3,9 @@
  * 브랜드 지갑 충전 및 조회
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Wallet,
   CreditCard,
@@ -27,7 +27,6 @@ const TOPUP_AMOUNTS = [10000, 50000, 100000, 500000, 1000000];
 // Provider 옵션
 const PROVIDERS = [
   { value: 'TOSS', label: 'Toss Payments', description: '간편결제, 카드, 계좌이체' },
-  { value: 'STRIPE', label: 'Stripe', description: '해외 카드 결제' },
 ] as const;
 
 // 상태별 설정
@@ -60,26 +59,60 @@ const txTypeConfig: Record<string, { label: string; isCredit: boolean }> = {
 export default function BrandWallet() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const confirmAttempted = useRef(false);
 
   // 충전 폼 상태
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<'TOSS' | 'STRIPE'>('TOSS');
+  const [selectedProvider, setSelectedProvider] = useState<'TOSS'>('TOSS');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // URL 파라미터에서 결제 결과 확인
+  // URL 파라미터에서 결제 결과 확인 및 confirm 처리
   useEffect(() => {
     const topupResult = searchParams.get('topup');
+
     if (topupResult === 'success') {
       setSuccessMessage('충전이 완료되었습니다!');
       queryClient.invalidateQueries({ queryKey: ['brandWallet'] });
       queryClient.invalidateQueries({ queryKey: ['myTopups'] });
     } else if (topupResult === 'fail') {
       setError('충전에 실패했습니다. 다시 시도해주세요.');
+    } else if (topupResult === 'pending') {
+      // TossPayments에서 돌아옴 - confirm 필요
+      const topupId = searchParams.get('topupId');
+      const paymentKey = searchParams.get('paymentKey');
+
+      if (topupId && paymentKey && !confirmAttempted.current) {
+        confirmAttempted.current = true;
+        setIsConfirming(true);
+
+        // 결제 확인 API 호출
+        api.confirmTopup(topupId, paymentKey)
+          .then(() => {
+            setSuccessMessage('충전이 완료되었습니다!');
+            queryClient.invalidateQueries({ queryKey: ['brandWallet'] });
+            queryClient.invalidateQueries({ queryKey: ['myTopups'] });
+            // URL 정리
+            navigate('/brand/wallet?topup=success', { replace: true });
+          })
+          .catch((err: any) => {
+            console.error('Confirm error:', err);
+            setError(err.response?.data?.message || '결제 확인 중 오류가 발생했습니다.');
+          })
+          .finally(() => {
+            setIsConfirming(false);
+          });
+      } else if (!topupId || !paymentKey) {
+        setError('결제 정보가 올바르지 않습니다.');
+      }
+    } else if (topupResult === 'cancel') {
+      setError('결제가 취소되었습니다.');
     }
-  }, [searchParams, queryClient]);
+  }, [searchParams, queryClient, navigate]);
 
   // 지갑 조회
   const { data: walletData, isLoading: walletLoading } = useQuery({
@@ -96,13 +129,17 @@ export default function BrandWallet() {
 
   // 충전 생성 뮤테이션
   const createTopupMutation = useMutation({
-    mutationFn: (data: { amount: number; provider: 'TOSS' | 'STRIPE' }) =>
+    mutationFn: (data: { amount: number; provider: 'TOSS' }) =>
       api.createTopup(data),
     onSuccess: (response) => {
-      // checkoutUrl로 리다이렉트
+      // checkoutUrl로 리다이렉트 (topupId 포함)
       const checkoutUrl = response.data?.checkoutUrl;
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
+      const topupId = response.data?.topupPayment?.id;
+      if (checkoutUrl && topupId) {
+        // topupId를 checkout URL에 추가
+        const url = new URL(checkoutUrl, window.location.origin);
+        url.searchParams.set('topupId', topupId);
+        window.location.href = url.toString();
       } else {
         setError('결제 페이지 URL을 받지 못했습니다.');
         setIsProcessing(false);
@@ -111,6 +148,22 @@ export default function BrandWallet() {
     onError: (err: any) => {
       setError(err.response?.data?.message || '충전 요청 실패');
       setIsProcessing(false);
+    },
+  });
+
+  // 테스트 충전 뮤테이션 (데모용)
+  const mockTopupMutation = useMutation({
+    mutationFn: (amount: number) => api.mockTopup(amount),
+    onSuccess: () => {
+      setSuccessMessage('테스트 충전이 완료되었습니다!');
+      queryClient.invalidateQueries({ queryKey: ['brandWallet'] });
+      queryClient.invalidateQueries({ queryKey: ['myTopups'] });
+      setSelectedAmount(null);
+      setCustomAmount('');
+    },
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message || '테스트 충전 실패';
+      setError(errorMsg);
     },
   });
 
@@ -168,6 +221,12 @@ export default function BrandWallet() {
         </div>
 
         {/* 알림 메시지 */}
+        {isConfirming && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 flex items-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            결제를 확인하고 있습니다...
+          </div>
+        )}
         {successMessage && (
           <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 flex items-center gap-2">
             <CheckCircle className="w-5 h-5" />
@@ -296,6 +355,34 @@ export default function BrandWallet() {
                   {effectiveAmount
                     ? `${formatCurrency(effectiveAmount)} 충전하기`
                     : '충전하기'}
+                </>
+              )}
+            </button>
+
+            {/* 테스트 충전 버튼 (데모용) */}
+            <button
+              onClick={() => {
+                setError('');
+                setSuccessMessage('');
+                if (!effectiveAmount || effectiveAmount < 1000) {
+                  setError('최소 충전 금액은 1,000원입니다.');
+                  return;
+                }
+                mockTopupMutation.mutate(effectiveAmount);
+              }}
+              disabled={!effectiveAmount || mockTopupMutation.isPending}
+              className="btn btn-outline w-full mt-2 flex items-center justify-center gap-2"
+            >
+              {mockTopupMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  처리 중...
+                </>
+              ) : (
+                <>
+                  {effectiveAmount
+                    ? `${formatCurrency(effectiveAmount)} 테스트 충전`
+                    : '테스트 충전'} (데모용)
                 </>
               )}
             </button>

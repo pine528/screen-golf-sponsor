@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
 
-import config from './config';
+import config, { validateEnv } from './config';
 import routes from './routes';
 import metricsRoutes from './routes/metrics.routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -21,9 +21,14 @@ import { escrowService } from './services/escrow.service';
 import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
+import { fanVoteService } from './services/fanVote.service';
 import { validateEncryptionKey } from './utils/crypto';
+import prisma from './models/prisma';
 
-// Sentry 초기화 (가장 먼저)
+// 환경변수 검증 (가장 먼저)
+validateEnv();
+
+// Sentry 초기화
 initSentry();
 
 // 암호화 키 검증 (출금 계좌 암호화용)
@@ -236,9 +241,43 @@ cron.schedule('20 9 * * *', async () => {
   }
 }, cronOptions);
 
+// ★ Fan Vote: Auto-close expired votes every 5 minutes
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    const result = await fanVoteService.autoCloseExpiredEvents();
+    if (result.closedCount > 0) {
+      console.log(`[Cron] Fan Votes: ${result.closedCount} expired votes closed`);
+    }
+  } catch (error) {
+    console.error('[Cron] Fan Vote auto-close error:', error);
+  }
+}, cronOptions);
+
+// Startup migration: Remove wallet FK constraints if they exist
+async function runStartupMigrations() {
+  try {
+    console.log('[Startup] Checking wallet FK constraints...');
+
+    // Try to drop the FK constraints (will silently fail if they don't exist)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "wallets" DROP CONSTRAINT IF EXISTS "wallet_athlete_fk";
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "wallets" DROP CONSTRAINT IF EXISTS "wallet_brand_fk";
+    `);
+
+    console.log('[Startup] Wallet FK constraints removed (if existed)');
+  } catch (error) {
+    console.warn('[Startup] Could not remove FK constraints (may not exist):', error);
+  }
+}
+
 // Start server
 const PORT = config.port;
-httpServer.listen(PORT, () => {
+
+// Run startup migrations then start server
+runStartupMigrations().then(() => {
+  httpServer.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
@@ -250,6 +289,7 @@ httpServer.listen(PORT, () => {
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
   `);
+  });
 });
 
 export { app, httpServer, socketService };

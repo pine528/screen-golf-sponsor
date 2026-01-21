@@ -18,6 +18,8 @@ enum UserRole {
   ADMIN
   FAN
   FINANCE   // 재무/출금 관리 권한
+  SUPPORT   // 고객지원 (읽기 전용)
+  AUDITOR   // 감사 (읽기 전용)
 }
 
 enum KycStatus {
@@ -91,8 +93,8 @@ model Brand {
   sponsoredVoteEvents VoteEvent[]
   sponsoredFanVotes FanVoteEvent[] @relation("SponsoredVotes")
   payments        Payment[]
-  wallets         Wallet[]
   favoritedBy     FavoriteBrand[]
+  billingProfile  BillingProfile?
 
   @@map("brands")
 }
@@ -124,7 +126,6 @@ model Athlete {
   contracts            Contract[]
   eventParticipations  EventParticipation[]
   votePoints           AthleteVotePoint[]
-  wallets              Wallet[]
   payoutItems          PayoutItem[]
   favoritedBy          FavoriteAthlete[]
   withdrawalRequests   WithdrawalRequest[]
@@ -1141,9 +1142,8 @@ model Wallet {
   withdrawalRequests   WithdrawalRequest[]
   topupPayments        TopupPayment[]
   refundRequests       RefundRequest[]
-  // Virtual relations for admin queries (no FK constraint)
-  brand       Brand?          @relation(fields: [ownerId], references: [id], map: "wallet_brand_fk")
-  athlete     Athlete?        @relation(fields: [ownerId], references: [id], map: "wallet_athlete_fk")
+  // Note: ownerId references Brand or Athlete depending on ownerType
+  // No FK constraint - polymorphic relation handled in application code
 
   @@unique([ownerType, ownerId])
   @@map("wallets")
@@ -1942,4 +1942,89 @@ model SeasonBadgeAward {
 
   @@unique([participantId, badgeId])
   @@map("season_badge_awards")
+}
+
+// ============================================
+// Phase 11-2A: Billing / Statements / Tax Invoice
+// ============================================
+
+model BillingProfile {
+  id                  String    @id @default(uuid())
+  brandId             String    @unique @map("brand_id")
+
+  businessName        String    @map("business_name")       // 상호
+  businessNumber      String    @map("business_number")     // 사업자등록번호
+  representativeName  String    @map("representative_name") // 대표자명
+  businessType        String?   @map("business_type")       // 업태
+  businessCategory    String?   @map("business_category")   // 업종
+
+  billingEmail        String    @map("billing_email")
+  billingPhone        String?   @map("billing_phone")
+  address             String
+  addressDetail       String?   @map("address_detail")
+
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  brand               Brand     @relation(fields: [brandId], references: [id])
+  taxInvoiceRequests  TaxInvoiceRequest[]
+
+  @@map("billing_profiles")
+}
+
+enum DocumentExportType {
+  STATEMENT_CSV
+  STATEMENT_PDF
+  TAX_INVOICE_PDF
+}
+
+model DocumentExportLog {
+  id          String              @id @default(uuid())
+  userId      String              @map("user_id")
+  brandId     String              @map("brand_id")
+  exportType  DocumentExportType  @map("export_type")
+  fromDate    DateTime            @map("from_date")
+  toDate      DateTime            @map("to_date")
+  itemCount   Int                 @map("item_count")
+  ipAddress   String?             @map("ip_address")
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  @@index([brandId, createdAt])
+  @@map("document_export_logs")
+}
+
+enum TaxInvoiceStatus {
+  REQUESTED
+  APPROVED
+  ISSUED
+  REJECTED
+}
+
+model TaxInvoiceRequest {
+  id                  String            @id @default(uuid())
+  billingProfileId    String            @map("billing_profile_id")
+  fromDate            DateTime          @map("from_date")
+  toDate              DateTime          @map("to_date")
+  supplyAmount        Decimal           @db.Decimal(18, 0) @map("supply_amount")
+  taxAmount           Decimal           @db.Decimal(18, 0) @map("tax_amount")
+  totalAmount         Decimal           @db.Decimal(18, 0) @map("total_amount")
+
+  status              TaxInvoiceStatus  @default(REQUESTED)
+  requestedAt         DateTime          @default(now()) @map("requested_at")
+  approvedBy          String?           @map("approved_by")
+  approvedAt          DateTime?         @map("approved_at")
+  rejectedBy          String?           @map("rejected_by")
+  rejectedAt          DateTime?         @map("rejected_at")
+  rejectionReason     String?           @map("rejection_reason")
+  issuedBy            String?           @map("issued_by")
+  issuedAt            DateTime?         @map("issued_at")
+  invoiceNumber       String?           @unique @map("invoice_number")
+
+  idempotencyKey      String            @unique @map("idempotency_key")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  billingProfile      BillingProfile    @relation(fields: [billingProfileId], references: [id])
+
+  @@index([status, requestedAt])
+  @@map("tax_invoice_requests")
 }

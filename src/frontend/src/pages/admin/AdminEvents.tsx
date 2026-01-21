@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 import {
@@ -15,6 +15,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { cn } from '../../utils';
 
@@ -29,6 +31,22 @@ export function AdminEvents() {
     queryKey: ['admin-events', page, statusFilter],
     queryFn: () => api.getEvents({ page, status: statusFilter !== 'all' ? statusFilter : undefined }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (eventId: string) => api.deleteEvent(eventId),
+    onSuccess: () => {
+      refetch();
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || '이벤트 삭제에 실패했습니다');
+    },
+  });
+
+  const handleDelete = (event: any) => {
+    if (window.confirm(`"${event.name}" 이벤트를 삭제하시겠습니까?`)) {
+      deleteMutation.mutate(event.id);
+    }
+  };
 
   const events = eventsData?.data || [];
 
@@ -51,8 +69,11 @@ export function AdminEvents() {
     CANCELLED: '취소',
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
+  const formatDate = (dateString: string | undefined | null) => {
+    if (!dateString) return '날짜 미정';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '날짜 미정';
+    return date.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -172,7 +193,7 @@ export function AdminEvents() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-sm text-slate-600">
                           <Clock className="w-4 h-4" />
-                          <span>{formatDate(event.startDate)} - {formatDate(event.endDate)}</span>
+                          <span>{formatDate(event.dateStart || event.startDate)} - {formatDate(event.dateEnd || event.endDate)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -218,7 +239,9 @@ export function AdminEvents() {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            onClick={() => handleDelete(event)}
+                            disabled={deleteMutation.isPending}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                             title="삭제"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -285,33 +308,99 @@ interface EventModalProps {
 }
 
 function EventModal({ event, onClose, onSave }: EventModalProps) {
+  // Default dates for new events: start = today, end = 7 days later
+  const getDefaultStartDate = () => {
+    const date = new Date();
+    return date.toISOString().split('T')[0];
+  };
+  const getDefaultEndDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + 7);
+    return date.toISOString().split('T')[0];
+  };
+
   const [formData, setFormData] = useState({
     name: event?.name || '',
-    type: event?.type || 'TOURNAMENT',
+    tour: event?.tour || 'KPGA',
     venue: event?.venue || '',
-    startDate: event?.startDate?.split('T')[0] || '',
-    endDate: event?.endDate?.split('T')[0] || '',
+    startDate: event?.startDate?.split('T')[0] || event?.dateStart?.split('T')[0] || getDefaultStartDate(),
+    endDate: event?.endDate?.split('T')[0] || event?.dateEnd?.split('T')[0] || getDefaultEndDate(),
     description: event?.description || '',
-    expectedViewers: event?.expectedViewers || '',
+    broadcastEpisode: event?.broadcastEpisode || '',
   });
+  const [error, setError] = useState('');
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => api.createEvent(data),
+    onSuccess: () => onSave(),
+    onError: (err: any) => setError(err.response?.data?.message || '이벤트 생성에 실패했습니다'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.updateEvent(event.id, data),
+    onSuccess: () => onSave(),
+    onError: (err: any) => setError(err.response?.data?.message || '이벤트 수정에 실패했습니다'),
+  });
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would call the API to create/update the event
-    console.log('Saving event:', formData);
-    onSave();
+    setError('');
+
+    // Validate dates
+    if (!formData.startDate || !formData.endDate) {
+      setError('시작일과 종료일을 모두 입력해주세요');
+      return;
+    }
+
+    const startDate = new Date(formData.startDate);
+    const endDate = new Date(formData.endDate);
+
+    if (endDate < startDate) {
+      setError('종료일은 시작일보다 같거나 늦어야 합니다');
+      return;
+    }
+
+    // 날짜를 ISO datetime 형식으로 변환
+    const payload = {
+      name: formData.name,
+      tour: formData.tour,
+      venue: formData.venue || undefined,
+      dateStart: startDate.toISOString(),
+      dateEnd: endDate.toISOString(),
+      description: formData.description || undefined,
+      broadcastEpisode: formData.broadcastEpisode || undefined,
+    };
+
+    if (event) {
+      updateMutation.mutate(payload);
+    } else {
+      createMutation.mutate(payload);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-200">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900">
             {event ? '이벤트 수정' : '새 이벤트 등록'}
           </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
           <div>
             <label className="label">이벤트명</label>
             <input
@@ -324,15 +413,17 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
             />
           </div>
           <div>
-            <label className="label">이벤트 유형</label>
+            <label className="label">투어</label>
             <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              value={formData.tour}
+              onChange={(e) => setFormData({ ...formData, tour: e.target.value })}
               className="input"
+              required
             >
-              <option value="TOURNAMENT">대회</option>
-              <option value="EXHIBITION">전시회</option>
-              <option value="PROMOTION">프로모션</option>
+              <option value="KPGA">KPGA</option>
+              <option value="KLPGA">KLPGA</option>
+              <option value="KGTOUR">KG투어</option>
+              <option value="OTHER">기타</option>
             </select>
           </div>
           <div>
@@ -368,13 +459,13 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
             </div>
           </div>
           <div>
-            <label className="label">예상 시청자 수</label>
+            <label className="label">방송 회차 (선택)</label>
             <input
-              type="number"
-              value={formData.expectedViewers}
-              onChange={(e) => setFormData({ ...formData, expectedViewers: e.target.value })}
+              type="text"
+              value={formData.broadcastEpisode}
+              onChange={(e) => setFormData({ ...formData, broadcastEpisode: e.target.value })}
               className="input"
-              placeholder="10000"
+              placeholder="예: EP01, 1회차"
             />
           </div>
           <div>
@@ -387,11 +478,18 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
             />
           </div>
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn btn-secondary flex-1">
+            <button type="button" onClick={onClose} disabled={isSubmitting} className="btn btn-secondary flex-1">
               취소
             </button>
-            <button type="submit" className="btn btn-primary flex-1">
-              {event ? '수정' : '등록'}
+            <button type="submit" disabled={isSubmitting} className="btn btn-primary flex-1 inline-flex items-center justify-center gap-2">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  저장 중...
+                </>
+              ) : (
+                event ? '수정' : '등록'
+              )}
             </button>
           </div>
         </form>

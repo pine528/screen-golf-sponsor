@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Layout } from '../../../components/Layout';
 import { api } from '../../../services/api';
 
 function formatNumber(value: string | number): string {
@@ -108,6 +109,7 @@ export default function FinanceEscrows() {
   };
 
   return (
+    <Layout>
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">에스크로 관리</h1>
@@ -275,5 +277,6 @@ export default function FinanceEscrows() {
         )}
       </div>
     </div>
+    </Layout>
   );
 }

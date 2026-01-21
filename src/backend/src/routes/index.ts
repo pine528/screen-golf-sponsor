@@ -28,6 +28,8 @@ import adminPenaltyRoutes from './admin.penalty.routes';
 import reportRoutes from './report.routes';
 import exposureRoutes from './exposure.routes';
 import seasonRoutes from './season.routes';
+import brandBillingRoutes from './brand.billing.routes';
+import adminTaxInvoiceRoutes from './admin.taxInvoice.routes';
 
 const router = Router();
 
@@ -60,8 +62,10 @@ router.use('/fan-votes', fanVoteRoutes);
 router.use('/shop', shopRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/brand/topups', brandTopupRoutes);
+router.use('/brand/billing', brandBillingRoutes);
 router.use('/payments/webhook', webhookRoutes);
 router.use('/admin/finance/topups', adminTopupRoutes);
+router.use('/admin/finance/tax-invoices', adminTaxInvoiceRoutes);
 router.use('/admin/reconciliation', adminReconciliationRoutes);
 router.use('/faq', faqRoutes);
 router.use('/admin/penalties', adminPenaltyRoutes);

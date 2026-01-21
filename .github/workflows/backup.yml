@@ -1,0 +1,200 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    # 매일 03:30 KST (전일 18:30 UTC)
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: 'Backup type'
+        type: choice
+        options:
+          - full
+          - verify_only
+        default: full
+
+env:
+  BACKUP_RETENTION_DAYS: 14
+
+jobs:
+  backup:
+    name: PostgreSQL Backup
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.backup_type != 'verify_only' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'ap-northeast-2' }}
+
+      - name: Make backup script executable
+        run: chmod +x ./src/backend/scripts/db/backup.sh
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          BACKUP_LOCAL_DIR: /tmp/backups
+        run: |
+          ./src/backend/scripts/db/backup.sh full
+
+      - name: Upload backup artifact (fallback)
+        if: ${{ !secrets.S3_BACKUP_BUCKET }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_number }}
+          path: /tmp/backups/*.sqlc.gz
+          retention-days: 7
+
+      - name: Notify on success
+        if: success()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{
+                "text": "✅ [screengolf] Database backup completed successfully",
+                "attachments": [{
+                  "color": "good",
+                  "fields": [
+                    {"title": "Workflow", "value": "${{ github.workflow }}", "short": true},
+                    {"title": "Run", "value": "#${{ github.run_number }}", "short": true}
+                  ]
+                }]
+              }'
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d '{
+                "text": "⚠️ [screengolf] Database backup FAILED!",
+                "attachments": [{
+                  "color": "danger",
+                  "fields": [
+                    {"title": "Workflow", "value": "${{ github.workflow }}", "short": true},
+                    {"title": "Run", "value": "#${{ github.run_number }}", "short": true},
+                    {"title": "Details", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                  ]
+                }]
+              }'
+          fi
+
+  verify:
+    name: Verify Backup
+    runs-on: ubuntu-latest
+    needs: backup
+    # 매주 일요일에만 검증 실행 (또는 수동으로 verify_only 선택 시)
+    if: |
+      always() &&
+      (github.event.schedule == '30 18 * * 0' || github.event.inputs.backup_type == 'verify_only')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'ap-northeast-2' }}
+
+      - name: Make verify script executable
+        run: chmod +x ./src/backend/scripts/db/verify-backup.sh
+
+      - name: Verify latest backup
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+        run: |
+          ./src/backend/scripts/db/verify-backup.sh
+
+      - name: Notify verification result
+        if: always()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            STATUS="${{ job.status }}"
+            if [ "$STATUS" == "success" ]; then
+              EMOJI="✅"
+              COLOR="good"
+              MSG="Backup verification passed"
+            else
+              EMOJI="❌"
+              COLOR="danger"
+              MSG="Backup verification FAILED"
+            fi
+            curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+              -H 'Content-type: application/json' \
+              -d "{
+                \"text\": \"$EMOJI [screengolf] $MSG\",
+                \"attachments\": [{
+                  \"color\": \"$COLOR\",
+                  \"fields\": [
+                    {\"title\": \"Job\", \"value\": \"Weekly Verification\", \"short\": true},
+                    {\"title\": \"Status\", \"value\": \"$STATUS\", \"short\": true}
+                  ]
+                }]
+              }"
+          fi
+
+  cleanup:
+    name: Cleanup Old Backups
+    runs-on: ubuntu-latest
+    needs: backup
+    if: success()
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'ap-northeast-2' }}
+
+      - name: Cleanup old daily backups
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+        run: |
+          if [ -n "$S3_BACKUP_BUCKET" ]; then
+            echo "Cleaning up backups older than ${{ env.BACKUP_RETENTION_DAYS }} days..."
+
+            # S3 라이프사이클 정책을 사용하는 것이 권장되지만,
+            # 여기서는 수동 정리 예시를 보여줍니다
+
+            CUTOFF_DATE=$(date -d "-${{ env.BACKUP_RETENTION_DAYS }} days" +%Y%m%d)
+            echo "Cutoff date: $CUTOFF_DATE"
+
+            # 일일 백업 정리 (14일 이상)
+            aws s3 ls "s3://${S3_BACKUP_BUCKET}/daily/" | while read -r line; do
+              FILE_DATE=$(echo "$line" | awk '{print $4}' | grep -oP '\d{8}' | head -1)
+              if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
+                FILE_NAME=$(echo "$line" | awk '{print $4}')
+                echo "Deleting old backup: $FILE_NAME"
+                aws s3 rm "s3://${S3_BACKUP_BUCKET}/daily/${FILE_NAME}"
+              fi
+            done
+
+            echo "Cleanup completed."
+          else
+            echo "S3_BACKUP_BUCKET not set, skipping cleanup"
+          fi

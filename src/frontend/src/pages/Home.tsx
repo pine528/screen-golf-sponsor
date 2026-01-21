@@ -12,13 +12,14 @@ import {
   CheckCircle2,
   Activity,
   Sparkles,
-  Play,
   ChevronDown,
   LayoutDashboard,
   Menu,
   X,
   Vote,
   Star,
+  Gavel,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -267,7 +268,7 @@ export function Home() {
                 투명하고 공정하게 거래하세요
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
                 {isAuthenticated ? (
                   <Link
                     to="/dashboard"
@@ -285,10 +286,20 @@ export function Home() {
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 )}
-                <button className="btn btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 inline-flex items-center justify-center gap-2">
-                  <Play className="w-4 h-4" />
-                  서비스 소개
-                </button>
+                <Link
+                  to="/auctions"
+                  className="btn btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 inline-flex items-center justify-center gap-2"
+                >
+                  <Gavel className="w-4 h-4" />
+                  경매 둘러보기
+                </Link>
+                <Link
+                  to="/inventory"
+                  className="btn btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 inline-flex items-center justify-center gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  선수 둘러보기
+                </Link>
               </div>
 
               {/* Stats Row */}
@@ -678,24 +689,24 @@ export function Home() {
             <div>
               <h4 className="text-slate-900 font-semibold mb-3 sm:mb-4 text-sm sm:text-base">서비스</h4>
               <ul className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-slate-500">
-                <li><a href="#" className="hover:text-slate-900 transition-colors">경매 참여</a></li>
-                <li><a href="#" className="hover:text-slate-900 transition-colors">슬롯 탐색</a></li>
-                <li><a href="#" className="hover:text-slate-900 transition-colors">계약 관리</a></li>
+                <li><Link to="/auctions" className="hover:text-slate-900 transition-colors">경매 참여</Link></li>
+                <li><Link to="/inventory" className="hover:text-slate-900 transition-colors">슬롯 탐색</Link></li>
+                <li><Link to="/contracts" className="hover:text-slate-900 transition-colors">계약 관리</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-slate-900 font-semibold mb-3 sm:mb-4 text-sm sm:text-base">지원</h4>
               <ul className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-slate-500">
-                <li><a href="#" className="hover:text-slate-900 transition-colors">이용가이드</a></li>
+                <li><Link to="/guide" className="hover:text-slate-900 transition-colors">이용가이드</Link></li>
                 <li><Link to="/faq" className="hover:text-slate-900 transition-colors">자주 묻는 질문</Link></li>
-                <li><a href="#" className="hover:text-slate-900 transition-colors">고객센터</a></li>
+                <li><Link to="/contact" className="hover:text-slate-900 transition-colors">고객센터</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-slate-900 font-semibold mb-3 sm:mb-4 text-sm sm:text-base">법적 고지</h4>
               <ul className="space-y-2 sm:space-y-3 text-xs sm:text-sm text-slate-500">
-                <li><a href="#" className="hover:text-slate-900 transition-colors">이용약관</a></li>
-                <li><a href="#" className="hover:text-slate-900 transition-colors">개인정보처리방침</a></li>
+                <li><Link to="/terms" className="hover:text-slate-900 transition-colors">이용약관</Link></li>
+                <li><Link to="/privacy" className="hover:text-slate-900 transition-colors">개인정보처리방침</Link></li>
               </ul>
             </div>
           </div>

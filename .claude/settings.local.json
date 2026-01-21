@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(comm:*)",
+      "Bash(comm -13:*)",
+      "Bash(find pages -name \"*.tsx\" -exec sh -c 'grep -l \"\"console.error\\\\|console.warn\\\\|TODO\\\\|FIXME\\\\|XXX\\\\|HACK\"\" \"\"$1\"\" && echo \"\" Issues in: $1\"\"' _ {} ;)",
+      "Bash(ls:*)",
+      "Bash(while read name)",
+      "Bash(do grep -q \"$name\" index.ts)",
+      "Bash(echo:*)",
+      "Bash(done)"
     ]
   }
 }

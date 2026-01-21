@@ -127,6 +127,94 @@ export const optionalAuth = async (
   }
 };
 
+/**
+ * 역할별 기본 권한 매핑
+ * - '*' 는 모든 권한을 의미
+ */
+export const ROLE_PERMISSIONS: Record<string, string[]> = {
+  ADMIN: ['*'],  // 전체 권한
+  FINANCE: [
+    'refund.approve',
+    'settlement.execute',
+    'reconciliation.run',
+    'withdrawal.approve',
+    'report.view',
+    'user.view',
+    'transaction.view',
+  ],
+  SUPPORT: [
+    'user.view',
+    'transaction.view',
+    'issue.view',
+    'report.view',
+  ],
+  AUDITOR: [
+    'audit.view',
+    'report.view',
+    'reconciliation.view',
+    'user.view',
+    'transaction.view',
+  ],
+};
+
+/**
+ * 사용자가 특정 권한을 가지고 있는지 확인
+ */
+export const hasPermission = (role: UserRole, permission: string): boolean => {
+  const rolePerms = ROLE_PERMISSIONS[role] || [];
+  return rolePerms.includes('*') || rolePerms.includes(permission);
+};
+
+/**
+ * 권한 기반 인가 미들웨어
+ * - 역할에 매핑된 권한 확인
+ * - Admin.permissions 필드도 확인 (있을 경우)
+ */
+export const authorizePermission = (permission: string) => {
+  return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        throw new UnauthorizedError('Not authenticated');
+      }
+
+      // 역할 기반 권한 확인
+      if (hasPermission(req.user.role, permission)) {
+        return next();
+      }
+
+      // Admin 테이블의 permissions 필드 확인 (JSON 배열)
+      if (req.user.adminId) {
+        const admin = await prisma.admin.findUnique({
+          where: { id: req.user.adminId },
+        });
+        const customPerms = (admin?.permissions as string[]) || [];
+        if (customPerms.includes(permission) || customPerms.includes('*')) {
+          return next();
+        }
+      }
+
+      throw new ForbiddenError(`권한이 없습니다: ${permission}`);
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+/**
+ * 관리자 역할 전용 미들웨어 (ADMIN, FINANCE, SUPPORT, AUDITOR)
+ */
+export const requireAdminRole = authorize('ADMIN', 'FINANCE', 'SUPPORT', 'AUDITOR');
+
+/**
+ * 읽기 권한이 있는 관리자 역할 (조회만 가능)
+ */
+export const authorizeReadOnly = authorize('ADMIN', 'FINANCE', 'SUPPORT', 'AUDITOR');
+
+/**
+ * 쓰기 권한이 있는 관리자 역할 (ADMIN, FINANCE만)
+ */
+export const authorizeWrite = authorize('ADMIN', 'FINANCE');
+
 export const requireKycApproved = async (
   req: AuthRequest,
   res: Response,

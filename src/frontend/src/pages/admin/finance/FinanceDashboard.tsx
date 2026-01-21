@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Layout } from '../../../components/Layout';
 import { api } from '../../../services/api';
 
 // 숫자 포맷 헬퍼
@@ -39,9 +40,11 @@ export default function FinanceDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </Layout>
     );
   }
 
@@ -49,6 +52,7 @@ export default function FinanceDashboard() {
   const walletsByType = summary?.wallets || [];
 
   return (
+    <Layout>
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">재무 콘솔</h1>
@@ -283,5 +287,6 @@ export default function FinanceDashboard() {
         </Link>
       </div>
     </div>
+    </Layout>
   );
 }

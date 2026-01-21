@@ -30,6 +30,33 @@ interface VoteEvent {
   };
 }
 
+interface FanVoteEvent {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  endsAt: string;
+  entryFee: number;
+  prizePool: number;
+  _count?: {
+    entries: number;
+  };
+}
+
+// 두 타입을 통합한 표시용 인터페이스
+interface DisplayVote {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'admin' | 'fan';
+  questionType?: 'PREDICTION' | 'QUIZ' | 'POLL';
+  pointsPerCorrect?: number;
+  entryFee?: number;
+  prizePool?: number;
+  endAt: string;
+  participantCount: number;
+}
+
 interface AthleteRanking {
   athleteId: string;
   name: string;
@@ -39,13 +66,49 @@ interface AthleteRanking {
 }
 
 export default function FanHome() {
-  const { data: activeVotes, isLoading: loadingVotes } = useQuery({
+  // 관리자 투표 조회
+  const { data: adminVotes, isLoading: loadingAdminVotes } = useQuery({
     queryKey: ['activeVoteEvents'],
     queryFn: async () => {
       const res = await api.getActiveVoteEvents();
       return (res.data || []) as VoteEvent[];
     },
   });
+
+  // 팬 투표 조회
+  const { data: fanVotes, isLoading: loadingFanVotes } = useQuery({
+    queryKey: ['activeFanVotes'],
+    queryFn: async () => {
+      const res = await api.getActiveFanVotes();
+      return (res.data || []) as FanVoteEvent[];
+    },
+  });
+
+  // 두 투표 타입 통합
+  const activeVotes: DisplayVote[] = [
+    ...(adminVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      type: 'admin' as const,
+      questionType: v.questionType,
+      pointsPerCorrect: v.pointsPerCorrect,
+      endAt: v.endAt,
+      participantCount: v._count?.votes ?? 0,
+    })),
+    ...(fanVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      type: 'fan' as const,
+      entryFee: v.entryFee,
+      prizePool: v.prizePool,
+      endAt: v.endsAt,
+      participantCount: v._count?.entries ?? 0,
+    })),
+  ].sort((a, b) => new Date(a.endAt).getTime() - new Date(b.endAt).getTime());
+
+  const loadingVotes = loadingAdminVotes || loadingFanVotes;
 
   const { data: pointsData, isLoading: loadingPoints } = useQuery({
     queryKey: ['myPoints'],
@@ -174,18 +237,33 @@ export default function FanHome() {
                 {activeVotes.slice(0, 3).map((vote) => (
                   <Link
                     key={vote.id}
-                    to={`/votes/${vote.id}`}
+                    to={vote.type === 'admin' ? `/votes/${vote.id}` : `/fan-votes/${vote.id}`}
                     className="block p-4 hover:bg-slate-50 transition-colors group"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className={cn('badge text-xs', getTypeColor(vote.questionType))}>
-                          {getTypeLabel(vote.questionType)}
-                        </span>
-                        {vote.pointsPerCorrect > 0 && (
-                          <span className="text-xs font-medium text-emerald-600">
-                            +{vote.pointsPerCorrect}P
-                          </span>
+                        {vote.type === 'admin' && vote.questionType ? (
+                          <>
+                            <span className={cn('badge text-xs', getTypeColor(vote.questionType))}>
+                              {getTypeLabel(vote.questionType)}
+                            </span>
+                            {(vote.pointsPerCorrect ?? 0) > 0 && (
+                              <span className="text-xs font-medium text-emerald-600">
+                                +{vote.pointsPerCorrect}P
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge text-xs bg-pink-100 text-pink-700">
+                              팬 투표
+                            </span>
+                            {(vote.prizePool ?? 0) > 0 && (
+                              <span className="text-xs font-medium text-pink-600">
+                                🏆{vote.prizePool?.toLocaleString()}P
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
@@ -196,12 +274,17 @@ export default function FanHome() {
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1">
                         <Users className="w-3 h-3" />
-                        {vote._count?.votes ?? 0}명
+                        {vote.participantCount}명
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {getTimeRemaining(vote.endAt)}
                       </span>
+                      {vote.type === 'fan' && (vote.entryFee ?? 0) > 0 && (
+                        <span className="text-pink-600 font-medium">
+                          참가 {vote.entryFee}P
+                        </span>
+                      )}
                     </div>
                   </Link>
                 ))}

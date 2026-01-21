@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Layout } from '../components/Layout';
 import { api } from '../services/api';
 import {
   HelpCircle,
@@ -18,6 +18,7 @@ import {
   Users,
   Building2,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { cn } from '../utils';
 
@@ -153,8 +154,16 @@ export function Faq() {
   };
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-8"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          홈으로 돌아가기
+        </Link>
+
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -292,7 +301,7 @@ export function Faq() {
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }
 

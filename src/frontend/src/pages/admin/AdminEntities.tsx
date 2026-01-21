@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Building2, Search, Filter, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, ShieldCheck, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { Users, Building2, Search, Filter, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, ShieldCheck, Clock, XCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 
@@ -65,6 +65,32 @@ export default function AdminEntities() {
       queryClient.invalidateQueries({ queryKey: ['adminBrands'] });
     },
   });
+
+  const deleteAthleteMutation = useMutation({
+    mutationFn: (athleteId: string) => api.deleteAdminAthlete(athleteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminAthletes'] });
+    },
+  });
+
+  const deleteBrandMutation = useMutation({
+    mutationFn: (brandId: string) => api.deleteAdminBrand(brandId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminBrands'] });
+    },
+  });
+
+  const handleDeleteAthlete = (athlete: any) => {
+    if (confirm(`${athlete.name} 선수를 삭제하시겠습니까?`)) {
+      deleteAthleteMutation.mutate(athlete.id);
+    }
+  };
+
+  const handleDeleteBrand = (brand: any) => {
+    if (confirm(`${brand.name} 브랜드를 삭제하시겠습니까?`)) {
+      deleteBrandMutation.mutate(brand.id);
+    }
+  };
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
@@ -362,27 +388,39 @@ export default function AdminEntities() {
                             {new Date(athlete.createdAt).toLocaleDateString('ko-KR')}
                           </td>
                           <td className="px-6 py-4">
-                            <button
-                              onClick={() => toggleAthleteMutation.mutate(athlete.id)}
-                              disabled={toggleAthleteMutation.isPending}
-                              className={`flex items-center gap-1 text-sm font-medium transition-colors ${
-                                athlete.user?.isActive
-                                  ? 'text-emerald-600 hover:text-emerald-700'
-                                  : 'text-slate-400 hover:text-slate-500'
-                              }`}
-                            >
-                              {athlete.user?.isActive ? (
-                                <>
-                                  <ToggleRight className="w-5 h-5" />
-                                  활성
-                                </>
-                              ) : (
-                                <>
-                                  <ToggleLeft className="w-5 h-5" />
-                                  비활성
-                                </>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleAthleteMutation.mutate(athlete.id)}
+                                disabled={toggleAthleteMutation.isPending}
+                                className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                                  athlete.user?.isActive
+                                    ? 'text-emerald-600 hover:text-emerald-700'
+                                    : 'text-slate-400 hover:text-slate-500'
+                                }`}
+                              >
+                                {athlete.user?.isActive ? (
+                                  <>
+                                    <ToggleRight className="w-5 h-5" />
+                                    활성
+                                  </>
+                                ) : (
+                                  <>
+                                    <ToggleLeft className="w-5 h-5" />
+                                    비활성
+                                  </>
+                                )}
+                              </button>
+                              {athlete._count?.contracts === 0 && athlete._count?.slotInstances === 0 && (
+                                <button
+                                  onClick={() => handleDeleteAthlete(athlete)}
+                                  disabled={deleteAthleteMutation.isPending}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                  title="삭제"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
-                            </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -407,27 +445,39 @@ export default function AdminEntities() {
                             {new Date(brand.createdAt).toLocaleDateString('ko-KR')}
                           </td>
                           <td className="px-6 py-4">
-                            <button
-                              onClick={() => toggleBrandMutation.mutate(brand.id)}
-                              disabled={toggleBrandMutation.isPending}
-                              className={`flex items-center gap-1 text-sm font-medium transition-colors ${
-                                brand.user?.isActive
-                                  ? 'text-emerald-600 hover:text-emerald-700'
-                                  : 'text-slate-400 hover:text-slate-500'
-                              }`}
-                            >
-                              {brand.user?.isActive ? (
-                                <>
-                                  <ToggleRight className="w-5 h-5" />
-                                  활성
-                                </>
-                              ) : (
-                                <>
-                                  <ToggleLeft className="w-5 h-5" />
-                                  비활성
-                                </>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleBrandMutation.mutate(brand.id)}
+                                disabled={toggleBrandMutation.isPending}
+                                className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                                  brand.user?.isActive
+                                    ? 'text-emerald-600 hover:text-emerald-700'
+                                    : 'text-slate-400 hover:text-slate-500'
+                                }`}
+                              >
+                                {brand.user?.isActive ? (
+                                  <>
+                                    <ToggleRight className="w-5 h-5" />
+                                    활성
+                                  </>
+                                ) : (
+                                  <>
+                                    <ToggleLeft className="w-5 h-5" />
+                                    비활성
+                                  </>
+                                )}
+                              </button>
+                              {brand._count?.contracts === 0 && brand._count?.bids === 0 && (
+                                <button
+                                  onClick={() => handleDeleteBrand(brand)}
+                                  disabled={deleteBrandMutation.isPending}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                  title="삭제"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
-                            </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

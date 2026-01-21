@@ -44,7 +44,44 @@ interface VoteEvent {
   };
 }
 
-function VoteCard({ vote }: { vote: VoteEvent }) {
+interface FanVoteEvent {
+  id: string;
+  title: string;
+  description?: string;
+  question: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  entryFeePoints: number | string;  // Decimal from backend
+  sponsorContribution?: number | string;  // 스폰서 기여금
+  options: string[];  // Backend returns string array
+  _count?: {
+    entries: number;
+  };
+}
+
+// 통합 표시용 인터페이스
+interface DisplayVote {
+  id: string;
+  title: string;
+  description?: string;
+  question: string;
+  voteType: 'admin' | 'fan';
+  questionType?: 'PREDICTION' | 'QUIZ' | 'POLL';
+  pointsPerCorrect?: number;
+  entryFee?: number;
+  prizePool?: number;
+  status: string;
+  endAt: string;
+  participantCount: number;
+  event?: {
+    id: string;
+    name: string;
+    dateStart: string;
+  };
+}
+
+function VoteCard({ vote }: { vote: DisplayVote }) {
   const isEnded = vote.status === 'CLOSED' || vote.status === 'SETTLED';
   const endDate = new Date(vote.endAt);
   const now = new Date();
@@ -68,9 +105,11 @@ function VoteCard({ vote }: { vote: VoteEvent }) {
     }
   };
 
+  const linkTo = vote.voteType === 'admin' ? `/votes/${vote.id}` : `/fan-votes/${vote.id}`;
+
   return (
     <Link
-      to={`/votes/${vote.id}`}
+      to={linkTo}
       className={cn(
         'block card p-5 hover:border-emerald-500/30 transition-all duration-200 group',
         isExpiringSoon && !isEnded && 'border-amber-300 bg-amber-50/30'
@@ -78,9 +117,15 @@ function VoteCard({ vote }: { vote: VoteEvent }) {
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className={cn('badge text-xs', getTypeColor(vote.questionType))}>
-            {getTypeLabel(vote.questionType)}
-          </span>
+          {vote.voteType === 'admin' && vote.questionType ? (
+            <span className={cn('badge text-xs', getTypeColor(vote.questionType))}>
+              {getTypeLabel(vote.questionType)}
+            </span>
+          ) : (
+            <span className="badge text-xs bg-pink-100 text-pink-700">
+              팬 투표
+            </span>
+          )}
           {isEnded ? (
             <span className="badge bg-slate-100 text-slate-600 text-xs">
               종료됨
@@ -95,9 +140,14 @@ function VoteCard({ vote }: { vote: VoteEvent }) {
             </span>
           )}
         </div>
-        {vote.pointsPerCorrect > 0 && (
+        {vote.voteType === 'admin' && (vote.pointsPerCorrect ?? 0) > 0 && (
           <span className="text-xs font-medium text-emerald-600">
             +{vote.pointsPerCorrect}P
+          </span>
+        )}
+        {vote.voteType === 'fan' && (vote.prizePool ?? 0) > 0 && (
+          <span className="text-xs font-medium text-pink-600">
+            🏆{vote.prizePool?.toLocaleString()}P
           </span>
         )}
       </div>
@@ -113,12 +163,17 @@ function VoteCard({ vote }: { vote: VoteEvent }) {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
             <Users className="w-3.5 h-3.5" />
-            {vote._count?.votes ?? 0}명 참여
+            {vote.participantCount}명 참여
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
             {isEnded ? '종료' : new Date(vote.endAt).toLocaleDateString('ko-KR')}
           </span>
+          {vote.voteType === 'fan' && (vote.entryFee ?? 0) > 0 && (
+            <span className="text-pink-600 font-medium">
+              참가 {vote.entryFee}P
+            </span>
+          )}
         </div>
         <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
       </div>
@@ -138,22 +193,102 @@ function VoteCard({ vote }: { vote: VoteEvent }) {
 export default function Votes() {
   const [activeTab, setActiveTab] = useState<TabType>('active');
 
-  const { data: activeVotes, isLoading: loadingActive } = useQuery({
+  // 관리자 투표 (진행중)
+  const { data: activeAdminVotes, isLoading: loadingActiveAdmin } = useQuery({
     queryKey: ['voteEvents', 'active'],
     queryFn: async () => {
       const res = await api.getVoteEvents({ status: 'ACTIVE' });
-      return res.data || [];
+      return (res.data || []) as VoteEvent[];
     },
   });
 
-  const { data: endedVotes, isLoading: loadingEnded } = useQuery({
+  // 팬 투표 (진행중)
+  const { data: activeFanVotes, isLoading: loadingActiveFan } = useQuery({
+    queryKey: ['fanVotes', 'active'],
+    queryFn: async () => {
+      const res = await api.getActiveFanVotes();
+      return (res.data || []) as FanVoteEvent[];
+    },
+  });
+
+  // 관리자 투표 (종료)
+  const { data: endedAdminVotes, isLoading: loadingEndedAdmin } = useQuery({
     queryKey: ['voteEvents', 'ended'],
     queryFn: async () => {
       const res = await api.getVoteEvents({ status: 'CLOSED,SETTLED' });
-      return res.data || [];
+      return (res.data || []) as VoteEvent[];
     },
   });
 
+  // 팬 투표 (종료)
+  const { data: endedFanVotes, isLoading: loadingEndedFan } = useQuery({
+    queryKey: ['fanVotes', 'ended'],
+    queryFn: async () => {
+      const res = await api.getEndedFanVotes();
+      return (res.data || []) as FanVoteEvent[];
+    },
+  });
+
+  // 통합 진행중 투표
+  const activeVotes: DisplayVote[] = [
+    ...(activeAdminVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      question: v.question,
+      voteType: 'admin' as const,
+      questionType: v.questionType,
+      pointsPerCorrect: v.pointsPerCorrect,
+      status: v.status,
+      endAt: v.endAt,
+      participantCount: v._count?.votes ?? 0,
+      event: v.event,
+    })),
+    ...(activeFanVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      question: v.question,
+      voteType: 'fan' as const,
+      entryFee: Number(v.entryFeePoints) || 0,
+      prizePool: (Number(v.entryFeePoints) || 0) * (v._count?.entries ?? 0) + (Number(v.sponsorContribution) || 0),
+      status: v.status,
+      endAt: v.endsAt,
+      participantCount: v._count?.entries ?? 0,
+    })),
+  ].sort((a, b) => new Date(a.endAt).getTime() - new Date(b.endAt).getTime());
+
+  // 통합 종료 투표
+  const endedVotes: DisplayVote[] = [
+    ...(endedAdminVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      question: v.question,
+      voteType: 'admin' as const,
+      questionType: v.questionType,
+      pointsPerCorrect: v.pointsPerCorrect,
+      status: v.status,
+      endAt: v.endAt,
+      participantCount: v._count?.votes ?? 0,
+      event: v.event,
+    })),
+    ...(endedFanVotes || []).map((v) => ({
+      id: v.id,
+      title: v.title,
+      description: v.description,
+      question: v.question,
+      voteType: 'fan' as const,
+      entryFee: Number(v.entryFeePoints) || 0,
+      prizePool: (Number(v.entryFeePoints) || 0) * (v._count?.entries ?? 0) + (Number(v.sponsorContribution) || 0),
+      status: v.status,
+      endAt: v.endsAt,
+      participantCount: v._count?.entries ?? 0,
+    })),
+  ].sort((a, b) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime());
+
+  const loadingActive = loadingActiveAdmin || loadingActiveFan;
+  const loadingEnded = loadingEndedAdmin || loadingEndedFan;
   const isLoading = activeTab === 'active' ? loadingActive : loadingEnded;
   const votes = activeTab === 'active' ? activeVotes : endedVotes;
 
@@ -229,8 +364,8 @@ export default function Votes() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {votes.map((vote: VoteEvent) => (
-              <VoteCard key={vote.id} vote={vote} />
+            {votes.map((vote: DisplayVote) => (
+              <VoteCard key={`${vote.voteType}-${vote.id}`} vote={vote} />
             ))}
           </div>
         )}
