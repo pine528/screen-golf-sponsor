@@ -305,6 +305,7 @@ export class SlotInstanceService {
 
   /**
    * Update sale mode for a slot (auction / direct buy options)
+   * - enableAuction이 true이고 필요 필드가 모두 있으면 Auction 레코드 자동 생성
    */
   async updateSaleMode(
     slotId: string,
@@ -319,7 +320,7 @@ export class SlotInstanceService {
   ) {
     const slot = await prisma.slotInstance.findUnique({
       where: { id: slotId },
-      include: { auction: true },
+      include: { auction: true, slotTemplate: true },
     });
 
     if (!slot) {
@@ -330,8 +331,8 @@ export class SlotInstanceService {
       throw new ForbiddenError('Not authorized to update this slot');
     }
 
-    if (slot.status !== 'OPEN') {
-      throw new ConflictError('Cannot update sale mode for non-open slots');
+    if (slot.status !== 'OPEN' && slot.status !== 'IN_AUCTION') {
+      throw new ConflictError('Cannot update sale mode for this slot status');
     }
 
     // Validation
@@ -361,20 +362,81 @@ export class SlotInstanceService {
       }
     }
 
-    return prisma.slotInstance.update({
-      where: { id: slotId },
-      data: {
-        enableAuction,
-        enableDirectBuy,
-        directBuyPrice: enableDirectBuy && directBuyPrice ? new Decimal(directBuyPrice) : null,
-        auctionMinBid: enableAuction && auctionMinBid ? new Decimal(auctionMinBid) : null,
-        auctionEndAt: enableAuction ? auctionEndAt : null,
-      },
-      include: {
-        event: true,
-        athlete: true,
-        slotTemplate: true,
-      },
+    // 트랜잭션으로 슬롯 업데이트 + 경매 생성/업데이트
+    return prisma.$transaction(async (tx) => {
+      // 슬롯 업데이트
+      const updatedSlot = await tx.slotInstance.update({
+        where: { id: slotId },
+        data: {
+          enableAuction,
+          enableDirectBuy,
+          directBuyPrice: enableDirectBuy && directBuyPrice ? new Decimal(directBuyPrice) : null,
+          auctionMinBid: enableAuction && auctionMinBid ? new Decimal(auctionMinBid) : null,
+          auctionEndAt: enableAuction ? auctionEndAt : null,
+          // 경매 활성화 시 상태 변경
+          status: enableAuction ? 'IN_AUCTION' : 'OPEN',
+        },
+        include: {
+          event: true,
+          athlete: true,
+          slotTemplate: true,
+          auction: true,
+        },
+      });
+
+      // 경매 활성화 시 Auction 레코드 생성/업데이트
+      if (enableAuction && auctionMinBid && auctionEndAt) {
+        const now = new Date();
+        const startPrice = Number(auctionMinBid);
+
+        if (slot.auction) {
+          // 기존 경매가 있으면 업데이트 (SCHEDULED 또는 LIVE 상태일 때만)
+          if (slot.auction.status === 'SCHEDULED' || slot.auction.status === 'LIVE') {
+            await tx.auction.update({
+              where: { id: slot.auction.id },
+              data: {
+                endAt: new Date(auctionEndAt),
+                currentPrice: startPrice,
+                status: 'LIVE', // 즉시 LIVE로 변경
+              },
+            });
+          }
+        } else {
+          // 새 경매 생성 - 즉시 LIVE 상태로
+          await tx.auction.create({
+            data: {
+              slotInstanceId: slotId,
+              startAt: now,
+              endAt: new Date(auctionEndAt),
+              originalEndAt: new Date(auctionEndAt),
+              currentPrice: startPrice,
+              status: 'LIVE',
+              softCloseSec: 120,
+              maxExtensionSec: 600,
+              minBidIncrement: 10000,
+            },
+          });
+        }
+      } else if (!enableAuction && slot.auction) {
+        // 경매 비활성화 시 기존 경매 취소 (SCHEDULED 또는 LIVE 상태일 때만)
+        if (slot.auction.status === 'SCHEDULED' || slot.auction.status === 'LIVE') {
+          await tx.auction.update({
+            where: { id: slot.auction.id },
+            data: { status: 'CANCELLED' },
+          });
+        }
+      }
+
+      // 최종 슬롯 정보 반환
+      return tx.slotInstance.findUnique({
+        where: { id: slotId },
+        include: {
+          event: true,
+          athlete: true,
+          slotTemplate: true,
+          auction: true,
+        },
+      });
     });
   }
 

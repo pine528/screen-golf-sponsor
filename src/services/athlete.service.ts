@@ -98,13 +98,17 @@ export class AthleteService {
     bankAccount?: string;
     bankHolder?: string;
   }) {
+    console.log('[AthleteService.update] Input:', { id, userId, data });
+
     const athlete = await prisma.athlete.findUnique({ where: { id } });
 
     if (!athlete) {
+      console.log('[AthleteService.update] Athlete not found:', id);
       throw new NotFoundError('Athlete not found');
     }
 
     if (athlete.userId !== userId) {
+      console.log('[AthleteService.update] Authorization failed:', { athleteUserId: athlete.userId, requestUserId: userId });
       throw new ForbiddenError('Not authorized to update this athlete');
     }
 
@@ -112,8 +116,9 @@ export class AthleteService {
     const updateData: any = {};
 
     // undefined가 아닌 경우에만 업데이트 (빈 문자열도 허용)
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.displayName !== undefined) updateData.name = data.displayName;
+    // name 필드는 displayName이 빈 문자열이 아닌 경우에만 업데이트
+    if (data.name !== undefined && data.name !== '') updateData.name = data.name;
+    if (data.displayName !== undefined && data.displayName !== '') updateData.name = data.displayName;
     if (data.realName !== undefined) updateData.realName = data.realName;
     if (data.bio !== undefined) updateData.bio = data.bio;
     if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
@@ -133,10 +138,15 @@ export class AthleteService {
       };
     }
 
-    return prisma.athlete.update({
+    console.log('[AthleteService.update] UpdateData:', updateData);
+
+    const updated = await prisma.athlete.update({
       where: { id },
       data: updateData,
     });
+
+    console.log('[AthleteService.update] Updated athlete:', updated);
+    return updated;
   }
 
   async updateKycStatus(id: string, status: KycStatus, documents?: any) {

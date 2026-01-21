@@ -260,15 +260,27 @@ export class AdminService {
 
   // Pending Reviews
   async getPendingReviews() {
+    const contractInclude = {
+      brand: { select: { id: true, name: true } },
+      athlete: { select: { id: true, name: true } },
+      auction: {
+        include: {
+          slotInstance: {
+            include: {
+              event: { select: { id: true, name: true } },
+              slotTemplate: { select: { id: true, name: true, code: true } },
+            },
+          },
+        },
+      },
+    };
+
     const [assets, verifications] = await Promise.all([
       prisma.creativeAsset.findMany({
         where: { status: 'SUBMITTED' },
         include: {
           contract: {
-            include: {
-              brand: { select: { id: true, name: true } },
-              athlete: { select: { id: true, name: true } },
-            },
+            include: contractInclude,
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -277,10 +289,7 @@ export class AdminService {
         where: { status: 'SUBMITTED' },
         include: {
           contract: {
-            include: {
-              brand: { select: { id: true, name: true } },
-              athlete: { select: { id: true, name: true } },
-            },
+            include: contractInclude,
           },
         },
         orderBy: { createdAt: 'asc' },

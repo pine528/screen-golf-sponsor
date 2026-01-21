@@ -14,14 +14,14 @@ const REQUIRED_ENVS = [
 /**
  * 결제 연동 환경변수 안내 (validateEnv에서 강제하지 않음)
  *
- * PortOne V2 + TossPayments 채널 사용 시:
- * - PORTONE_V2_API_SECRET (필수) - PortOne V2 API 시크릿
- * - PORTONE_STORE_ID (필수) - 상점 ID (store-xxx 형식)
- * - PORTONE_CHANNEL_KEY (필수) - TossPayments 채널 키
- * - PORTONE_WEBHOOK_SECRET (선택) - Webhook 서명 검증용
+ * TossPayments 직접 연동:
+ * - TOSS_SECRET_KEY (필수) - Toss 시크릿 키
+ * - TOSS_WEBHOOK_SECRET (선택) - Webhook 서명 검증용
+ * - TOSS_CLIENT_KEY (선택) - 프론트엔드 SDK용
  *
- * 기존 Toss 직접 연동 (TOSS_*) 및 Stripe (STRIPE_*)는 비활성화
- * → PortOne을 통한 단일 결제 채널로 통합
+ * Stripe (글로벌 결제):
+ * - STRIPE_SECRET_KEY - Stripe 시크릿 키
+ * - STRIPE_WEBHOOK_SECRET - Webhook 서명 검증용
  */
 
 /**
@@ -39,7 +39,7 @@ export function validateEnv(): void {
     }
   }
 
-  // 결제: PortOne V2 사용 (PORTONE_V2_API_SECRET, PORTONE_STORE_ID, PORTONE_CHANNEL_KEY)
+  // 결제: TossPayments 사용 (TOSS_SECRET_KEY)
   // 환경변수 미설정 시 결제 기능 비활성화 (서버는 정상 동작)
 
   if (missing.length > 0) {

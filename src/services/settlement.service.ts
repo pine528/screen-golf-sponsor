@@ -237,7 +237,11 @@ export class SettlementService {
   }
 
   async getAthleteStats(athleteId: string) {
-    const [totalPaid, pendingAmount, stats] = await Promise.all([
+    const [athlete, totalPaid, pendingAmount, thisMonth, settlementCount] = await Promise.all([
+      prisma.athlete.findUnique({
+        where: { id: athleteId },
+        select: { bankAccount: true },
+      }),
       prisma.settlement.aggregate({
         where: {
           contract: { athleteId },
@@ -252,18 +256,32 @@ export class SettlementService {
         },
         _sum: { payoutAmount: true },
       }),
-      prisma.settlement.groupBy({
-        by: ['status'],
-        where: { contract: { athleteId } },
-        _count: true,
+      prisma.settlement.aggregate({
+        where: {
+          contract: { athleteId },
+          status: 'PAID',
+          paidAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          },
+        },
         _sum: { payoutAmount: true },
       }),
+      prisma.settlement.count({
+        where: { contract: { athleteId } },
+      }),
     ]);
+
+    // bankAccount는 JSON: { bankName, accountNumber, accountHolder }
+    const bankInfo = (athlete?.bankAccount as any) || {};
 
     return {
       totalPaid: totalPaid._sum.payoutAmount || 0,
       pendingAmount: pendingAmount._sum.payoutAmount || 0,
-      breakdown: stats,
+      thisMonth: thisMonth._sum.payoutAmount || 0,
+      settlementCount,
+      bankName: bankInfo.bankName || null,
+      bankAccount: bankInfo.accountNumber || null,
+      bankHolder: bankInfo.accountHolder || null,
     };
   }
 
