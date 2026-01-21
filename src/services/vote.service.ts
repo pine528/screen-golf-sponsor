@@ -297,8 +297,19 @@ export class VoteService {
       throw new NotFoundError('VoteEvent not found');
     }
 
-    if (voteEvent.status !== 'DRAFT') {
-      throw new ForbiddenError('Can only delete draft vote events');
+    // DRAFT 또는 SETTLED 상태만 삭제 가능
+    if (voteEvent.status !== 'DRAFT' && voteEvent.status !== 'SETTLED') {
+      throw new ForbiddenError('초안 또는 정산완료된 투표만 삭제할 수 있습니다');
+    }
+
+    // SETTLED인 경우 관련 데이터도 함께 삭제
+    if (voteEvent.status === 'SETTLED') {
+      return prisma.$transaction(async (tx) => {
+        // 투표 기록 삭제
+        await tx.vote.deleteMany({ where: { voteEventId: id } });
+        // 이벤트 삭제
+        return tx.voteEvent.delete({ where: { id } });
+      });
     }
 
     return prisma.voteEvent.delete({ where: { id } });
