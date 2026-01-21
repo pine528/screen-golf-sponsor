@@ -13,8 +13,8 @@ export class CampaignService {
     targetCategories?: string[];
     excludedAthletes?: string[];
     preferredAthletes?: string[];
-    dateStart: Date;
-    dateEnd: Date;
+    dateStart?: Date;
+    dateEnd?: Date;
   }) {
     return prisma.campaign.create({
       data: {
@@ -26,8 +26,8 @@ export class CampaignService {
         targetCategories: data.targetCategories || [],
         excludedAthletes: data.excludedAthletes || [],
         preferredAthletes: data.preferredAthletes || [],
-        dateStart: data.dateStart,
-        dateEnd: data.dateEnd,
+        dateStart: data.dateStart || null,
+        dateEnd: data.dateEnd || null,
         status: 'DRAFT',
       },
       include: {

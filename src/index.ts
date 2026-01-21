@@ -64,11 +64,12 @@ app.use(cors({
 // Request ID 미들웨어 (가장 먼저)
 app.use(requestIdMiddleware);
 
-// Rate limiting
+// Rate limiting (프로덕션에서도 넉넉하게)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000, // 1분
+  max: 200, // 분당 200 요청
   message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  skip: () => config.nodeEnv === 'development', // 개발환경에서는 rate limit 스킵
 });
 app.use('/api/', limiter);
 

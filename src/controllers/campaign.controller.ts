@@ -19,8 +19,8 @@ export class CampaignController {
         targetCategories,
         excludedAthletes,
         preferredAthletes,
-        dateStart: new Date(dateStart),
-        dateEnd: new Date(dateEnd),
+        dateStart: dateStart ? new Date(dateStart) : undefined,
+        dateEnd: dateEnd ? new Date(dateEnd) : undefined,
       });
 
       sendSuccess(res, campaign, 201);
