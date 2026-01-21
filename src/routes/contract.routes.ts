@@ -41,6 +41,13 @@ router.get('/my', authenticate, contractController.getMyContracts);
 router.post('/', authenticate, authorize('ADMIN'), contractController.createFromAuction);
 
 /**
+ * @route GET /contracts/settlements
+ * @desc List all settlements (admin)
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get('/settlements', authenticate, authorize('ADMIN'), settlementController.list);
+
+/**
  * @route GET /contracts/:id
  * @desc Get contract by ID
  */
@@ -133,12 +140,6 @@ router.post(
 // ============================================
 // Settlements
 // ============================================
-
-/**
- * @route GET /contracts/settlements
- * @desc List all settlements (admin)
- */
-router.get('/settlements', authenticate, authorize('ADMIN'), settlementController.list);
 
 /**
  * @route GET /contracts/settlements/my

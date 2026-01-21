@@ -1219,6 +1219,77 @@ router.get('/withdrawals.csv', async (req: Request, res: Response, next: NextFun
   }
 });
 
+// =========================================
+// WITHDRAWAL BATCH MANAGEMENT (출금 배치 관리)
+// 주의: 이 섹션은 /withdrawals/:id 보다 먼저 선언해야 함
+// =========================================
+
+// GET /admin/finance/withdrawals/batches - 배치 목록
+router.get('/withdrawals/batches', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, page = '1', pageSize = '20' } = req.query;
+
+    const result = await withdrawalBatchService.list({
+      status: status as any,
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+    });
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /admin/finance/withdrawals/batches - 배치 생성
+router.post('/withdrawals/batches', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { withdrawalIds, note } = req.body;
+    const adminId = (req as any).user.id;
+
+    if (!withdrawalIds || !Array.isArray(withdrawalIds) || withdrawalIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: '출금 요청 ID를 1개 이상 선택해주세요' },
+      });
+    }
+
+    const result = await withdrawalBatchService.createBatch(withdrawalIds, adminId, note);
+
+    // ActionLog 저장
+    await saveActionLog(
+      adminId,
+      'WITHDRAWAL_BATCH_CREATE',
+      'WITHDRAWAL_BATCH',
+      result.batch.id,
+      { withdrawalIds, note },
+      { batchId: result.batch.id, included: result.included.length, skipped: result.skipped.length },
+      note || `배치 생성: ${result.included.length}건`,
+      undefined,
+      req.ip
+    );
+
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =========================================
+// WITHDRAWAL METRICS (출금 메트릭)
+// 주의: 이 섹션은 /withdrawals/:id 보다 먼저 선언해야 함
+// =========================================
+
+// GET /admin/finance/withdrawals/metrics - 출금 메트릭
+router.get('/withdrawals/metrics', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const metrics = await withdrawalService.getMetrics();
+    sendSuccess(res, metrics);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /admin/finance/withdrawals/:id - 출금 요청 상세
 router.get('/withdrawals/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1377,61 +1448,6 @@ router.post('/withdrawals/:id/paid', writeRateLimiter, async (req: Request, res:
   }
 });
 
-// =========================================
-// WITHDRAWAL BATCH MANAGEMENT (출금 배치 관리)
-// =========================================
-
-// GET /admin/finance/withdrawals/batches - 배치 목록
-router.get('/withdrawals/batches', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { status, page = '1', pageSize = '20' } = req.query;
-
-    const result = await withdrawalBatchService.list({
-      status: status as any,
-      page: parseInt(page as string, 10),
-      pageSize: parseInt(pageSize as string, 10),
-    });
-
-    sendSuccess(res, result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// POST /admin/finance/withdrawals/batches - 배치 생성
-router.post('/withdrawals/batches', writeRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { withdrawalIds, note } = req.body;
-    const adminId = (req as any).user.id;
-
-    if (!withdrawalIds || !Array.isArray(withdrawalIds) || withdrawalIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'INVALID_INPUT', message: '출금 요청 ID를 1개 이상 선택해주세요' },
-      });
-    }
-
-    const result = await withdrawalBatchService.createBatch(withdrawalIds, adminId, note);
-
-    // ActionLog 저장
-    await saveActionLog(
-      adminId,
-      'WITHDRAWAL_BATCH_CREATE',
-      'WITHDRAWAL_BATCH',
-      result.batch.id,
-      { withdrawalIds, note },
-      { batchId: result.batch.id, included: result.included.length, skipped: result.skipped.length },
-      note || `배치 생성: ${result.included.length}건`,
-      undefined,
-      req.ip
-    );
-
-    sendSuccess(res, result);
-  } catch (error) {
-    next(error);
-  }
-});
-
 // GET /admin/finance/withdrawals/batches/:id - 배치 상세
 router.get('/withdrawals/batches/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1542,20 +1558,6 @@ router.post('/withdrawals/batches/:id/cancel', writeRateLimiter, async (req: Req
     );
 
     sendSuccess(res, result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// =========================================
-// WITHDRAWAL METRICS (출금 메트릭)
-// =========================================
-
-// GET /admin/finance/withdrawals/metrics - 출금 메트릭
-router.get('/withdrawals/metrics', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const metrics = await withdrawalService.getMetrics();
-    sendSuccess(res, metrics);
   } catch (error) {
     next(error);
   }
