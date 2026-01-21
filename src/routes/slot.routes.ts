@@ -111,22 +111,32 @@ router.patch(
 
 /**
  * @route PATCH /slots/instances/:id/sale-mode
- * @desc Update slot sale mode (auction/direct buy settings) - Athlete only
+ * @desc Update slot sale mode (auction/direct buy settings) - Athlete or Admin
  */
 router.patch(
   '/instances/:id/sale-mode',
   authenticate,
-  authorize('ATHLETE'),
+  authorize('ATHLETE', 'ADMIN'),
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
+      const userRole = req.user!.role;
       const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt } = req.body;
 
-      // Get athlete ID from user
-      const athlete = await athleteService.findByUserId(userId);
+      let athleteId: string;
 
-      const slot = await slotInstanceService.updateSaleMode(id, athlete.id, {
+      if (userRole === 'ADMIN') {
+        // Admin: 슬롯에서 직접 athleteId 가져오기
+        const slot = await slotInstanceService.findById(id);
+        athleteId = slot.athleteId;
+      } else {
+        // Athlete: 본인 athleteId 사용
+        const athlete = await athleteService.findByUserId(userId);
+        athleteId = athlete.id;
+      }
+
+      const slot = await slotInstanceService.updateSaleMode(id, athleteId, {
         enableAuction,
         enableDirectBuy,
         directBuyPrice: directBuyPrice ? Number(directBuyPrice) : null,
