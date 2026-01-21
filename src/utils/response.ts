@@ -17,6 +17,11 @@ export function serializeDecimals<T>(obj: T): T {
     return (obj as any).toString() as unknown as T;
   }
 
+  // Date 처리 - ISO 문자열로 변환
+  if (obj instanceof Date) {
+    return obj.toISOString() as unknown as T;
+  }
+
   // 배열 처리
   if (Array.isArray(obj)) {
     return obj.map(item => serializeDecimals(item)) as unknown as T;
