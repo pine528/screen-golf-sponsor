@@ -138,14 +138,21 @@ export class BidService {
 
       let bid;
 
-      if (existingBid) {
+      // ★ 트랜잭션 내에서 직접 조회하여 race condition 방지
+      const existingBidInTx = await tx.bid.findUnique({
+        where: {
+          auctionId_brandId: { auctionId, brandId }
+        }
+      });
+
+      if (existingBidInTx) {
         // Update existing bid
-        if (maxBid <= existingBid.maxBid) {
+        if (maxBid <= existingBidInTx.maxBid) {
           throw new BadRequestError('New max bid must be higher than current max bid');
         }
 
         bid = await tx.bid.update({
-          where: { id: existingBid.id },
+          where: { id: existingBidInTx.id },
           data: {
             maxBid,
             autoBid,
