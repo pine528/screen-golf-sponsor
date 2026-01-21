@@ -306,7 +306,8 @@ export class BrandService {
     return bids.map((bid) => {
       const auction = bid.auction;
       const slot = auction.slotInstance;
-      const highestBid = auction.bids[0]?.currentProxy || 0;
+      // currentPrice는 2차가 경매의 공개 최고가 (다음 입찰 최소 금액)
+      const highestBid = auction.currentPrice || auction.bids[0]?.currentProxy || 0;
       const remainingMs = auction.endAt.getTime() - now.getTime();
       const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
 
