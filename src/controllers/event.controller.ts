@@ -6,9 +6,19 @@ import { AuthRequest } from '../types';
 export class EventController {
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Debug: log incoming data
+      console.log('[Event Create] Request body:', JSON.stringify(req.body, null, 2));
+      console.log('[Event Create] dateStart type:', typeof req.body.dateStart, req.body.dateStart);
+      console.log('[Event Create] dateEnd type:', typeof req.body.dateEnd, req.body.dateEnd);
+
       const event = await eventService.create(req.body);
+
+      // Debug: log created event
+      console.log('[Event Create] Created event:', JSON.stringify(event, null, 2));
+
       sendSuccess(res, event, 201);
     } catch (error) {
+      console.error('[Event Create] Error:', error);
       next(error);
     }
   }
@@ -34,6 +44,17 @@ export class EventController {
         page: Number(page),
         limit: Number(limit),
       });
+
+      // Debug: log first event's dates
+      if (events.length > 0) {
+        console.log('[Event List] First event dates:', {
+          id: events[0].id,
+          name: events[0].name,
+          dateStart: events[0].dateStart,
+          dateEnd: events[0].dateEnd,
+        });
+      }
+
       sendPaginated(res, events, Number(page), Number(limit), total);
     } catch (error) {
       next(error);
