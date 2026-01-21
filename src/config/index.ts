@@ -12,12 +12,14 @@ const REQUIRED_ENVS = [
 ];
 
 /**
- * 운영 환경(production)에서 추가로 필요한 환경변수
- * PortOne V2는 시크릿 키 하나만 사용
+ * 결제 연동 환경변수 안내 (validateEnv에서 강제하지 않음)
+ *
+ * 결제 provider(Toss/Stripe)는 payments/providers/index.ts에서 조건부 로드됨
+ * - secretKey가 없으면 해당 provider가 비활성화됨 (서버 죽지 않음)
+ *
+ * Toss 사용 시: TOSS_SECRET_KEY, TOSS_WEBHOOK_SECRET
+ * Stripe 사용 시: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
  */
-const PRODUCTION_REQUIRED_ENVS = [
-  'PORTONE_SECRET',  // V2 시크릿 키 (store-xxx 형식)
-];
 
 /**
  * 환경변수 검증 함수
@@ -34,14 +36,8 @@ export function validateEnv(): void {
     }
   }
 
-  // 운영 환경에서는 추가 환경변수 체크
-  if (nodeEnv === 'production') {
-    for (const key of PRODUCTION_REQUIRED_ENVS) {
-      if (!process.env[key]) {
-        missing.push(key);
-      }
-    }
-  }
+  // 결제 provider 환경변수는 payments/providers/index.ts에서 조건부 로드
+  // secretKey 없으면 해당 provider 비활성화 (graceful degradation)
 
   if (missing.length > 0) {
     console.error('========================================');
