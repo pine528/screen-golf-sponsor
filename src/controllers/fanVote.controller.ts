@@ -266,6 +266,26 @@ export class FanVoteController {
     }
   }
 
+  /**
+   * DELETE /api/fan-votes/admin/:id
+   * 관리자: 정산 완료된 투표 삭제
+   */
+  async deleteSettledEvent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const adminId = req.user!.id;
+
+      const result = await fanVoteService.deleteSettledEvent(id, adminId);
+
+      sendSuccess(res, {
+        ...result,
+        message: '투표가 삭제되었습니다',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ============================================
   // Phase G: 투표 스폰서십
   // ============================================

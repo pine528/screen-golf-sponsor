@@ -352,6 +352,70 @@ export class FanVoteService {
     return updatedEvent;
   }
 
+  /**
+   * 관리자: 정산 완료된 팬 투표 삭제
+   */
+  async deleteSettledEvent(eventId: string, adminId: string) {
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+      include: {
+        settlement: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    if (event.status !== 'SETTLED') {
+      throw new ConflictError('정산 완료된 투표만 삭제할 수 있습니다');
+    }
+
+    // 트랜잭션으로 관련 데이터 삭제
+    await prisma.$transaction(async (tx) => {
+      // 1. 당첨자 기록 삭제
+      await tx.fanVoteWinner.deleteMany({
+        where: { eventId },
+      });
+
+      // 2. 정산 기록 삭제
+      await tx.fanVoteSettlement.deleteMany({
+        where: { eventId },
+      });
+
+      // 3. 참여 기록 삭제
+      await tx.fanVoteEntry.deleteMany({
+        where: { eventId },
+      });
+
+      // 4. 스폰서 참여 기록 삭제
+      await tx.sponsorEngagement.deleteMany({
+        where: { eventId },
+      });
+
+      // 5. 이벤트 삭제
+      await tx.fanVoteEvent.delete({
+        where: { id: eventId },
+      });
+    });
+
+    // 감사 로그
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'FAN_VOTE_DELETE',
+        entityType: 'FAN_VOTE_EVENT',
+        entityId: eventId,
+        oldValue: {
+          title: event.title,
+          status: event.status,
+        },
+      },
+    });
+
+    return { success: true };
+  }
+
   // ============================================
   // Phase F4: Fan-created Votes
   // ============================================

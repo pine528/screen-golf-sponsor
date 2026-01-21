@@ -156,6 +156,14 @@ router.post(
   fanVoteController.settleEvent.bind(fanVoteController)
 );
 
+// 정산 완료된 투표 삭제
+router.delete(
+  '/admin/:id',
+  authenticate,
+  requireRole('ADMIN'),
+  fanVoteController.deleteSettledEvent.bind(fanVoteController)
+);
+
 // ============================================
 // Brand Sponsor Routes (BRAND 권한 필요)
 // ============================================
