@@ -2,6 +2,26 @@ import prisma from '../models/prisma';
 import { NotFoundError } from '../utils/errors';
 import { EventStatus } from '@prisma/client';
 
+// 날짜 기반으로 이벤트 상태 계산
+function computeEventStatus(event: { dateStart: Date; dateEnd: Date; status: EventStatus }): EventStatus {
+  // CANCELLED는 수동 설정이므로 유지
+  if (event.status === 'CANCELLED') {
+    return 'CANCELLED';
+  }
+
+  const now = new Date();
+  const start = new Date(event.dateStart);
+  const end = new Date(event.dateEnd);
+
+  if (now < start) {
+    return 'UPCOMING';
+  } else if (now >= start && now <= end) {
+    return 'LIVE';
+  } else {
+    return 'COMPLETED';
+  }
+}
+
 export class EventService {
   async create(data: {
     tour: string;
@@ -50,7 +70,11 @@ export class EventService {
       throw new NotFoundError('Event not found');
     }
 
-    return event;
+    // 날짜 기반으로 상태 자동 계산
+    return {
+      ...event,
+      status: computeEventStatus(event),
+    };
   }
 
   async list(filters: {
@@ -72,7 +96,7 @@ export class EventService {
       if (to) where.dateStart.lte = to;
     }
 
-    const [events, total] = await Promise.all([
+    const [rawEvents, total] = await Promise.all([
       prisma.event.findMany({
         where,
         skip: (page - 1) * limit,
@@ -101,6 +125,12 @@ export class EventService {
       }),
       prisma.event.count({ where }),
     ]);
+
+    // 날짜 기반으로 상태 자동 계산
+    const events = rawEvents.map(event => ({
+      ...event,
+      status: computeEventStatus(event),
+    }));
 
     return { events, total };
   }
