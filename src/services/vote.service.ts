@@ -532,17 +532,19 @@ export class VoteService {
       optionCounts.set(vote.selectedOptionId, count + 1);
     }
 
-    const optionsWithCounts = options.map(opt => ({
-      ...opt,
-      voteCount: optionCounts.get(opt.id) || 0,
+    const optionStats = options.map(opt => ({
+      optionId: opt.id,
+      label: opt.label,
+      athleteId: opt.athleteId,
+      count: optionCounts.get(opt.id) || 0,
       percentage: voteEvent.votes.length > 0
-        ? Math.round((optionCounts.get(opt.id) || 0) / voteEvent.votes.length * 100)
+        ? (optionCounts.get(opt.id) || 0) / voteEvent.votes.length * 100
         : 0,
     }));
 
     return {
       totalVotes: voteEvent.votes.length,
-      options: optionsWithCounts,
+      optionStats,
       athletePoints: voteEvent.athletePoints,
       status: voteEvent.status,
       correctOptionId: voteEvent.correctOptionId,
