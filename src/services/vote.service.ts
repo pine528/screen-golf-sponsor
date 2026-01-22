@@ -1,6 +1,7 @@
 import prisma from '../models/prisma';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { VoteEventStatus } from '@prisma/client';
+import { pointService } from './point.service';
 
 export class VoteService {
   // ============================================
@@ -261,25 +262,16 @@ export class VoteService {
         data: { isCorrect, pointsEarned },
       });
 
-      // 정답인 경우 포인트 지급
-      if (isCorrect) {
-        const user = await prisma.user.update({
-          where: { id: vote.userId },
-          data: { pointBalance: { increment: pointsEarned } },
-        });
-
-        // 포인트 원장 기록
-        await prisma.pointLedger.create({
-          data: {
-            userId: vote.userId,
-            amount: pointsEarned,
-            balance: user.pointBalance,
-            type: 'VOTE_REWARD',
-            description: `투표 이벤트 정답 보상: ${voteEvent.title}`,
-            referenceId: voteEvent.id,
-            referenceType: 'VOTE_EVENT',
-          },
-        });
+      // 정답인 경우 포인트 지급 (PointWallet 사용)
+      if (isCorrect && pointsEarned > 0) {
+        await pointService.adjustPoints(
+          vote.userId,
+          pointsEarned,
+          'VOTE_WIN_PAYOUT',
+          'VOTE_EVENT',
+          `${voteEvent.id}_${vote.id}`,  // 투표별 고유 ID로 멱등성 보장
+          `투표 이벤트 정답 보상: ${voteEvent.title}`
+        );
       }
 
       // 선수 포인트 집계 (옵션에 athleteId가 있는 경우)
