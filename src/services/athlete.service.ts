@@ -242,7 +242,11 @@ export class AthleteService {
   }
 
   async getAvailableSlots(athleteId: string, eventId?: string) {
-    const where: any = { athleteId, status: 'OPEN' };
+    // OPEN, IN_AUCTION, RESERVED 상태 모두 포함 (경매중/예약 슬롯도 표시)
+    const where: any = {
+      athleteId,
+      status: { in: ['OPEN', 'IN_AUCTION', 'RESERVED'] },
+    };
     if (eventId) where.eventId = eventId;
 
     return prisma.slotInstance.findMany({
@@ -250,7 +254,35 @@ export class AthleteService {
       include: {
         slotTemplate: true,
         event: true,
+        auction: {
+          select: {
+            id: true,
+            status: true,
+            currentPrice: true,
+            startAt: true,
+            endAt: true,
+            _count: { select: { bids: true } },
+            // Contract는 Auction을 통해 연결됨 (1:1 관계)
+            contract: {
+              select: {
+                id: true,
+                status: true,
+                priceFinal: true,
+                brand: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
+      orderBy: [
+        { event: { dateStart: 'asc' } },
+        { createdAt: 'desc' },
+      ],
     });
   }
 
