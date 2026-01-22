@@ -96,6 +96,16 @@ export class AuctionController {
     }
   }
 
+  async startAuction(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const auction = await auctionService.startAuction(id);
+      sendSuccess(res, auction);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getMyBids(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user?.brandId) {

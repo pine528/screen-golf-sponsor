@@ -98,6 +98,12 @@ router.delete(
 );
 
 /**
+ * @route POST /auctions/:id/start
+ * @desc Start a scheduled auction (admin only)
+ */
+router.post('/:id/start', authenticate, authorize('ADMIN'), auctionController.startAuction);
+
+/**
  * @route POST /auctions/:id/cancel
  * @desc Cancel an auction (admin only)
  */
