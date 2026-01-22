@@ -249,12 +249,24 @@ export class VoteService {
       throw new BadRequestError('Invalid correct option ID');
     }
 
-    // 정답자에게 포인트 지급 및 선수 포인트 집계
+    // 정답자 필터링
+    const correctVotes = voteEvent.votes.filter(v => v.selectedOptionId === correctOptionId);
+    const correctCount = correctVotes.length;
+
+    // 총 상금 풀 = pointsPerCorrect (이제 총 상금 풀로 사용)
+    const totalPrizePool = voteEvent.pointsPerCorrect;
+
+    // 1인당 지급 포인트 계산 (정답자 있을 때만)
+    const payoutEach = correctCount > 0 ? Math.floor(totalPrizePool / correctCount) : 0;
+    const remainder = correctCount > 0 ? totalPrizePool - (payoutEach * correctCount) : totalPrizePool;
+
+    // 선수 포인트 집계용
     const athletePointsMap = new Map<string, number>();
 
+    // 모든 투표 업데이트 (정답 여부 표시)
     for (const vote of voteEvent.votes) {
       const isCorrect = vote.selectedOptionId === correctOptionId;
-      const pointsEarned = isCorrect ? voteEvent.pointsPerCorrect : 0;
+      const pointsEarned = isCorrect ? payoutEach : 0;
 
       // 투표 업데이트
       await prisma.vote.update({
@@ -263,14 +275,14 @@ export class VoteService {
       });
 
       // 정답인 경우 포인트 지급 (PointWallet 사용)
-      if (isCorrect && pointsEarned > 0) {
+      if (isCorrect && payoutEach > 0) {
         await pointService.adjustPoints(
           vote.userId,
-          pointsEarned,
+          payoutEach,
           'VOTE_WIN_PAYOUT',
           'VOTE_EVENT',
           `${voteEvent.id}_${vote.id}`,  // 투표별 고유 ID로 멱등성 보장
-          `투표 이벤트 정답 보상: ${voteEvent.title}`
+          `투표 이벤트 정답 보상: ${voteEvent.title} (${correctCount}명 중 1/${correctCount})`
         );
       }
 
@@ -280,6 +292,11 @@ export class VoteService {
         const current = athletePointsMap.get(selectedOption.athleteId) || 0;
         athletePointsMap.set(selectedOption.athleteId, current + 1);
       }
+    }
+
+    // 잔여 포인트는 플랫폼 귀속 (로그만 남김)
+    if (remainder > 0) {
+      console.log(`[VoteEvent ${id}] 정산 잔여 포인트: ${remainder}P (플랫폼 귀속)`);
     }
 
     // 선수 포인트 저장
