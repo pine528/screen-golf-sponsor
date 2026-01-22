@@ -213,7 +213,12 @@ export class AdminService {
 
   // Monitoring
   async getAuctionMonitoring() {
-    const [live, endingSoon, flagged] = await Promise.all([
+    // 오늘 시작 시간 계산
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [live, endingSoon, flagged, todayBids] = await Promise.all([
+      // 진행중 경매
       prisma.auction.findMany({
         where: { status: 'LIVE' },
         include: {
@@ -228,6 +233,7 @@ export class AdminService {
         },
         orderBy: { endAt: 'asc' },
       }),
+      // 마감 임박 (10분 이내)
       prisma.auction.findMany({
         where: {
           status: 'LIVE',
@@ -253,9 +259,34 @@ export class AdminService {
           },
         },
       }),
+      // 오늘 입찰 통계
+      prisma.bid.findMany({
+        where: {
+          createdAt: { gte: todayStart },
+        },
+        select: {
+          maxBid: true,
+          brandId: true,
+        },
+      }),
     ]);
 
-    return { live, endingSoon, flagged };
+    // 오늘 총 입찰액 계산 (maxBid 합계)
+    const todayTotalBids = todayBids.reduce((sum, bid) => sum + bid.maxBid, 0);
+
+    // 오늘 활성 입찰자 수 (고유 브랜드)
+    const activeBidders = new Set(todayBids.map(bid => bid.brandId)).size;
+
+    return {
+      live,
+      endingSoonList: endingSoon,
+      flagged,
+      // 프론트엔드용 요약 통계
+      liveAuctions: live.length,
+      endingSoon: endingSoon.length,
+      todayTotalBids,
+      activeBidders,
+    };
   }
 
   // Pending Reviews
