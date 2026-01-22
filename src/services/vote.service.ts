@@ -106,22 +106,11 @@ export class VoteService {
   }
 
   async listActiveVoteEvents(page: number = 1, limit: number = 20) {
-    const now = new Date();
-
-    // Debug: 모든 ACTIVE 상태 투표 확인
-    const allActiveVotes = await prisma.voteEvent.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, title: true, status: true, startAt: true, endAt: true },
-    });
-    console.log('[listActiveVoteEvents] Server now:', now.toISOString());
-    console.log('[listActiveVoteEvents] All ACTIVE votes:', JSON.stringify(allActiveVotes, null, 2));
-
+    // ACTIVE 상태인 투표만 조회 (날짜 필터링 제거 - 관리자가 상태로 직접 관리)
     const [voteEvents, total] = await Promise.all([
       prisma.voteEvent.findMany({
         where: {
           status: 'ACTIVE',
-          startAt: { lte: now },
-          endAt: { gte: now },
         },
         skip: (page - 1) * limit,
         take: limit,
@@ -139,8 +128,6 @@ export class VoteService {
       prisma.voteEvent.count({
         where: {
           status: 'ACTIVE',
-          startAt: { lte: now },
-          endAt: { gte: now },
         },
       }),
     ]);
