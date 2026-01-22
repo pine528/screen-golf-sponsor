@@ -357,10 +357,8 @@ export class VoteService {
       throw new ForbiddenError('Voting is not active for this event');
     }
 
-    const now = new Date();
-    if (now < voteEvent.startAt || now > voteEvent.endAt) {
-      throw new ForbiddenError('Voting period is not active');
-    }
+    // 날짜 필터링 제거 - 관리자가 ACTIVE 상태로 직접 관리
+    // ACTIVE 상태면 투표 가능
 
     // 옵션 검증
     const options = voteEvent.options as { id: string; label: string }[];
