@@ -108,6 +108,14 @@ export class VoteService {
   async listActiveVoteEvents(page: number = 1, limit: number = 20) {
     const now = new Date();
 
+    // Debug: 모든 ACTIVE 상태 투표 확인
+    const allActiveVotes = await prisma.voteEvent.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, title: true, status: true, startAt: true, endAt: true },
+    });
+    console.log('[listActiveVoteEvents] Server now:', now.toISOString());
+    console.log('[listActiveVoteEvents] All ACTIVE votes:', JSON.stringify(allActiveVotes, null, 2));
+
     const [voteEvents, total] = await Promise.all([
       prisma.voteEvent.findMany({
         where: {
