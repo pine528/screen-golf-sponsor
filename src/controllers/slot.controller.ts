@@ -68,12 +68,13 @@ export class SlotInstanceController {
 
   async list(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { page = 1, limit = 20, eventId, athleteId, slotCode, status } = req.query;
+      const { page = 1, limit = 20, eventId, athleteId, slotCode, status, enableDirectBuy } = req.query;
       const { instances, total } = await slotInstanceService.list({
         eventId: eventId as string,
         athleteId: athleteId as string,
         slotCode: slotCode as string,
         status: status as any,
+        enableDirectBuy: enableDirectBuy === 'true' ? true : enableDirectBuy === 'false' ? false : undefined,
         page: Number(page),
         limit: Number(limit),
       });

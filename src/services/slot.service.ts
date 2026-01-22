@@ -176,15 +176,17 @@ export class SlotInstanceService {
     athleteId?: string;
     slotCode?: string;
     status?: SlotStatus;
+    enableDirectBuy?: boolean;
     page?: number;
     limit?: number;
   }) {
-    const { eventId, athleteId, slotCode, status, page = 1, limit = 20 } = filters;
+    const { eventId, athleteId, slotCode, status, enableDirectBuy, page = 1, limit = 20 } = filters;
 
     const where: any = {};
     if (eventId) where.eventId = eventId;
     if (athleteId) where.athleteId = athleteId;
     if (status) where.status = status;
+    if (enableDirectBuy !== undefined) where.enableDirectBuy = enableDirectBuy;
     if (slotCode) {
       where.slotTemplate = { code: slotCode };
     }
