@@ -60,6 +60,9 @@ export class VoteService {
             },
           },
         },
+        _count: {
+          select: { votes: true },
+        },
       },
     });
 
