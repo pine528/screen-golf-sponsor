@@ -151,6 +151,18 @@ export class AuctionController {
       next(error);
     }
   }
+
+  /**
+   * 어드민이 설정한 특별 공개 경매 목록 (Featured Auctions)
+   */
+  async getFeatured(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const auctions = await auctionService.getFeaturedAuctions();
+      sendSuccess(res, auctions);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const auctionController = new AuctionController();

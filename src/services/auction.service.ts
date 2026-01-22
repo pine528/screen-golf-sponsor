@@ -441,6 +441,58 @@ export class AuctionService {
   }
 
   /**
+   * Featured Auctions: 어드민이 설정한 특별 공개 경매 목록
+   * - isFeatured=true인 LIVE 또는 SCHEDULED 경매
+   * - 비로그인 사용자도 조회 가능
+   */
+  async getFeaturedAuctions() {
+    return prisma.auction.findMany({
+      where: {
+        isFeatured: true,
+        status: { in: ['LIVE', 'SCHEDULED'] },
+      },
+      orderBy: [
+        { status: 'asc' }, // LIVE first
+        { endAt: 'asc' },
+      ],
+      include: {
+        slotInstance: {
+          include: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                dateStart: true,
+                dateEnd: true,
+                venue: true,
+              },
+            },
+            athlete: {
+              select: {
+                id: true,
+                name: true,
+                tour: true,
+                profileImageUrl: true,
+              },
+            },
+            slotTemplate: {
+              select: {
+                id: true,
+                name: true,
+                bodyPart: true,
+                defaultReservePrice: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: { bids: true },
+        },
+      },
+    });
+  }
+
+  /**
    * ★ Phase 9-3: 경매 요약 정보 (폴링용)
    * - currentPrice, bidCount, remainingSeconds, status
    * - myIsHighest: 로그인한 브랜드가 최고 입찰자인지 (optional)

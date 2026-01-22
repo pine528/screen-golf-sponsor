@@ -209,4 +209,28 @@ router.patch('/admins/:adminId/role', adminController.changeAdminRole);
  */
 router.patch('/admins/:adminId/permissions', adminController.updateAdminPermissions);
 
+// ============================================
+// Featured Auctions (공개 이벤트 경매)
+// ============================================
+
+/**
+ * @route POST /admin/featured-auctions
+ * @desc Create a featured auction for a famous athlete
+ * @body { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy?, directBuyPrice? }
+ */
+router.post('/featured-auctions', adminController.createFeaturedAuction);
+
+/**
+ * @route POST /admin/featured-auctions/bulk
+ * @desc Create multiple featured auctions at once
+ * @body { athleteId, eventId, slots: [{slotTemplateId, reservePrice}], auctionEndAt, enableDirectBuy? }
+ */
+router.post('/featured-auctions/bulk', adminController.bulkCreateFeaturedAuctions);
+
+/**
+ * @route GET /admin/featured-auctions
+ * @desc Get list of recent featured auctions
+ */
+router.get('/featured-auctions', adminController.getFeaturedAuctions);
+
 export default router;

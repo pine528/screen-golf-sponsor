@@ -13,6 +13,12 @@ const router = Router();
 router.get('/', authenticate, auctionController.list);
 
 /**
+ * @route GET /auctions/featured
+ * @desc Get featured/recommended auctions (최근 7일 내 생성된 경매)
+ */
+router.get('/featured', optionalAuth, auctionController.getFeatured);
+
+/**
  * @route GET /auctions/live
  * @desc Get all live auctions
  */

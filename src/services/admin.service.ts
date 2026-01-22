@@ -710,6 +710,185 @@ export class AdminService {
 
     return result;
   }
+
+  // ============================================
+  // Featured Auction Management (공개 이벤트 경매)
+  // ============================================
+
+  /**
+   * Admin이 유명 선수의 슬롯을 직접 설정하고 경매 오픈
+   * - 슬롯 생성 + 경매 즉시 시작 (1단계로 처리)
+   */
+  async createFeaturedAuction(data: {
+    athleteId: string;
+    eventId: string;
+    slotTemplateId: string;
+    reservePrice: number;
+    auctionEndAt: Date;
+    enableDirectBuy?: boolean;
+    directBuyPrice?: number;
+  }) {
+    const { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy, directBuyPrice } = data;
+
+    // Validate athlete
+    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+    if (!athlete) throw new NotFoundError('Athlete not found');
+
+    // Validate event
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundError('Event not found');
+
+    // Validate slot template
+    const template = await prisma.slotTemplate.findUnique({ where: { id: slotTemplateId } });
+    if (!template) throw new NotFoundError('Slot template not found');
+
+    // Validate auction end date
+    if (new Date(auctionEndAt) <= new Date()) {
+      throw new BadRequestError('Auction end date must be in the future');
+    }
+
+    // Transaction: Create slot + auction in one step
+    return prisma.$transaction(async (tx) => {
+      // Check for existing slot
+      const existingSlot = await tx.slotInstance.findUnique({
+        where: {
+          eventId_athleteId_slotTemplateId: { eventId, athleteId, slotTemplateId },
+        },
+      });
+
+      if (existingSlot) {
+        throw new BadRequestError('Slot already exists for this athlete/event/template combination');
+      }
+
+      // Create slot instance with auction enabled
+      const slot = await tx.slotInstance.create({
+        data: {
+          eventId,
+          athleteId,
+          slotTemplateId,
+          reservePrice,
+          enableAuction: true,
+          enableDirectBuy: enableDirectBuy || false,
+          directBuyPrice: enableDirectBuy && directBuyPrice ? directBuyPrice : null,
+          auctionMinBid: reservePrice,
+          auctionEndAt,
+          status: 'IN_AUCTION',
+        },
+      });
+
+      // Create auction (immediately LIVE)
+      const now = new Date();
+      const auction = await tx.auction.create({
+        data: {
+          slotInstanceId: slot.id,
+          startAt: now,
+          endAt: new Date(auctionEndAt),
+          originalEndAt: new Date(auctionEndAt),
+          currentPrice: reservePrice,
+          status: 'LIVE',
+          softCloseSec: 120,
+          maxExtensionSec: 600,
+          minBidIncrement: Math.max(10000, Math.floor(reservePrice * 0.05)), // 5% or 10000원 중 큰 값
+        },
+      });
+
+      // Return complete data
+      return tx.slotInstance.findUnique({
+        where: { id: slot.id },
+        include: {
+          event: true,
+          athlete: true,
+          slotTemplate: true,
+          auction: true,
+        },
+      });
+    });
+  }
+
+  /**
+   * 여러 슬롯을 한번에 공개 경매로 설정
+   */
+  async bulkCreateFeaturedAuctions(data: {
+    athleteId: string;
+    eventId: string;
+    slots: Array<{
+      slotTemplateId: string;
+      reservePrice: number;
+    }>;
+    auctionEndAt: Date;
+    enableDirectBuy?: boolean;
+  }) {
+    const results = await Promise.all(
+      data.slots.map(async (slot) => {
+        try {
+          const result = await this.createFeaturedAuction({
+            athleteId: data.athleteId,
+            eventId: data.eventId,
+            slotTemplateId: slot.slotTemplateId,
+            reservePrice: slot.reservePrice,
+            auctionEndAt: data.auctionEndAt,
+            enableDirectBuy: data.enableDirectBuy,
+            directBuyPrice: data.enableDirectBuy ? Math.floor(slot.reservePrice * 1.5) : undefined,
+          });
+          return { success: true, data: result };
+        } catch (e: any) {
+          return { success: false, error: e.message, slotTemplateId: slot.slotTemplateId };
+        }
+      })
+    );
+
+    return {
+      created: results.filter((r) => r.success).map((r) => r.data),
+      failed: results.filter((r) => !r.success),
+    };
+  }
+
+  /**
+   * 최근 생성된 공개 경매 목록 (추천 경매)
+   */
+  async getFeaturedAuctions(limit: number = 10) {
+    const recentAuctions = await prisma.auction.findMany({
+      where: {
+        status: 'LIVE',
+        // 최근 7일 이내 생성된 경매
+        createdAt: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+      ],
+      take: limit,
+      include: {
+        slotInstance: {
+          include: {
+            event: true,
+            athlete: true,
+            slotTemplate: true,
+          },
+        },
+        _count: {
+          select: { bids: true },
+        },
+      },
+    });
+
+    return recentAuctions.map((auction) => ({
+      id: auction.id,
+      slotId: auction.slotInstanceId,
+      slotName: auction.slotInstance.slotTemplate.name,
+      athleteId: auction.slotInstance.athleteId,
+      athleteName: auction.slotInstance.athlete.name,
+      eventId: auction.slotInstance.eventId,
+      eventName: auction.slotInstance.event.name,
+      currentPrice: auction.currentPrice,
+      reservePrice: auction.slotInstance.reservePrice,
+      bidCount: auction._count.bids,
+      endAt: auction.endAt,
+      createdAt: auction.createdAt,
+      status: auction.status,
+    }));
+  }
 }
 
 export const adminService = new AdminService();

@@ -473,16 +473,14 @@ export class SlotInstanceService {
       throw new NotFoundError('Slot not found');
     }
 
-    if (!slot.enableDirectBuy) {
-      throw new BadRequestError('Direct buy is not enabled for this slot');
-    }
-
-    if (!slot.directBuyPrice) {
-      throw new BadRequestError('Direct buy price not set');
-    }
-
     if (slot.status !== 'OPEN') {
       throw new ConflictError('Slot is no longer available for purchase');
+    }
+
+    // 즉시구매 가격: directBuyPrice가 있으면 사용, 없으면 reservePrice 사용
+    const buyPrice = slot.directBuyPrice || slot.reservePrice;
+    if (!buyPrice || Number(buyPrice) <= 0) {
+      throw new BadRequestError('No valid price set for this slot');
     }
 
     // Get brand
@@ -494,7 +492,7 @@ export class SlotInstanceService {
       throw new NotFoundError('Brand not found');
     }
 
-    // 잔액 검증: 가용 잔액 >= directBuyPrice
+    // 잔액 검증: 가용 잔액 >= buyPrice
     const brandWallet = await prisma.wallet.findUnique({
       where: {
         ownerType_ownerId: {
@@ -509,9 +507,9 @@ export class SlotInstanceService {
     }
 
     const available = new Decimal(brandWallet.balance).minus(brandWallet.frozenAmount);
-    if (available.lt(slot.directBuyPrice)) {
+    if (available.lt(buyPrice)) {
       throw new BadRequestError(
-        `Insufficient balance. Available: ${available.toString()}, Required: ${slot.directBuyPrice.toString()}`
+        `Insufficient balance. Available: ${available.toString()}, Required: ${buyPrice.toString()}`
       );
     }
 
@@ -548,11 +546,10 @@ export class SlotInstanceService {
       }
 
       // ★ Phase 9-1.1: frozenAmount 증가 (예약 동결)
-      const price = slot.directBuyPrice!;
       await tx.wallet.update({
         where: { id: brandWallet.id },
         data: {
-          frozenAmount: { increment: price },
+          frozenAmount: { increment: buyPrice },
           version: { increment: 1 },
         },
       });
@@ -569,7 +566,7 @@ export class SlotInstanceService {
           endAt: now,
           originalEndAt: now,
           status: 'ENDED',
-          currentPrice: Number(slot.directBuyPrice),
+          currentPrice: Number(buyPrice),
         },
       });
 
@@ -582,7 +579,7 @@ export class SlotInstanceService {
           auctionId: auction.id,
           brandId,
           athleteId: slot.athleteId,
-          priceFinal: Number(slot.directBuyPrice),
+          priceFinal: Number(buyPrice),
           status: 'PENDING_SIGNATURE',
           brandSignedAt: now, // 브랜드 선서명
           reservedUntil, // ★ Phase 9-1.1: 예약 만료 시간
@@ -609,7 +606,7 @@ export class SlotInstanceService {
         data: {
           walletId: brandWallet.id,
           type: 'DIRECT_BUY_RESERVE',
-          amount: price, // 동결 금액 (양수로 기록 - balance는 변경 없음)
+          amount: buyPrice, // 동결 금액 (양수로 기록 - balance는 변경 없음)
           balanceAfter: brandWallet.balance, // balance는 그대로
           refType: 'CONTRACT',
           refId: createdContract.id,
@@ -628,7 +625,7 @@ export class SlotInstanceService {
             slotId,
             brandId,
             athleteId: slot.athleteId,
-            price: Number(slot.directBuyPrice),
+            price: Number(buyPrice),
             reservedUntil: reservedUntil.toISOString(),
           },
         },
@@ -649,7 +646,7 @@ export class SlotInstanceService {
           slotName: slot.slotTemplate.name,
           eventName: slot.event.name,
           brandName: brand.name,
-          price: Number(slot.directBuyPrice),
+          price: Number(buyPrice),
         },
       });
     } catch (e) {

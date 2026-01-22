@@ -383,6 +383,7 @@ model Auction {
   currentPrice    Int           @default(0) @map("current_price")
   status          AuctionStatus @default(SCHEDULED)
   winningBidId    String?       @map("winning_bid_id")
+  isFeatured      Boolean       @default(false) @map("is_featured")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
