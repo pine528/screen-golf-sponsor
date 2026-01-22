@@ -813,4 +813,73 @@ router.delete('/athletes/:id', async (req: AuthRequest, res: Response, next: Nex
   }
 });
 
+/**
+ * @route GET /admin/entities/fans
+ * @desc Get fans list with search
+ * @query email (search by email)
+ */
+router.get('/fans', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const email = (req.query.email as string) || '';
+
+    const where: any = {
+      role: 'FAN',
+    };
+
+    if (email) {
+      where.email = { contains: email, mode: 'insensitive' };
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+          fan: {
+            select: {
+              nickname: true,
+            },
+          },
+          pointWallet: {
+            select: {
+              balance: true,
+              updatedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: users.map((u) => ({
+        ...u,
+        pointWallet: u.pointWallet
+          ? {
+              balance: u.pointWallet.balance.toString(),
+              updatedAt: u.pointWallet.updatedAt,
+            }
+          : null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
