@@ -169,6 +169,12 @@ router.delete(
 // ============================================
 
 // 브랜드 투표 생성
+// URL 필드: 빈 문자열, undefined, 또는 유효한 URL 모두 허용
+const optionalUrl = z.preprocess(
+  (val) => (val === '' || val === null ? undefined : val),
+  z.string().url().optional()
+);
+
 const createByBrandSchema = z.object({
   title: z.string().min(1, '제목을 입력하세요').max(200),
   question: z.string().min(1, '질문을 입력하세요').max(500),
@@ -178,10 +184,10 @@ const createByBrandSchema = z.object({
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   sponsorContribution: z.number().int().min(0).optional(),
-  sponsorBannerUrl: z.string().url().optional().or(z.literal('')),
-  sponsorLogoUrl: z.string().url().optional().or(z.literal('')),
+  sponsorBannerUrl: optionalUrl,
+  sponsorLogoUrl: optionalUrl,
   sponsorMessage: z.string().max(200).optional(),
-  sponsorLinkUrl: z.string().url().optional().or(z.literal('')),
+  sponsorLinkUrl: optionalUrl,
 });
 
 router.post(
@@ -215,10 +221,10 @@ router.post(
 // 투표 후원
 const sponsorSchema = z.object({
   contributionAmount: z.number().int().min(1, '후원 금액은 1 이상이어야 합니다'),
-  bannerUrl: z.string().url().optional(),
-  logoUrl: z.string().url().optional(),
+  bannerUrl: optionalUrl,
+  logoUrl: optionalUrl,
   message: z.string().max(200).optional(),
-  linkUrl: z.string().url().optional(),
+  linkUrl: optionalUrl,
 });
 
 router.post(
