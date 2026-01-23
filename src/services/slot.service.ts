@@ -419,14 +419,30 @@ export class SlotInstanceService {
         const startPrice = Number(auctionMinBid);
 
         if (slot.auction) {
-          // 기존 경매가 있으면 업데이트 (SCHEDULED 또는 LIVE 상태일 때만)
+          // 기존 경매가 있으면 상태에 따라 처리
           if (slot.auction.status === 'SCHEDULED' || slot.auction.status === 'LIVE') {
+            // 활성 경매는 업데이트
             await tx.auction.update({
               where: { id: slot.auction.id },
               data: {
                 endAt: new Date(auctionEndAt),
                 currentPrice: startPrice,
                 status: 'LIVE', // 즉시 LIVE로 변경
+              },
+            });
+          } else {
+            // ★ 종료/취소/유찰 경매가 있으면 새 경매 생성 (기존 경매는 그대로 둠)
+            await tx.auction.create({
+              data: {
+                slotInstanceId: slotId,
+                startAt: now,
+                endAt: new Date(auctionEndAt),
+                originalEndAt: new Date(auctionEndAt),
+                currentPrice: startPrice,
+                status: 'LIVE',
+                softCloseSec: 120,
+                maxExtensionSec: 600,
+                minBidIncrement: 10000,
               },
             });
           }
