@@ -165,6 +165,50 @@ router.delete(
 );
 
 // ============================================
+// Brand Vote Creation Routes (BRAND 권한 필요)
+// ============================================
+
+// 브랜드 투표 생성
+const createByBrandSchema = z.object({
+  title: z.string().min(1, '제목을 입력하세요').max(200),
+  question: z.string().min(1, '질문을 입력하세요').max(500),
+  options: z.array(z.string()).min(2, '최소 2개 옵션').max(6, '최대 6개 옵션'),
+  entryFeePoints: z.number().int().min(0, '참가비는 0 이상'),
+  winnersCount: z.number().int().min(1, '당첨자 수는 1명 이상'),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  sponsorContribution: z.number().int().min(0).optional(),
+  sponsorBannerUrl: z.string().url().optional().or(z.literal('')),
+  sponsorLogoUrl: z.string().url().optional().or(z.literal('')),
+  sponsorMessage: z.string().max(200).optional(),
+  sponsorLinkUrl: z.string().url().optional().or(z.literal('')),
+});
+
+router.post(
+  '/brand/create',
+  authenticate,
+  authorize('BRAND'),
+  validate(createByBrandSchema),
+  fanVoteController.createByBrand.bind(fanVoteController)
+);
+
+// 브랜드가 만든 투표 목록
+router.get(
+  '/brand/my/events',
+  authenticate,
+  authorize('BRAND'),
+  fanVoteController.getBrandCreatedEvents.bind(fanVoteController)
+);
+
+// 브랜드 투표 제출 (DRAFT -> SUBMITTED)
+router.post(
+  '/brand/:id/submit',
+  authenticate,
+  authorize('BRAND'),
+  fanVoteController.submitBrandVote.bind(fanVoteController)
+);
+
+// ============================================
 // Brand Sponsor Routes (BRAND 권한 필요)
 // ============================================
 

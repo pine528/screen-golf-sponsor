@@ -1006,6 +1006,204 @@ export class FanVoteService {
   // Phase G: 투표 스폰서십
   // ============================================
 
+  // ============================================
+  // Brand Vote Creation
+  // ============================================
+
+  /**
+   * 브랜드가 투표 생성 (DRAFT 상태)
+   */
+  async createByBrand(
+    userId: string,
+    brandId: string,
+    data: {
+      title: string;
+      question: string;
+      options: string[];
+      entryFeePoints: number;
+      winnersCount: number;
+      startsAt: Date;
+      endsAt: Date;
+      sponsorContribution?: number;
+      sponsorBannerUrl?: string;
+      sponsorLogoUrl?: string;
+      sponsorMessage?: string;
+      sponsorLinkUrl?: string;
+    }
+  ) {
+    // 유효성 검사
+    if (data.options.length < 2 || data.options.length > 6) {
+      throw new BadRequestError('옵션은 2개 이상 6개 이하로 입력해주세요');
+    }
+
+    if (data.entryFeePoints < 0) {
+      throw new BadRequestError('참가비는 0 이상이어야 합니다');
+    }
+
+    if (data.winnersCount < 1) {
+      throw new BadRequestError('당첨자 수는 1명 이상이어야 합니다');
+    }
+
+    if (data.startsAt >= data.endsAt) {
+      throw new BadRequestError('종료 시간은 시작 시간보다 늦어야 합니다');
+    }
+
+    // 시스템 설정에서 브랜드 생성비 조회 (없으면 0)
+    const createFeeSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'BRAND_VOTE_CREATE_FEE' },
+    });
+    const createFeePoints = createFeeSetting ? parseInt(createFeeSetting.value) : 0;
+
+    // 총 차감액 = 생성비 + 스폰서 기여금
+    const sponsorContribution = data.sponsorContribution || 0;
+    const totalDeduction = createFeePoints + sponsorContribution;
+
+    // 트랜잭션으로 생성 + 포인트 차감
+    const event = await prisma.$transaction(async (tx) => {
+      // 이벤트 생성
+      const newEvent = await tx.fanVoteEvent.create({
+        data: {
+          creatorUserId: userId,
+          title: data.title,
+          question: data.question,
+          options: data.options,
+          entryFeePoints: data.entryFeePoints,
+          createFeePoints: createFeePoints,
+          winnersCount: data.winnersCount,
+          startsAt: data.startsAt,
+          endsAt: data.endsAt,
+          status: 'DRAFT',
+          // 브랜드 스폰서 정보
+          sponsorBrandId: brandId,
+          sponsorContribution: sponsorContribution,
+          sponsorBannerUrl: data.sponsorBannerUrl,
+          sponsorLogoUrl: data.sponsorLogoUrl,
+          sponsorMessage: data.sponsorMessage,
+          sponsorLinkUrl: data.sponsorLinkUrl,
+        },
+      });
+
+      // 포인트 차감 (생성비 + 스폰서 기여금)
+      if (totalDeduction > 0) {
+        const pointResult = await pointService.adjustPoints(
+          userId,
+          -totalDeduction,
+          'VOTE_CREATE_FEE',
+          'BRAND_VOTE_CREATE',
+          newEvent.id,
+          `브랜드 투표 생성: ${data.title} (생성비 ${createFeePoints}P + 기여금 ${sponsorContribution}P)`
+        );
+
+        if (!pointResult.success && !pointResult.alreadyProcessed) {
+          throw new BadRequestError('포인트가 부족합니다');
+        }
+      }
+
+      // SponsorEngagement 생성 (스폰서 기여금이 있는 경우)
+      if (sponsorContribution > 0) {
+        await tx.sponsorEngagement.create({
+          data: {
+            eventId: newEvent.id,
+            bannerImpressions: 0,
+            bannerClicks: 0,
+            linkClicks: 0,
+          },
+        });
+      }
+
+      return newEvent;
+    });
+
+    return event;
+  }
+
+  /**
+   * 브랜드가 투표 제출 (DRAFT -> SUBMITTED)
+   */
+  async submitBrandVote(userId: string, brandId: string, eventId: string) {
+    const event = await prisma.fanVoteEvent.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
+    }
+
+    if (event.creatorUserId !== userId) {
+      throw new BadRequestError('자신이 만든 투표만 제출할 수 있습니다');
+    }
+
+    if (event.status !== 'DRAFT') {
+      throw new ConflictError('초안 상태의 투표만 제출할 수 있습니다');
+    }
+
+    const updatedEvent = await prisma.fanVoteEvent.update({
+      where: { id: eventId },
+      data: {
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+      },
+    });
+
+    // 관리자에게 알림 전송
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          type: 'FAN_VOTE_SUBMITTED',
+          title: '브랜드 투표 승인 요청',
+          message: `"${event.title}" 브랜드 투표가 승인 대기 중입니다`,
+          data: { eventId: event.id },
+        })),
+      });
+    }
+
+    return updatedEvent;
+  }
+
+  /**
+   * 브랜드가 만든 투표 목록 조회
+   */
+  async getBrandCreatedEvents(
+    userId: string,
+    options: { page?: number; pageSize?: number } = {}
+  ) {
+    const page = options.page || 1;
+    const pageSize = options.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    const [events, total] = await Promise.all([
+      prisma.fanVoteEvent.findMany({
+        where: { creatorUserId: userId },
+        include: {
+          _count: {
+            select: { entries: true },
+          },
+          sponsorEngagement: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.fanVoteEvent.count({ where: { creatorUserId: userId } }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
   /**
    * 브랜드가 투표 후원
    */

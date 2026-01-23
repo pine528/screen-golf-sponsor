@@ -287,6 +287,106 @@ export class FanVoteController {
   }
 
   // ============================================
+  // Brand Vote Creation
+  // ============================================
+
+  /**
+   * POST /api/fan-votes/brand/create
+   * 브랜드가 투표 생성
+   */
+  async createByBrand(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.id;
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const {
+        title,
+        question,
+        options,
+        entryFeePoints,
+        winnersCount,
+        startsAt,
+        endsAt,
+        sponsorContribution,
+        sponsorBannerUrl,
+        sponsorLogoUrl,
+        sponsorMessage,
+        sponsorLinkUrl,
+      } = req.body;
+
+      const event = await fanVoteService.createByBrand(userId, brandId, {
+        title,
+        question,
+        options,
+        entryFeePoints,
+        winnersCount,
+        startsAt: new Date(startsAt),
+        endsAt: new Date(endsAt),
+        sponsorContribution,
+        sponsorBannerUrl,
+        sponsorLogoUrl,
+        sponsorMessage,
+        sponsorLinkUrl,
+      });
+
+      sendSuccess(res, event, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/fan-votes/brand/:id/submit
+   * 브랜드가 투표 제출 (DRAFT -> SUBMITTED)
+   */
+  async submitBrandVote(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const event = await fanVoteService.submitBrandVote(userId, brandId, id);
+      sendSuccess(res, event);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/fan-votes/brand/my/events
+   * 브랜드가 만든 투표 목록
+   */
+  async getBrandCreatedEvents(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.id;
+      const brandId = req.user!.brandId;
+
+      if (!brandId) {
+        res.status(403).json({ success: false, message: '브랜드 계정이 아닙니다' });
+        return;
+      }
+
+      const page = req.query.page ? parseInt(req.query.page as string) : 1;
+      const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 20;
+
+      const result = await fanVoteService.getBrandCreatedEvents(userId, { page, pageSize });
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
   // Phase G: 투표 스폰서십
   // ============================================
 
