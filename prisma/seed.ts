@@ -25,6 +25,26 @@ async function main() {
   });
   console.log('Admin user created:', adminUser.email);
 
+  // Create Platform System User (for fee collection)
+  const platformUser = await prisma.user.upsert({
+    where: { id: 'PLATFORM_SYSTEM' },
+    update: {},
+    create: {
+      id: 'PLATFORM_SYSTEM',
+      email: 'platform@system.internal',
+      passwordHash: '$2b$12$PLATFORM_NOT_FOR_LOGIN_PLACEHOLDER',
+      role: 'ADMIN',
+      isActive: false, // 로그인 불가
+      admin: {
+        create: {
+          name: 'Platform System',
+          department: 'System',
+        },
+      },
+    },
+  });
+  console.log('Platform system user created:', platformUser.id);
+
   // Create Brand User
   const brandPassword = await bcrypt.hash('brand123!', 12);
   const brandUser = await prisma.user.upsert({
