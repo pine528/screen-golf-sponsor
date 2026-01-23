@@ -584,14 +584,6 @@ export class SlotInstanceService {
         throw new ConflictError('Slot already purchased by another buyer');
       }
 
-      // ★ 경매+즉시구매 슬롯인 경우, 활성 경매 취소
-      if (slot.status === 'IN_AUCTION') {
-        await tx.auction.updateMany({
-          where: { slotInstanceId: slotId, status: 'LIVE' },
-          data: { status: 'CANCELLED' },
-        });
-      }
-
       // ★ Phase 9-1.1: frozenAmount 증가 (예약 동결)
       await tx.wallet.update({
         where: { id: brandWallet.id },
@@ -604,18 +596,51 @@ export class SlotInstanceService {
       // ★ Phase 9-1.1: LedgerTx 기록 (감사 목적)
       // 먼저 Contract를 생성해야 refId로 사용 가능하므로 아래에서 처리
 
-      // Create a dummy auction record for contract linkage
       const now = new Date();
-      const auction = await tx.auction.create({
-        data: {
-          slotInstanceId: slotId,
-          startAt: now,
-          endAt: now,
-          originalEndAt: now,
-          status: 'ENDED',
-          currentPrice: Number(buyPrice),
-        },
-      });
+      let auction;
+
+      // ★ 경매+즉시구매 슬롯인 경우, 기존 경매를 ENDED로 변경하고 재사용
+      if (slot.status === 'IN_AUCTION') {
+        // 기존 LIVE 경매를 찾아서 ENDED로 변경
+        const existingAuction = await tx.auction.findFirst({
+          where: { slotInstanceId: slotId, status: 'LIVE' },
+        });
+
+        if (existingAuction) {
+          auction = await tx.auction.update({
+            where: { id: existingAuction.id },
+            data: {
+              status: 'ENDED',
+              endAt: now,
+              currentPrice: Number(buyPrice),
+            },
+          });
+        } else {
+          // LIVE 경매가 없으면 새로 생성
+          auction = await tx.auction.create({
+            data: {
+              slotInstanceId: slotId,
+              startAt: now,
+              endAt: now,
+              originalEndAt: now,
+              status: 'ENDED',
+              currentPrice: Number(buyPrice),
+            },
+          });
+        }
+      } else {
+        // 즉시구매만 설정된 슬롯: 더미 경매 생성
+        auction = await tx.auction.create({
+          data: {
+            slotInstanceId: slotId,
+            startAt: now,
+            endAt: now,
+            originalEndAt: now,
+            status: 'ENDED',
+            currentPrice: Number(buyPrice),
+          },
+        });
+      }
 
       // ★ Phase 9-1.1: reservedUntil = now + 24시간
       const reservedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
