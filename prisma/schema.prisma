@@ -318,6 +318,8 @@ model SlotTemplate {
   categoryExclusivityGroup String?      @map("category_exclusivity_group")
   defaultReservePrice     Int           @default(100000) @map("default_reserve_price")
   eventOverrideAllowed    Boolean       @default(true) @map("event_override_allowed")
+  duration                Int?          @map("duration")                  // 노출 시간 (초)
+  estimatedImpressions    Int?          @map("estimated_impressions")     // 예상 노출 (회)
   isActive                Boolean       @default(true) @map("is_active")
   createdAt               DateTime      @default(now()) @map("created_at")
   updatedAt               DateTime      @updatedAt @map("updated_at")
