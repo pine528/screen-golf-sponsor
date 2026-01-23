@@ -359,6 +359,23 @@ export class FanVoteService {
       throw new BadRequestError('환원 비율은 1% 이상 100% 이하여야 합니다');
     }
 
+    // 승인 시 필요한 포인트 미리 계산 (Seed + 개설 수수료)
+    if (creatorPrizePool > 0) {
+      const openFeeResult = await feePolicyService.calculateOpenFee(new Prisma.Decimal(creatorPrizePool));
+      const requiredBalance = new Prisma.Decimal(creatorPrizePool).plus(openFeeResult.fee);
+
+      const wallet = await prisma.pointWallet.findUnique({
+        where: { userId: data.creatorUserId },
+      });
+      const currentBalance = wallet?.balance || new Prisma.Decimal(0);
+
+      if (currentBalance.lessThan(requiredBalance)) {
+        throw new BadRequestError(
+          `포인트가 부족합니다. 필요: ${requiredBalance}P (상금 ${creatorPrizePool}P + 수수료 ${openFeeResult.fee}P), 현재: ${currentBalance}P`
+        );
+      }
+    }
+
     const event = await prisma.fanVoteEvent.create({
       data: {
         creatorUserId: data.creatorUserId,
@@ -604,6 +621,23 @@ export class FanVoteService {
 
     if (distributionPercent < 1 || distributionPercent > 100) {
       throw new BadRequestError('환원 비율은 1% 이상 100% 이하여야 합니다');
+    }
+
+    // 승인 시 필요한 포인트 미리 계산 (Seed + 개설 수수료)
+    if (creatorPrizePool > 0) {
+      const openFeeResult = await feePolicyService.calculateOpenFee(new Prisma.Decimal(creatorPrizePool));
+      const requiredBalance = new Prisma.Decimal(creatorPrizePool).plus(openFeeResult.fee);
+
+      const wallet = await prisma.pointWallet.findUnique({
+        where: { userId },
+      });
+      const currentBalance = wallet?.balance || new Prisma.Decimal(0);
+
+      if (currentBalance.lessThan(requiredBalance)) {
+        throw new BadRequestError(
+          `포인트가 부족합니다. 필요: ${requiredBalance}P (상금 ${creatorPrizePool}P + 수수료 ${openFeeResult.fee}P), 현재: ${currentBalance}P`
+        );
+      }
     }
 
     // 시스템 설정에서 생성비 조회 (없으면 0)
@@ -1409,13 +1443,30 @@ export class FanVoteService {
       throw new BadRequestError('환원 비율은 1% 이상 100% 이하여야 합니다');
     }
 
+    // 승인 시 필요한 포인트 미리 계산 (Seed + 개설 수수료)
+    if (creatorPrizePool > 0) {
+      const openFeeResult = await feePolicyService.calculateOpenFee(new Prisma.Decimal(creatorPrizePool));
+      const requiredBalance = new Prisma.Decimal(creatorPrizePool).plus(openFeeResult.fee);
+
+      const wallet = await prisma.pointWallet.findUnique({
+        where: { userId },
+      });
+      const currentBalance = wallet?.balance || new Prisma.Decimal(0);
+
+      if (currentBalance.lessThan(requiredBalance)) {
+        throw new BadRequestError(
+          `포인트가 부족합니다. 필요: ${requiredBalance}P (상금 ${creatorPrizePool}P + 수수료 ${openFeeResult.fee}P), 현재: ${currentBalance}P`
+        );
+      }
+    }
+
     // 시스템 설정에서 브랜드 생성비 조회 (없으면 0)
     const createFeeSetting = await prisma.systemSetting.findUnique({
       where: { key: 'BRAND_VOTE_CREATE_FEE' },
     });
     const createFeePoints = createFeeSetting ? parseInt(createFeeSetting.value) : 0;
 
-    // 총 차감액 = 생성비 + 스폰서 기여금 (생성자 상금은 정산 시 차감)
+    // 총 차감액 = 생성비 + 스폰서 기여금 (생성자 상금은 승인 시 차감)
     const sponsorContribution = data.sponsorContribution || 0;
     const totalDeduction = createFeePoints + sponsorContribution;
 
@@ -1530,6 +1581,23 @@ export class FanVoteService {
 
     if (distributionPercent < 1 || distributionPercent > 100) {
       throw new BadRequestError('환원 비율은 1% 이상 100% 이하여야 합니다');
+    }
+
+    // 승인 시 필요한 포인트 미리 계산 (Seed + 개설 수수료)
+    if (creatorPrizePool > 0) {
+      const openFeeResult = await feePolicyService.calculateOpenFee(new Prisma.Decimal(creatorPrizePool));
+      const requiredBalance = new Prisma.Decimal(creatorPrizePool).plus(openFeeResult.fee);
+
+      const wallet = await prisma.pointWallet.findUnique({
+        where: { userId },
+      });
+      const currentBalance = wallet?.balance || new Prisma.Decimal(0);
+
+      if (currentBalance.lessThan(requiredBalance)) {
+        throw new BadRequestError(
+          `포인트가 부족합니다. 필요: ${requiredBalance}P (상금 ${creatorPrizePool}P + 수수료 ${openFeeResult.fee}P), 현재: ${currentBalance}P`
+        );
+      }
     }
 
     // 시스템 설정에서 선수 생성비 조회 (없으면 0)
