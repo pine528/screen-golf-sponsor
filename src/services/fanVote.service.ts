@@ -549,8 +549,8 @@ export class FanVoteService {
           tx,
           event.creatorUserId,
           totalRefund,
-          'VOTE_REFUND',
-          'FAN_VOTE',
+          'ADMIN_GRANT',  // 관리자 환불 처리
+          'FAN_VOTE_DELETE',
           `${eventId}_refund`,
           `투표 삭제 환불: ${event.title} (상금 ${seedPoints}P + 수수료 ${openFeeCharged}P)`
         );
@@ -561,8 +561,8 @@ export class FanVoteService {
             tx,
             PLATFORM_USER_ID,
             openFeeCharged.negated(),
-            'VOTE_REFUND',
-            'FAN_VOTE',
+            'ADMIN_GRANT',  // 관리자 환불 처리
+            'FAN_VOTE_DELETE',
             `${eventId}_platform_refund`,
             `투표 삭제 수수료 반환: ${event.title} (${openFeeCharged}P)`
           );
