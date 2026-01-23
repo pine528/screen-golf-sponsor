@@ -724,13 +724,16 @@ export class FanVoteService {
     });
 
     if (admins.length > 0) {
+      // 생성자 역할에 따른 레이블
+      const roleLabel = event.creatorRole === 'ATHLETE' ? '선수' :
+                        event.creatorRole === 'BRAND' ? '브랜드' : '팬';
       await prisma.notification.createMany({
         data: admins.map((admin) => ({
           userId: admin.id,
           type: 'FAN_VOTE_SUBMITTED',
-          title: '팬 투표 승인 요청',
-          message: `"${event.title}" 투표가 승인 대기 중입니다`,
-          data: { eventId: event.id },
+          title: `${roleLabel} 투표 승인 요청`,
+          message: `"${event.title}" ${roleLabel} 투표가 승인 대기 중입니다`,
+          data: { eventId: event.id, creatorRole: event.creatorRole },
         })),
       });
     }

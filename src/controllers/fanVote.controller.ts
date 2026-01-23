@@ -138,22 +138,53 @@ export class FanVoteController {
   /**
    * POST /api/fan-votes/create
    * 사용자가 투표 생성 (FAN, ATHLETE, BRAND)
+   * 역할에 따라 적절한 서비스 메서드 호출
    */
   async createByFan(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
+      const userRole = req.user!.role;
       const { title, question, options, entryFeePoints, winnersCount, startsAt, endsAt, creatorPrizePool } = req.body;
 
-      const event = await fanVoteService.createByFan(userId, {
-        title,
-        question,
-        options,
-        entryFeePoints,
-        winnersCount,
-        startsAt: new Date(startsAt),
-        endsAt: new Date(endsAt),
-        creatorPrizePool: creatorPrizePool || 0, // Seed 포인트
-      });
+      let event;
+
+      if (userRole === 'ATHLETE' && req.user!.athleteId) {
+        // 선수가 생성
+        event = await fanVoteService.createByAthlete(userId, req.user!.athleteId, {
+          title,
+          question,
+          options,
+          entryFeePoints,
+          winnersCount,
+          startsAt: new Date(startsAt),
+          endsAt: new Date(endsAt),
+          creatorPrizePool: creatorPrizePool || 0,
+        });
+      } else if (userRole === 'BRAND' && req.user!.brandId) {
+        // 브랜드가 생성
+        event = await fanVoteService.createByBrand(userId, req.user!.brandId, {
+          title,
+          question,
+          options,
+          entryFeePoints,
+          winnersCount,
+          startsAt: new Date(startsAt),
+          endsAt: new Date(endsAt),
+          creatorPrizePool: creatorPrizePool || 0,
+        });
+      } else {
+        // 팬이 생성 (기본)
+        event = await fanVoteService.createByFan(userId, {
+          title,
+          question,
+          options,
+          entryFeePoints,
+          winnersCount,
+          startsAt: new Date(startsAt),
+          endsAt: new Date(endsAt),
+          creatorPrizePool: creatorPrizePool || 0,
+        });
+      }
 
       sendSuccess(res, event, 201);
     } catch (error) {
@@ -163,14 +194,28 @@ export class FanVoteController {
 
   /**
    * POST /api/fan-votes/:id/submit
-   * 팬이 투표 제출 (DRAFT -> SUBMITTED)
+   * 사용자가 투표 제출 (DRAFT -> SUBMITTED)
+   * 역할에 따라 적절한 서비스 메서드 호출
    */
   async submitFanVote(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
+      const userRole = req.user!.role;
 
-      const event = await fanVoteService.submitFanVote(userId, id);
+      let event;
+
+      if (userRole === 'ATHLETE' && req.user!.athleteId) {
+        // 선수가 제출
+        event = await fanVoteService.submitAthleteVote(userId, req.user!.athleteId, id);
+      } else if (userRole === 'BRAND' && req.user!.brandId) {
+        // 브랜드가 제출
+        event = await fanVoteService.submitBrandVote(userId, req.user!.brandId, id);
+      } else {
+        // 팬이 제출 (기본)
+        event = await fanVoteService.submitFanVote(userId, id);
+      }
+
       sendSuccess(res, event);
     } catch (error) {
       next(error);
