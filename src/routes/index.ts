@@ -31,6 +31,7 @@ import seasonRoutes from './season.routes';
 import brandBillingRoutes from './brand.billing.routes';
 import adminTaxInvoiceRoutes from './admin.taxInvoice.routes';
 import { feeInfoRouter, adminFeePolicyRouter } from './feePolicy.routes';
+import pointTopupRoutes from './pointTopup.routes';
 
 const router = Router();
 
@@ -68,6 +69,7 @@ router.use('/brand/billing', brandBillingRoutes);
 router.use('/payments/webhook', webhookRoutes);
 router.use('/admin/finance/topups', adminTopupRoutes);
 router.use('/admin/finance/tax-invoices', adminTaxInvoiceRoutes);
+router.use('/point-topups', pointTopupRoutes);
 router.use('/admin/fee-policies', adminFeePolicyRouter);
 router.use('/admin/reconciliation', adminReconciliationRoutes);
 router.use('/faq', faqRoutes);

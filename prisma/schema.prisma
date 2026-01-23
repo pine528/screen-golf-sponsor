@@ -52,6 +52,7 @@ model User {
   redemptionOrders RedemptionOrder[]
   pointTransfersFrom PointTransfer[] @relation("PointTransferFrom")
   pointTransfersTo   PointTransfer[] @relation("PointTransferTo")
+  pointTopups        PointTopup[]
 
   @@map("users")
 }
@@ -929,6 +930,7 @@ enum PointTxReason {
   POINT_TRANSFER_SEND     // 포인트 전송 (차감)
   POINT_TRANSFER_RECEIVE  // 포인트 수신 (적립)
   POINT_TOPUP             // 포인트 충전
+  POINT_TOPUP_REFUND      // 포인트 충전 환불
 }
 
 model PointWallet {
@@ -960,6 +962,54 @@ model PointLedgerTx {
   @@unique([userId, reason, refType, refId], name: "unique_point_tx")
   @@index([userId, createdAt])
   @@map("point_ledger_txs")
+}
+
+// ============================================
+// Point Topup (포인트 충전 - 현금 결제)
+// ============================================
+
+enum PointTopupStatus {
+  CREATED      // 결제 세션 생성됨
+  PENDING      // PG 결제 진행 중
+  PAID         // 결제 완료, 포인트 지급됨
+  FAILED       // 결제 실패
+  CANCELED     // 사용자 취소
+  REFUNDED     // 환불 완료
+}
+
+model PointTopup {
+  id                  String              @id @default(uuid())
+  userId              String              @map("user_id")
+  user                User                @relation(fields: [userId], references: [id])
+
+  // 결제 정보
+  amount              Decimal             @db.Decimal(18, 0)  // 결제 금액 (원)
+  pointsToGrant       Decimal             @map("points_to_grant") @db.Decimal(18, 0)  // 지급 포인트
+  currency            String              @default("KRW")
+  status              PointTopupStatus    @default(CREATED)
+
+  // PG 연동 정보
+  provider            PaymentProvider     @default(TOSS)
+  providerPaymentKey  String?             @unique @map("provider_payment_key")
+  providerOrderId     String              @unique @map("provider_order_id")
+
+  // 결제 URL
+  checkoutUrl         String?             @map("checkout_url")
+  checkoutExpiresAt   DateTime?           @map("checkout_expires_at")
+
+  // 완료 정보
+  paidAt              DateTime?           @map("paid_at")
+  failedAt            DateTime?           @map("failed_at")
+  failReason          String?             @map("fail_reason")
+  refundedAt          DateTime?           @map("refunded_at")
+  refundReason        String?             @map("refund_reason")
+
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@index([providerOrderId])
+  @@map("point_topups")
 }
 
 // Legacy model - to be migrated

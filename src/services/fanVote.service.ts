@@ -926,27 +926,25 @@ export class FanVoteService {
     const updatedEvent = await prisma.$transaction(async (tx) => {
       // 개설 수수료 차감 (seedPoints > 0인 경우만)
       if (seedPoints.greaterThan(0) && openFee.greaterThan(0)) {
-        // 개설자에서 수수료 차감
-        const deductResult = await pointService.adjustPoints(
+        // 개설자에서 수수료 차감 (adjustPointsWithTx 사용 - 같은 트랜잭션 내)
+        await pointService.adjustPointsWithTx(
+          tx,
           event.creatorUserId,
           openFee.negated(),
           'VOTE_OPEN_FEE',
           'FAN_VOTE',
-          eventId,
+          `${eventId}_creator`,
           `팬 투표 개설 수수료: ${event.title} (${openFee}P)`
         );
 
-        if (!deductResult.success && !deductResult.alreadyProcessed) {
-          throw new BadRequestError('개설 수수료 차감에 실패했습니다');
-        }
-
-        // 플랫폼에 수수료 적립
-        await pointService.adjustPoints(
+        // 플랫폼에 수수료 적립 (adjustPointsWithTx 사용 - 같은 트랜잭션 내)
+        await pointService.adjustPointsWithTx(
+          tx,
           PLATFORM_USER_ID,
           openFee,
           'VOTE_OPEN_FEE',
           'FAN_VOTE',
-          eventId,
+          `${eventId}_platform`,
           `팬 투표 개설 수수료 수입: ${event.title} (${openFee}P)`
         );
       }
