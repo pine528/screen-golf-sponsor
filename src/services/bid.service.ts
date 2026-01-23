@@ -365,9 +365,9 @@ export class BidService {
     }
 
     if (bids.length === 1) {
-      // Single bidder - current price is their proxy (reserve or min bid)
+      // Single bidder - current price is their max bid amount
       return {
-        newCurrentPrice: bids[0].currentProxy,
+        newCurrentPrice: bids[0].maxBid,
         winningBidId: bids[0].id,
       };
     }
