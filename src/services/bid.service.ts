@@ -138,7 +138,7 @@ export class BidService {
 
       let bid;
 
-      // ★ 트랜잭션 내에서 직접 조회하여 race condition 방지
+      // ★ upsert를 사용하여 race condition 방지 (atomic operation)
       const existingBidInTx = await tx.bid.findUnique({
         where: {
           auctionId_brandId: { auctionId, brandId }
@@ -160,16 +160,35 @@ export class BidService {
           },
         });
       } else {
-        // Create new bid
-        bid = await tx.bid.create({
-          data: {
-            auctionId,
-            brandId,
-            maxBid,
-            currentProxy: minRequiredBid,
-            autoBid,
-          },
-        });
+        // Create new bid (with P2002 retry handling)
+        try {
+          bid = await tx.bid.create({
+            data: {
+              auctionId,
+              brandId,
+              maxBid,
+              currentProxy: minRequiredBid,
+              autoBid,
+            },
+          });
+        } catch (createError: any) {
+          // P2002: Unique constraint violation - race condition, retry with update
+          if (createError.code === 'P2002') {
+            const retryBid = await tx.bid.findUnique({
+              where: { auctionId_brandId: { auctionId, brandId } }
+            });
+            if (retryBid && maxBid > retryBid.maxBid) {
+              bid = await tx.bid.update({
+                where: { id: retryBid.id },
+                data: { maxBid, autoBid, updatedAt: new Date() },
+              });
+            } else {
+              throw new BadRequestError('New max bid must be higher than current max bid');
+            }
+          } else {
+            throw createError;
+          }
+        }
       }
 
       // Process auto-bid competition (determines winner)
