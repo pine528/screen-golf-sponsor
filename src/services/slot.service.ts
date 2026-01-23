@@ -249,8 +249,9 @@ export class SlotInstanceService {
     minPrice?: number;
     maxPrice?: number;
   }) {
+    // ★ OPEN (즉시구매만/판매모드 미설정) + IN_AUCTION (경매 활성화) 모두 조회
     const where: any = {
-      status: 'OPEN',
+      status: { in: ['OPEN', 'IN_AUCTION'] },
     };
 
     if (filters?.eventId) where.eventId = filters.eventId;
@@ -278,6 +279,19 @@ export class SlotInstanceService {
           },
         },
         slotTemplate: true,
+        // ★ 경매 정보 포함 (인벤토리에서 현재가/입찰수 표시용)
+        auction: {
+          select: {
+            id: true,
+            status: true,
+            currentPrice: true,
+            startAt: true,
+            endAt: true,
+            _count: {
+              select: { bids: true },
+            },
+          },
+        },
       },
       orderBy: [
         { event: { dateStart: 'asc' } },
