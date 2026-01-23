@@ -139,57 +139,36 @@ export class BidService {
       let bid;
 
       // ★ upsert를 사용하여 race condition 방지 (atomic operation)
+      // 먼저 기존 입찰 확인 (maxBid 검증용)
       const existingBidInTx = await tx.bid.findUnique({
         where: {
           auctionId_brandId: { auctionId, brandId }
         }
       });
 
-      if (existingBidInTx) {
-        // Update existing bid
-        if (maxBid <= existingBidInTx.maxBid) {
-          throw new BadRequestError('New max bid must be higher than current max bid');
-        }
-
-        bid = await tx.bid.update({
-          where: { id: existingBidInTx.id },
-          data: {
-            maxBid,
-            autoBid,
-            updatedAt: new Date(),
-          },
-        });
-      } else {
-        // Create new bid (with P2002 retry handling)
-        try {
-          bid = await tx.bid.create({
-            data: {
-              auctionId,
-              brandId,
-              maxBid,
-              currentProxy: minRequiredBid,
-              autoBid,
-            },
-          });
-        } catch (createError: any) {
-          // P2002: Unique constraint violation - race condition, retry with update
-          if (createError.code === 'P2002') {
-            const retryBid = await tx.bid.findUnique({
-              where: { auctionId_brandId: { auctionId, brandId } }
-            });
-            if (retryBid && maxBid > retryBid.maxBid) {
-              bid = await tx.bid.update({
-                where: { id: retryBid.id },
-                data: { maxBid, autoBid, updatedAt: new Date() },
-              });
-            } else {
-              throw new BadRequestError('New max bid must be higher than current max bid');
-            }
-          } else {
-            throw createError;
-          }
-        }
+      // 기존 입찰이 있고 새 금액이 더 낮으면 거부
+      if (existingBidInTx && maxBid <= existingBidInTx.maxBid) {
+        throw new BadRequestError('New max bid must be higher than current max bid');
       }
+
+      // upsert로 atomic하게 생성 또는 업데이트
+      bid = await tx.bid.upsert({
+        where: {
+          auctionId_brandId: { auctionId, brandId }
+        },
+        update: {
+          maxBid,
+          autoBid,
+          updatedAt: new Date(),
+        },
+        create: {
+          auctionId,
+          brandId,
+          maxBid,
+          currentProxy: minRequiredBid,
+          autoBid,
+        },
+      });
 
       // Process auto-bid competition (determines winner)
       const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
