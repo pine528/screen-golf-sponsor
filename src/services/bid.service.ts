@@ -138,7 +138,6 @@ export class BidService {
 
       let bid;
 
-      // ★ upsert를 사용하여 race condition 방지 (atomic operation)
       // 먼저 기존 입찰 확인 (maxBid 검증용)
       const existingBidInTx = await tx.bid.findUnique({
         where: {
@@ -154,55 +153,31 @@ export class BidService {
         throw new BadRequestError('New max bid must be higher than current max bid');
       }
 
-      // 기존 입찰이 있으면 UPDATE, 없으면 CREATE (upsert 대신 명시적 분기)
-      try {
-        if (existingBidInTx) {
-          console.log(`[BidService] Updating existing bid ${existingBidInTx.id}`);
-          bid = await tx.bid.update({
-            where: { id: existingBidInTx.id },
-            data: {
-              maxBid,
-              autoBid,
-              updatedAt: new Date(),
-            },
-          });
-        } else {
-          console.log(`[BidService] Creating new bid`);
-          bid = await tx.bid.create({
-            data: {
-              auctionId,
-              brandId,
-              maxBid,
-              currentProxy: minRequiredBid,
-              autoBid,
-            },
-          });
-        }
-        console.log(`[BidService] Bid operation successful: ${bid.id}`);
-      } catch (bidError: any) {
-        console.error(`[BidService] Bid operation failed:`, bidError);
-        // P2002 발생 시 다시 찾아서 업데이트 시도
-        if (bidError.code === 'P2002') {
-          console.log(`[BidService] P2002 detected, retrying with findUnique + update`);
-          const retryBid = await tx.bid.findUnique({
-            where: { auctionId_brandId: { auctionId, brandId } }
-          });
-          if (retryBid) {
-            if (maxBid <= retryBid.maxBid) {
-              throw new BadRequestError('New max bid must be higher than current max bid');
-            }
-            bid = await tx.bid.update({
-              where: { id: retryBid.id },
-              data: { maxBid, autoBid, updatedAt: new Date() },
-            });
-            console.log(`[BidService] Retry successful: ${bid.id}`);
-          } else {
-            throw bidError;
-          }
-        } else {
-          throw bidError;
-        }
+      // ★ PostgreSQL 네이티브 UPSERT 사용 (INSERT ON CONFLICT)
+      // Prisma upsert 대신 raw SQL로 atomic하게 처리
+      const bidId = existingBidInTx?.id || crypto.randomUUID();
+      const now = new Date();
+
+      await tx.$executeRaw`
+        INSERT INTO bids (id, auction_id, brand_id, max_bid, current_proxy, auto_bid, created_at, updated_at)
+        VALUES (${bidId}, ${auctionId}, ${brandId}, ${maxBid}, ${minRequiredBid}, ${autoBid}, ${now}, ${now})
+        ON CONFLICT (auction_id, brand_id)
+        DO UPDATE SET
+          max_bid = ${maxBid},
+          auto_bid = ${autoBid},
+          updated_at = ${now}
+      `;
+
+      // 생성/수정된 bid 조회
+      bid = await tx.bid.findUnique({
+        where: { auctionId_brandId: { auctionId, brandId } }
+      });
+
+      if (!bid) {
+        throw new BadRequestError('Failed to create or update bid');
       }
+
+      console.log(`[BidService] Bid upsert successful: ${bid.id}`);
 
       // Process auto-bid competition (determines winner)
       const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
