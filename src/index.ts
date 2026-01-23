@@ -50,6 +50,9 @@ if (config.nodeEnv === 'production') {
 const app = express();
 const httpServer = createServer(app);
 
+// Trust proxy (Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Initialize Socket.io
 socketService.initialize(httpServer);
 
