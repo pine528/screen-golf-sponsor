@@ -50,6 +50,8 @@ model User {
   pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
   fanVoteWins    FanVoteWinner[]
   redemptionOrders RedemptionOrder[]
+  pointTransfersFrom PointTransfer[] @relation("PointTransferFrom")
+  pointTransfersTo   PointTransfer[] @relation("PointTransferTo")
 
   @@map("users")
 }
@@ -872,6 +874,42 @@ model AthleteVotePoint {
 }
 
 // ============================================
+// Fee Policy (수수료 정책 관리)
+// ============================================
+
+enum FeePolicyType {
+  FAN_VOTE_OPEN     // 개설 수수료 (Seed의 2%)
+  FAN_VOTE_ENTRY    // 참여 수수료 (Entry의 10%)
+  FAN_VOTE_SETTLE   // 정산 수수료 (상금풀의 2%)
+}
+
+model FeePolicy {
+  id                    String          @id @default(uuid())
+  type                  FeePolicyType
+
+  // 수수료 계산 파라미터
+  ratePercent           Decimal         @map("rate_percent") @db.Decimal(5, 4)   // 예: 0.0200 = 2%
+  minAmount             Decimal         @map("min_amount") @db.Decimal(18, 0)    // 최소 금액
+  maxAmount             Decimal         @map("max_amount") @db.Decimal(18, 0)    // 최대 금액
+
+  // Entry Fee 전용: 플랫폼/개설자 배분율
+  platformSharePercent  Decimal?        @map("platform_share_percent") @db.Decimal(5, 4)  // 0.7000 = 70%
+  creatorSharePercent   Decimal?        @map("creator_share_percent") @db.Decimal(5, 4)   // 0.3000 = 30%
+
+  isActive              Boolean         @default(true) @map("is_active")
+  effectiveFrom         DateTime        @map("effective_from")
+  effectiveTo           DateTime?       @map("effective_to")
+  description           String?
+
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  @@unique([type, effectiveFrom])
+  @@index([type, isActive, effectiveFrom])
+  @@map("fee_policies")
+}
+
+// ============================================
 // Point System (원장 기반 포인트 시스템)
 // ============================================
 
@@ -881,8 +919,16 @@ enum PointTxReason {
   VOTE_WIN_PAYOUT
   VOTE_CREATE_FEE
   VOTE_POT_REMAINDER
+  VOTE_CREATOR_PRIZE      // 생성자 상금 차감 (정산 시)
+  VOTE_OPEN_FEE           // 개설 수수료 (Seed의 2%)
+  VOTE_ENTRY_PLATFORM     // 참여 수수료 - 플랫폼 몫 (70%)
+  VOTE_ENTRY_CREATOR      // 참여 수수료 - 개설자 리워드 (30%)
+  VOTE_SETTLEMENT_FEE     // 정산 수수료 (상금풀의 2%)
   REDEEM_GOODS
   REDEEM_CANCEL_REFUND
+  POINT_TRANSFER_SEND     // 포인트 전송 (차감)
+  POINT_TRANSFER_RECEIVE  // 포인트 수신 (적립)
+  POINT_TOPUP             // 포인트 충전
 }
 
 model PointWallet {
@@ -962,6 +1008,15 @@ model FanVoteEvent {
   approvedAt          DateTime?       @map("approved_at")
   settledAt           DateTime?       @map("settled_at")
 
+  // 생성자 역할 및 상금 설정
+  creatorRole         String          @default("FAN") @map("creator_role")  // FAN, BRAND, ATHLETE, ADMIN
+  creatorPrizePool    Decimal         @default(0) @map("creator_prize_pool") @db.Decimal(18, 0)  // 생성자가 거는 상금 (= Seed)
+  distributionPercent Int             @default(100) @map("distribution_percent")  // 환원 비율 (1-100%)
+
+  // v1.0 수수료 체계: 개설 수수료
+  openFeeCharged      Decimal?        @map("open_fee_charged") @db.Decimal(18, 0)  // 개설 수수료 (차감됨)
+  openFeeChargedAt    DateTime?       @map("open_fee_charged_at")  // 개설 수수료 차감 시점
+
   // Phase G: Sponsor fields
   sponsorBrandId      String?         @map("sponsor_brand_id")
   sponsorContribution Decimal?        @map("sponsor_contribution") @db.Decimal(18, 0)
@@ -1004,6 +1059,14 @@ model FanVoteEntry {
   userId          String          @map("user_id")
   optionIndex     Int             @map("option_index")
   paidPoints      Decimal         @map("paid_points") @db.Decimal(18, 0)
+
+  // v1.0 수수료 분해 필드
+  grossEntry      Decimal?        @map("gross_entry") @db.Decimal(18, 0)       // 총 참여비 (= paidPoints)
+  entryDeduction  Decimal?        @map("entry_deduction") @db.Decimal(18, 0)   // 공제액 (10%)
+  platformFee     Decimal?        @map("platform_fee") @db.Decimal(18, 0)      // 플랫폼 몫 (70%)
+  creatorReward   Decimal?        @map("creator_reward") @db.Decimal(18, 0)    // 개설자 몫 (30%)
+  netToPool       Decimal?        @map("net_to_pool") @db.Decimal(18, 0)       // 상금풀 적립 (90%)
+
   createdAt       DateTime        @default(now()) @map("created_at")
 
   event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -1025,6 +1088,18 @@ model FanVoteSettlement {
   payoutEach      Decimal         @map("payout_each") @db.Decimal(18, 0)
   remainder       Decimal         @db.Decimal(18, 0)
   decidedByAdminId String         @map("decided_by_admin_id")
+
+  // v1.0 정산 상세 내역
+  totalEntryFees        Decimal?  @map("total_entry_fees") @db.Decimal(18, 0)         // 참여비 총액
+  totalEntryDeductions  Decimal?  @map("total_entry_deductions") @db.Decimal(18, 0)   // 참여 수수료 총액
+  seedPoints            Decimal?  @map("seed_points") @db.Decimal(18, 0)              // Seed (개설자 상금)
+  netPoolFromEntries    Decimal?  @map("net_pool_from_entries") @db.Decimal(18, 0)    // 참여자 기여 (90%)
+  grossPool             Decimal?  @map("gross_pool") @db.Decimal(18, 0)               // 총 상금풀 (Seed + 참여자기여)
+  settlementFee         Decimal?  @map("settlement_fee") @db.Decimal(18, 0)           // 정산 수수료 (2%)
+  winnerPayout          Decimal?  @map("winner_payout") @db.Decimal(18, 0)            // 1등 지급 총액
+  totalPlatformRevenue  Decimal?  @map("total_platform_revenue") @db.Decimal(18, 0)   // 플랫폼 총 수익
+  totalCreatorReward    Decimal?  @map("total_creator_reward") @db.Decimal(18, 0)     // 개설자 총 리워드
+
   createdAt       DateTime        @default(now()) @map("created_at")
 
   event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -2028,4 +2103,24 @@ model TaxInvoiceRequest {
 
   @@index([status, requestedAt])
   @@map("tax_invoice_requests")
+}
+
+// ============================================
+// Point Transfer (포인트 전송)
+// ============================================
+
+model PointTransfer {
+  id            String   @id @default(uuid())
+  fromUserId    String   @map("from_user_id")
+  toUserId      String   @map("to_user_id")
+  amount        Decimal  @db.Decimal(18, 0)
+  message       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  fromUser      User     @relation("PointTransferFrom", fields: [fromUserId], references: [id])
+  toUser        User     @relation("PointTransferTo", fields: [toUserId], references: [id])
+
+  @@index([fromUserId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("point_transfers")
 }

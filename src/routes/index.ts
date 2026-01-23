@@ -30,6 +30,7 @@ import exposureRoutes from './exposure.routes';
 import seasonRoutes from './season.routes';
 import brandBillingRoutes from './brand.billing.routes';
 import adminTaxInvoiceRoutes from './admin.taxInvoice.routes';
+import { feeInfoRouter, adminFeePolicyRouter } from './feePolicy.routes';
 
 const router = Router();
 
@@ -59,6 +60,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/fan', fanRoutes);
 router.use('/points', pointRoutes);
 router.use('/fan-votes', fanVoteRoutes);
+router.use('/fan-votes/fee', feeInfoRouter);
 router.use('/shop', shopRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/brand/topups', brandTopupRoutes);
@@ -66,6 +68,7 @@ router.use('/brand/billing', brandBillingRoutes);
 router.use('/payments/webhook', webhookRoutes);
 router.use('/admin/finance/topups', adminTopupRoutes);
 router.use('/admin/finance/tax-invoices', adminTaxInvoiceRoutes);
+router.use('/admin/fee-policies', adminFeePolicyRouter);
 router.use('/admin/reconciliation', adminReconciliationRoutes);
 router.use('/faq', faqRoutes);
 router.use('/admin/penalties', adminPenaltyRoutes);
