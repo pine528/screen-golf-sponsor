@@ -137,12 +137,12 @@ export class FanVoteController {
 
   /**
    * POST /api/fan-votes/create
-   * 팬이 투표 생성
+   * 사용자가 투표 생성 (FAN, ATHLETE, BRAND)
    */
   async createByFan(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { title, question, options, entryFeePoints, winnersCount, startsAt, endsAt } = req.body;
+      const { title, question, options, entryFeePoints, winnersCount, startsAt, endsAt, creatorPrizePool } = req.body;
 
       const event = await fanVoteService.createByFan(userId, {
         title,
@@ -152,6 +152,7 @@ export class FanVoteController {
         winnersCount,
         startsAt: new Date(startsAt),
         endsAt: new Date(endsAt),
+        creatorPrizePool: creatorPrizePool || 0, // Seed 포인트
       });
 
       sendSuccess(res, event, 201);

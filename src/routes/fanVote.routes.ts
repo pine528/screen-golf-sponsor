@@ -19,11 +19,11 @@ router.get('/active', fanVoteController.listActive.bind(fanVoteController));
 router.get('/ended', fanVoteController.listEnded.bind(fanVoteController));
 
 // ============================================
-// Fan Routes (FAN 권한 필요)
+// User Routes (FAN, ATHLETE, BRAND 모두 사용 가능)
 // ============================================
 
-// 팬 투표 생성 (FAN)
-const createByFanSchema = z.object({
+// 투표 생성 (FAN, ATHLETE, BRAND)
+const createByUserSchema = z.object({
   title: z.string().min(1, '제목을 입력하세요').max(200),
   question: z.string().min(1, '질문을 입력하세요').max(500),
   options: z.array(z.string()).min(2, '최소 2개 옵션').max(6, '최대 6개 옵션'),
@@ -31,41 +31,42 @@ const createByFanSchema = z.object({
   winnersCount: z.number().int().min(1, '당첨자 수는 1명 이상'),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
+  creatorPrizePool: z.number().int().min(0).optional(), // Seed 포인트
 });
 
 router.post(
   '/create',
   authenticate,
-  requireRole('FAN'),
-  validate(createByFanSchema),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
+  validate(createByUserSchema),
   fanVoteController.createByFan.bind(fanVoteController)
 );
 
-// 내가 만든 투표 목록 (FAN)
+// 내가 만든 투표 목록 (FAN, ATHLETE, BRAND)
 router.get(
   '/my/events',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   fanVoteController.getMyCreatedEvents.bind(fanVoteController)
 );
 
-// 내 참여 내역 (FAN)
+// 내 참여 내역 (FAN, ATHLETE, BRAND)
 router.get(
   '/my/entries',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   fanVoteController.getMyEntries.bind(fanVoteController)
 );
 
-// 팬 투표 제출 (FAN)
+// 투표 제출 (FAN, ATHLETE, BRAND)
 router.post(
   '/:id/submit',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   fanVoteController.submitFanVote.bind(fanVoteController)
 );
 
-// 팬 투표 참여 (FAN)
+// 투표 참여 (FAN, ATHLETE, BRAND)
 const enterVoteSchema = z.object({
   optionIndex: z.number().int().min(0, '옵션 인덱스는 0 이상이어야 합니다'),
 });
@@ -73,7 +74,7 @@ const enterVoteSchema = z.object({
 router.post(
   '/:id/enter',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   validate(enterVoteSchema),
   fanVoteController.enterVote.bind(fanVoteController)
 );
