@@ -206,6 +206,7 @@ export class BidService {
                 version: { increment: 1 },
               },
             });
+            // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
             await tx.ledgerTx.create({
               data: {
                 walletId: prevWallet.id,
@@ -213,7 +214,7 @@ export class BidService {
                 amount: new Decimal(previousWinner.frozenAmount).negated(),
                 balanceAfter: prevWallet.balance,
                 refType: 'BID',
-                refId: previousWinner.id,
+                refId: `${previousWinner.id}:${Date.now()}`,
                 description: `Outbid - auction ${auctionId}`,
               },
             });
@@ -239,6 +240,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: brandWallet.id,
@@ -246,7 +248,7 @@ export class BidService {
               amount: incrementAmount,
               balanceAfter: brandWallet.balance,
               refType: 'BID',
-              refId: bid.id,
+              refId: `${bid.id}:${Date.now()}`,
               description: `Auction bid freeze - auction ${auctionId}`,
             },
           });
@@ -268,6 +270,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: brandWallet.id,
@@ -275,7 +278,7 @@ export class BidService {
               amount: new Decimal(existingBid.frozenAmount).negated(),
               balanceAfter: brandWallet.balance,
               refType: 'BID',
-              refId: bid.id,
+              refId: `${bid.id}:${Date.now()}`,
               description: `Outbid - auction ${auctionId}`,
             },
           });
@@ -512,6 +515,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: wallet.id,
@@ -519,7 +523,7 @@ export class BidService {
               amount: new Decimal(bid.frozenAmount).negated(),
               balanceAfter: wallet.balance,
               refType: 'BID',
-              refId: bidId,
+              refId: `${bidId}:${Date.now()}`,
               description: `Bid deleted - auction ${bid.auctionId}`,
             },
           });
@@ -556,6 +560,7 @@ export class BidService {
                 version: { increment: 1 },
               },
             });
+            // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
             await tx.ledgerTx.create({
               data: {
                 walletId: winnerWallet.id,
@@ -563,7 +568,7 @@ export class BidService {
                 amount: freezeAmount,
                 balanceAfter: winnerWallet.balance,
                 refType: 'BID',
-                refId: newWinner.id,
+                refId: `${newWinner.id}:${Date.now()}`,
                 description: `New winning bid after deletion - auction ${bid.auctionId}`,
               },
             });
