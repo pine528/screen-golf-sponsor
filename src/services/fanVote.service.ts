@@ -922,11 +922,24 @@ export class FanVoteService {
       }
     }
 
-    // 트랜잭션으로 수수료 차감 + 상태 업데이트
+    // 트랜잭션으로 Seed + 수수료 차감 + 상태 업데이트
     const updatedEvent = await prisma.$transaction(async (tx) => {
-      // 개설 수수료 차감 (seedPoints > 0인 경우만)
-      if (seedPoints.greaterThan(0) && openFee.greaterThan(0)) {
-        // 개설자에서 수수료 차감 (adjustPointsWithTx 사용 - 같은 트랜잭션 내)
+      // 1. Seed(상금포인트) 차감 (승인 시점에 차감)
+      if (seedPoints.greaterThan(0)) {
+        await pointService.adjustPointsWithTx(
+          tx,
+          event.creatorUserId,
+          seedPoints.negated(),
+          'VOTE_CREATOR_PRIZE',
+          'FAN_VOTE',
+          `${eventId}_seed`,
+          `팬 투표 상금포인트 예치: ${event.title} (${seedPoints}P)`
+        );
+      }
+
+      // 2. 개설 수수료 차감
+      if (openFee.greaterThan(0)) {
+        // 개설자에서 수수료 차감
         await pointService.adjustPointsWithTx(
           tx,
           event.creatorUserId,
@@ -937,7 +950,7 @@ export class FanVoteService {
           `팬 투표 개설 수수료: ${event.title} (${openFee}P)`
         );
 
-        // 플랫폼에 수수료 적립 (adjustPointsWithTx 사용 - 같은 트랜잭션 내)
+        // 플랫폼에 수수료 적립
         await pointService.adjustPointsWithTx(
           tx,
           PLATFORM_USER_ID,
@@ -980,16 +993,17 @@ export class FanVoteService {
     });
 
     // 생성자에게 알림
-    const feeMessage = openFee.greaterThan(0)
-      ? ` 개설 수수료 ${openFee}P가 차감되었습니다.`
+    const totalDeducted = seedPoints.plus(openFee);
+    const deductMessage = totalDeducted.greaterThan(0)
+      ? ` 총 ${totalDeducted}P 차감 (상금 ${seedPoints}P + 수수료 ${openFee}P)`
       : '';
     await prisma.notification.create({
       data: {
         userId: event.creatorUserId,
         type: 'FAN_VOTE_APPROVED',
         title: '투표 승인 완료',
-        message: `"${event.title}" 투표가 승인되어 활성화되었습니다.${feeMessage}`,
-        data: { eventId: event.id, openFeeCharged: openFee.toString() },
+        message: `"${event.title}" 투표가 승인되어 활성화되었습니다.${deductMessage}`,
+        data: { eventId: event.id, seedDeducted: seedPoints.toString(), openFeeCharged: openFee.toString() },
       },
     });
 
@@ -1185,21 +1199,7 @@ export class FanVoteService {
           }
         }
 
-        // 7-3. 생성자 Seed 차감 (정산 시점에 차감)
-        if (seedPoints.greaterThan(0)) {
-          const deductResult = await pointService.adjustPoints(
-            event.creatorUserId,
-            seedPoints.negated(),
-            'VOTE_CREATOR_PRIZE',
-            'FAN_VOTE',
-            eventId,
-            `투표 상금 기여 (Seed): ${event.title} (${seedPoints}P)`
-          );
-
-          if (!deductResult.success && !deductResult.alreadyProcessed) {
-            throw new BadRequestError('생성자 포인트가 부족하여 정산할 수 없습니다');
-          }
-        }
+        // 7-3. Seed는 승인 시점에 이미 차감됨 (별도 처리 불필요)
 
         // 7-4. 정산 수수료 플랫폼 귀속
         if (settlementFee.greaterThan(0)) {
@@ -1270,7 +1270,7 @@ export class FanVoteService {
 
       // 9. 알림: 생성자
       const creatorMessage = seedPoints.greaterThan(0)
-        ? `"${event.title}" 투표 정산 완료. 당첨자 ${winnersCountActual}명, Seed ${seedPoints}P 차감됨, 리워드 ${totalCreatorRewardsFromEntry}P 지급됨`
+        ? `"${event.title}" 투표 정산 완료. 당첨자 ${winnersCountActual}명, Seed ${seedPoints}P 사용됨, 리워드 ${totalCreatorRewardsFromEntry}P 지급됨`
         : `"${event.title}" 투표 정산이 완료되었습니다. 당첨자 ${winnersCountActual}명, 리워드 ${totalCreatorRewardsFromEntry}P 지급됨`;
 
       await prisma.notification.create({
@@ -1281,7 +1281,7 @@ export class FanVoteService {
           message: creatorMessage,
           data: {
             eventId,
-            seedDeducted: seedPoints.toString(),
+            seedUsed: seedPoints.toString(), // 승인 시 이미 차감됨
             creatorReward: totalCreatorRewardsFromEntry.toString(),
           },
         },
