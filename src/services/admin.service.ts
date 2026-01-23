@@ -807,7 +807,7 @@ export class AdminService {
         },
       });
 
-      // Create auction (immediately LIVE)
+      // Create auction (immediately LIVE, marked as featured)
       const now = new Date();
       const auction = await tx.auction.create({
         data: {
@@ -820,6 +820,7 @@ export class AdminService {
           softCloseSec: 120,
           maxExtensionSec: 600,
           minBidIncrement: Math.max(10000, Math.floor(reservePrice * 0.05)), // 5% or 10000원 중 큰 값
+          isFeatured: true, // 어드민 추천경매로 표시
         },
       });
 
