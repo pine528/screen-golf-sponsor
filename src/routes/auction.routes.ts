@@ -8,9 +8,9 @@ const router = Router();
 
 /**
  * @route GET /auctions
- * @desc List auctions with filters
+ * @desc List auctions with filters (public - non-logged-in users can view)
  */
-router.get('/', authenticate, auctionController.list);
+router.get('/', optionalAuth, auctionController.list);
 
 /**
  * @route GET /auctions/featured
@@ -20,15 +20,15 @@ router.get('/featured', optionalAuth, auctionController.getFeatured);
 
 /**
  * @route GET /auctions/live
- * @desc Get all live auctions
+ * @desc Get all live auctions (public - non-logged-in users can view)
  */
-router.get('/live', authenticate, auctionController.getLive);
+router.get('/live', optionalAuth, auctionController.getLive);
 
 /**
  * @route GET /auctions/ending-soon
- * @desc Get auctions ending soon
+ * @desc Get auctions ending soon (public - non-logged-in users can view)
  */
-router.get('/ending-soon', authenticate, auctionController.getEndingSoon);
+router.get('/ending-soon', optionalAuth, auctionController.getEndingSoon);
 
 /**
  * @route GET /auctions/my-bids
@@ -56,9 +56,9 @@ router.post(
 
 /**
  * @route GET /auctions/:id
- * @desc Get auction by ID
+ * @desc Get auction by ID (public - non-logged-in users can view)
  */
-router.get('/:id', authenticate, auctionController.getById);
+router.get('/:id', optionalAuth, auctionController.getById);
 
 /**
  * ★ Phase 9-3: Auction summary API (polling)

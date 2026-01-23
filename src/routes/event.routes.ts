@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { eventController } from '../controllers/event.controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createEventSchema } from '../utils/validation';
 
@@ -8,15 +8,15 @@ const router = Router();
 
 /**
  * @route GET /events
- * @desc List events with filters
+ * @desc List events with filters (public - non-logged-in users can view)
  */
-router.get('/', authenticate, eventController.list);
+router.get('/', optionalAuth, eventController.list);
 
 /**
  * @route GET /events/upcoming
- * @desc Get upcoming events
+ * @desc Get upcoming events (public - non-logged-in users can view)
  */
-router.get('/upcoming', authenticate, eventController.getUpcoming);
+router.get('/upcoming', optionalAuth, eventController.getUpcoming);
 
 /**
  * @route POST /events
@@ -32,9 +32,9 @@ router.post(
 
 /**
  * @route GET /events/:id
- * @desc Get event by ID
+ * @desc Get event by ID (public - non-logged-in users can view)
  */
-router.get('/:id', authenticate, eventController.getById);
+router.get('/:id', optionalAuth, eventController.getById);
 
 /**
  * @route PATCH /events/:id

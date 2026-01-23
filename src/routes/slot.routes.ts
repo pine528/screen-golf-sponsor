@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import { slotTemplateController, slotInstanceController } from '../controllers/slot.controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createSlotTemplateSchema, createSlotInstanceSchema } from '../utils/validation';
 import { slotInstanceService } from '../services/slot.service';
@@ -55,15 +55,15 @@ router.patch(
 
 /**
  * @route GET /slots/instances
- * @desc List slot instances with filters
+ * @desc List slot instances with filters (public - non-logged-in users can view)
  */
-router.get('/instances', authenticate, slotInstanceController.list);
+router.get('/instances', optionalAuth, slotInstanceController.list);
 
 /**
  * @route GET /slots/instances/available
- * @desc Get available slots for bidding
+ * @desc Get available slots for bidding (public - non-logged-in users can view)
  */
-router.get('/instances/available', authenticate, slotInstanceController.getAvailable);
+router.get('/instances/available', optionalAuth, slotInstanceController.getAvailable);
 
 /**
  * @route POST /slots/instances
