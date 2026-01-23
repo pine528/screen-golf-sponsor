@@ -780,6 +780,7 @@ enum NotificationType {
   FAN_VOTE_APPROVED
   FAN_VOTE_SETTLED
   FAN_VOTE_WIN
+  FAN_VOTE_DELETED
   REDEMPTION_FULFILLED
   WITHDRAWAL_APPROVED
   WITHDRAWAL_REJECTED
@@ -925,6 +926,7 @@ enum PointTxReason {
   VOTE_ENTRY_PLATFORM     // 참여 수수료 - 플랫폼 몫 (70%)
   VOTE_ENTRY_CREATOR      // 참여 수수료 - 개설자 리워드 (30%)
   VOTE_SETTLEMENT_FEE     // 정산 수수료 (상금풀의 2%)
+  VOTE_REFUND             // 투표 삭제 시 환불
   REDEEM_GOODS
   REDEEM_CANCEL_REFUND
   POINT_TRANSFER_SEND     // 포인트 전송 (차감)

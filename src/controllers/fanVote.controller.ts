@@ -314,18 +314,25 @@ export class FanVoteController {
 
   /**
    * DELETE /api/fan-votes/admin/:id
-   * 관리자: 정산 완료된 투표 삭제
+   * 관리자: 투표 삭제 (모든 상태)
+   * - DRAFT/SUBMITTED: 바로 삭제
+   * - ACTIVE/CLOSED: Seed + 개설수수료 환불 후 삭제
+   * - SETTLED: 바로 삭제
    */
   async deleteSettledEvent(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
       const adminId = req.user!.id;
 
-      const result = await fanVoteService.deleteSettledEvent(id, adminId);
+      const result = await fanVoteService.adminDeleteEvent(id, adminId);
+
+      const refundMessage = result.refunded
+        ? ` (개설자에게 ${result.refundAmount}P 환불됨)`
+        : '';
 
       sendSuccess(res, {
         ...result,
-        message: '투표가 삭제되었습니다',
+        message: `투표가 삭제되었습니다${refundMessage}`,
       });
     } catch (error) {
       next(error);

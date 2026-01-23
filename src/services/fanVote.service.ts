@@ -510,13 +510,24 @@ export class FanVoteService {
   }
 
   /**
-   * 관리자: 정산 완료된 팬 투표 삭제
+   * 관리자: 정산 완료된 팬 투표 삭제 (레거시 - 하위 호환)
    */
   async deleteSettledEvent(eventId: string, adminId: string) {
+    return this.adminDeleteEvent(eventId, adminId);
+  }
+
+  /**
+   * 관리자: 모든 상태의 투표 삭제
+   * - DRAFT/SUBMITTED: 바로 삭제 (수수료 미청구 상태)
+   * - ACTIVE/CLOSED: Seed + 개설수수료 환불 후 삭제 (참여비는 환불 안함)
+   * - SETTLED: 바로 삭제 (이미 정산 완료)
+   */
+  async adminDeleteEvent(eventId: string, adminId: string) {
     const event = await prisma.fanVoteEvent.findUnique({
       where: { id: eventId },
       include: {
         settlement: true,
+        entries: true,
       },
     });
 
@@ -524,33 +535,61 @@ export class FanVoteService {
       throw new NotFoundError('투표 이벤트를 찾을 수 없습니다');
     }
 
-    if (event.status !== 'SETTLED') {
-      throw new ConflictError('정산 완료된 투표만 삭제할 수 있습니다');
-    }
+    // 환불 처리 필요 여부 확인 (ACTIVE/CLOSED 상태에서 Seed가 있는 경우)
+    const needsRefund = ['ACTIVE', 'CLOSED'].includes(event.status);
+    const seedPoints = event.creatorPrizePool || new Prisma.Decimal(0);
+    const openFeeCharged = event.openFeeCharged || new Prisma.Decimal(0);
+    const totalRefund = seedPoints.plus(openFeeCharged);
 
-    // 트랜잭션으로 관련 데이터 삭제
+    // 트랜잭션으로 환불 + 삭제 처리
     await prisma.$transaction(async (tx) => {
-      // 1. 당첨자 기록 삭제
+      // 1. ACTIVE/CLOSED 상태인 경우 개설자에게 Seed + 수수료 환불
+      if (needsRefund && totalRefund.greaterThan(0)) {
+        await pointService.adjustPointsWithTx(
+          tx,
+          event.creatorUserId,
+          totalRefund,
+          'VOTE_REFUND',
+          'FAN_VOTE',
+          `${eventId}_refund`,
+          `투표 삭제 환불: ${event.title} (상금 ${seedPoints}P + 수수료 ${openFeeCharged}P)`
+        );
+
+        // 플랫폼에서 수수료 차감 (수수료가 있는 경우만)
+        if (openFeeCharged.greaterThan(0)) {
+          await pointService.adjustPointsWithTx(
+            tx,
+            PLATFORM_USER_ID,
+            openFeeCharged.negated(),
+            'VOTE_REFUND',
+            'FAN_VOTE',
+            `${eventId}_platform_refund`,
+            `투표 삭제 수수료 반환: ${event.title} (${openFeeCharged}P)`
+          );
+        }
+      }
+
+      // 2. 당첨자 기록 삭제
       await tx.fanVoteWinner.deleteMany({
         where: { eventId },
       });
 
-      // 2. 정산 기록 삭제
+      // 3. 정산 기록 삭제
       await tx.fanVoteSettlement.deleteMany({
         where: { eventId },
       });
 
-      // 3. 참여 기록 삭제
+      // 4. 참여 기록 삭제
       await tx.fanVoteEntry.deleteMany({
         where: { eventId },
       });
 
-      // 4. 스폰서 참여 기록 삭제
+      // 5. 스폰서 참여 기록 삭제
       await tx.sponsorEngagement.deleteMany({
         where: { eventId },
       });
 
-      // 5. 이벤트 삭제
+      // 6. 이벤트 삭제
       await tx.fanVoteEvent.delete({
         where: { id: eventId },
       });
@@ -566,11 +605,34 @@ export class FanVoteService {
         oldValue: {
           title: event.title,
           status: event.status,
+          creatorUserId: event.creatorUserId,
+          seedPoints: seedPoints.toString(),
+          openFeeCharged: openFeeCharged.toString(),
+          entriesCount: event.entries.length,
+          refunded: needsRefund && totalRefund.greaterThan(0),
         },
       },
     });
 
-    return { success: true };
+    // 개설자에게 삭제 알림
+    const refundMessage = needsRefund && totalRefund.greaterThan(0)
+      ? ` ${totalRefund}P가 환불되었습니다.`
+      : '';
+    await prisma.notification.create({
+      data: {
+        userId: event.creatorUserId,
+        type: 'FAN_VOTE_DELETED',
+        title: '투표 삭제 안내',
+        message: `관리자에 의해 "${event.title}" 투표가 삭제되었습니다.${refundMessage}`,
+        data: { eventId, refundAmount: totalRefund.toString() },
+      },
+    });
+
+    return {
+      success: true,
+      refunded: needsRefund && totalRefund.greaterThan(0),
+      refundAmount: totalRefund.toString(),
+    };
   }
 
   // ============================================
