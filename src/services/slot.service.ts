@@ -505,8 +505,15 @@ export class SlotInstanceService {
       throw new NotFoundError('Slot not found');
     }
 
-    if (slot.status !== 'OPEN') {
+    // ★ 즉시구매 가능 상태 확인: OPEN 또는 IN_AUCTION(경매+즉시구매 둘 다 설정된 경우)
+    const validStatuses = ['OPEN', 'IN_AUCTION'];
+    if (!validStatuses.includes(slot.status)) {
       throw new ConflictError('Slot is no longer available for purchase');
+    }
+
+    // 즉시구매 활성화 확인
+    if (!slot.enableDirectBuy) {
+      throw new BadRequestError('Direct buy is not enabled for this slot');
     }
 
     // 즉시구매 가격: directBuyPrice가 있으면 사용, 없으면 reservePrice 사용
@@ -567,14 +574,22 @@ export class SlotInstanceService {
 
     // 트랜잭션으로 원자적 처리
     const contract = await prisma.$transaction(async (tx) => {
-      // 동시성 방어: 상태 조건부 업데이트
+      // 동시성 방어: 상태 조건부 업데이트 (OPEN 또는 IN_AUCTION 상태일 때만)
       const updateResult = await tx.slotInstance.updateMany({
-        where: { id: slotId, status: 'OPEN' },
+        where: { id: slotId, status: { in: ['OPEN', 'IN_AUCTION'] } },
         data: { status: 'RESERVED' },
       });
 
       if (updateResult.count === 0) {
         throw new ConflictError('Slot already purchased by another buyer');
+      }
+
+      // ★ 경매+즉시구매 슬롯인 경우, 활성 경매 취소
+      if (slot.status === 'IN_AUCTION') {
+        await tx.auction.updateMany({
+          where: { slotInstanceId: slotId, status: 'LIVE' },
+          data: { status: 'CANCELLED' },
+        });
       }
 
       // ★ Phase 9-1.1: frozenAmount 증가 (예약 동결)
