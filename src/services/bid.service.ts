@@ -146,29 +146,63 @@ export class BidService {
         }
       });
 
+      console.log(`[BidService] placeBid - auctionId: ${auctionId}, brandId: ${brandId}, maxBid: ${maxBid}`);
+      console.log(`[BidService] existingBidInTx: ${existingBidInTx ? `id=${existingBidInTx.id}, maxBid=${existingBidInTx.maxBid}` : 'null'}`);
+
       // 기존 입찰이 있고 새 금액이 더 낮으면 거부
       if (existingBidInTx && maxBid <= existingBidInTx.maxBid) {
         throw new BadRequestError('New max bid must be higher than current max bid');
       }
 
-      // upsert로 atomic하게 생성 또는 업데이트
-      bid = await tx.bid.upsert({
-        where: {
-          auctionId_brandId: { auctionId, brandId }
-        },
-        update: {
-          maxBid,
-          autoBid,
-          updatedAt: new Date(),
-        },
-        create: {
-          auctionId,
-          brandId,
-          maxBid,
-          currentProxy: minRequiredBid,
-          autoBid,
-        },
-      });
+      // 기존 입찰이 있으면 UPDATE, 없으면 CREATE (upsert 대신 명시적 분기)
+      try {
+        if (existingBidInTx) {
+          console.log(`[BidService] Updating existing bid ${existingBidInTx.id}`);
+          bid = await tx.bid.update({
+            where: { id: existingBidInTx.id },
+            data: {
+              maxBid,
+              autoBid,
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          console.log(`[BidService] Creating new bid`);
+          bid = await tx.bid.create({
+            data: {
+              auctionId,
+              brandId,
+              maxBid,
+              currentProxy: minRequiredBid,
+              autoBid,
+            },
+          });
+        }
+        console.log(`[BidService] Bid operation successful: ${bid.id}`);
+      } catch (bidError: any) {
+        console.error(`[BidService] Bid operation failed:`, bidError);
+        // P2002 발생 시 다시 찾아서 업데이트 시도
+        if (bidError.code === 'P2002') {
+          console.log(`[BidService] P2002 detected, retrying with findUnique + update`);
+          const retryBid = await tx.bid.findUnique({
+            where: { auctionId_brandId: { auctionId, brandId } }
+          });
+          if (retryBid) {
+            if (maxBid <= retryBid.maxBid) {
+              throw new BadRequestError('New max bid must be higher than current max bid');
+            }
+            bid = await tx.bid.update({
+              where: { id: retryBid.id },
+              data: { maxBid, autoBid, updatedAt: new Date() },
+            });
+            console.log(`[BidService] Retry successful: ${bid.id}`);
+          } else {
+            throw bidError;
+          }
+        } else {
+          throw bidError;
+        }
+      }
 
       // Process auto-bid competition (determines winner)
       const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
