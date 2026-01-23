@@ -68,8 +68,29 @@ export class AuctionController {
         throw new Error('No brand associated with this user');
       }
 
-      const result = await bidService.placeBid(id, req.user.brandId, maxBid, autoBid);
-      sendSuccess(res, result, 201);
+      // P2002 에러 발생 시 최대 3회 재시도
+      const maxRetries = 3;
+      let lastError: any;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await bidService.placeBid(id, req.user.brandId, maxBid, autoBid);
+          sendSuccess(res, result, 201);
+          return;
+        } catch (error: any) {
+          lastError = error;
+          // P2002 (unique constraint violation) 또는 409 상태 에러인 경우 재시도
+          const isP2002 = error?.code === 'P2002' || error?.name === 'PrismaClientKnownRequestError' && error?.code === 'P2002';
+          if (isP2002 && attempt < maxRetries) {
+            // 짧은 지연 후 재시도 (10-50ms 랜덤)
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 40 + 10));
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      throw lastError;
     } catch (error) {
       next(error);
     }
