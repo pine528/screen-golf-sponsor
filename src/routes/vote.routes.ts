@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { voteController } from '../controllers/vote.controller';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, requireRole, authorize } from '../middleware/auth';
 
 const router = Router();
 
@@ -27,43 +27,43 @@ router.get('/ranking/athletes', voteController.getAthleteRanking.bind(voteContro
 // Authenticated Routes
 // ============================================
 
-// 투표하기 (FAN 권한만 허용)
+// 투표하기 (FAN, ATHLETE, BRAND 권한 허용)
 router.post(
   '/events/:voteEventId/vote',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   voteController.submitVote.bind(voteController)
 );
 
-// 내 투표 내역 (FAN 권한만 허용)
+// 내 투표 내역 (FAN, ATHLETE, BRAND 권한 허용)
 router.get(
   '/my/votes',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   voteController.getMyVotes.bind(voteController)
 );
 
-// 내 포인트 조회 (FAN 권한만 허용)
+// 내 포인트 조회 (FAN, ATHLETE, BRAND 권한 허용)
 router.get(
   '/my/points',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   voteController.getMyPoints.bind(voteController)
 );
 
-// 내 포인트 내역 (FAN 권한만 허용)
+// 내 포인트 내역 (FAN, ATHLETE, BRAND 권한 허용)
 router.get(
   '/my/points/history',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   voteController.getMyPointHistory.bind(voteController)
 );
 
-// 포인트 사용 (FAN 권한만 허용)
+// 포인트 사용 (FAN, ATHLETE, BRAND 권한 허용)
 router.post(
   '/my/points/redeem',
   authenticate,
-  requireRole('FAN'),
+  authorize('FAN', 'ATHLETE', 'BRAND'),
   voteController.redeemPoints.bind(voteController)
 );
 
