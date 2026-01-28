@@ -515,9 +515,9 @@ class EmailService {
   async sendKycApprovedNotification(
     email: string,
     recipientName: string,
-    role: 'BRAND' | 'ATHLETE'
+    role: 'BRAND' | 'ATHLETE' | 'AGENCY'
   ): Promise<boolean> {
-    const roleLabel = role === 'BRAND' ? '브랜드' : '선수';
+    const roleLabel = role === 'BRAND' ? '브랜드' : role === 'AGENCY' ? '에이전시' : '선수';
 
     const content = `
       <h2 style="margin: 0 0 16px 0; color: #10b981; font-size: 20px;">
@@ -537,6 +537,8 @@ class EmailService {
       <p style="margin: 0 0 24px 0; color: #475569; line-height: 1.6;">
         ${role === 'BRAND'
           ? '이제 경매에 입찰하고 스폰서십 계약을 체결할 수 있습니다.'
+          : role === 'AGENCY'
+          ? '이제 선수를 등록하고 대리 관리를 시작할 수 있습니다.'
           : '이제 슬롯을 등록하고 스폰서십 수익을 얻을 수 있습니다.'}
       </p>
 
@@ -556,10 +558,10 @@ class EmailService {
   async sendKycRejectedNotification(
     email: string,
     recipientName: string,
-    role: 'BRAND' | 'ATHLETE',
+    role: 'BRAND' | 'ATHLETE' | 'AGENCY',
     reason: string
   ): Promise<boolean> {
-    const roleLabel = role === 'BRAND' ? '브랜드' : '선수';
+    const roleLabel = role === 'BRAND' ? '브랜드' : role === 'AGENCY' ? '에이전시' : '선수';
 
     const content = `
       <h2 style="margin: 0 0 16px 0; color: #ef4444; font-size: 20px;">

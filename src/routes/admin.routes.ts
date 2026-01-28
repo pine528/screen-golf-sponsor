@@ -41,6 +41,12 @@ router.post('/kyc/brands/:brandId/review', adminController.reviewBrandKyc);
  */
 router.post('/kyc/athletes/:athleteId/review', adminController.reviewAthleteKyc);
 
+/**
+ * @route POST /admin/kyc/agencies/:agencyId/review
+ * @desc Review agency KYC
+ */
+router.post('/kyc/agencies/:agencyId/review', adminController.reviewAgencyKyc);
+
 // ============================================
 // Slot Templates
 // ============================================

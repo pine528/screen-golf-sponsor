@@ -20,6 +20,7 @@ enum UserRole {
   FINANCE   // 재무/출금 관리 권한
   SUPPORT   // 고객지원 (읽기 전용)
   AUDITOR   // 감사 (읽기 전용)
+  AGENCY    // 에이전시 (선수 대리 관리)
 }
 
 enum KycStatus {
@@ -43,6 +44,7 @@ model User {
   athlete       Athlete?
   admin         Admin?
   fan           Fan?
+  agency        Agency?
   auditLogs     AuditLog[]
   votes         Vote[]
   pointLedgers  PointLedger[]
@@ -121,10 +123,13 @@ model Athlete {
   kycDocuments        Json?         @map("kyc_documents")
   bankAccount         Json?         @map("bank_account")
   taxInfo             Json?         @map("tax_info")
+  agencyId            String?       @map("agency_id")
+  agencyAssignedAt    DateTime?     @map("agency_assigned_at")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
   user                 User          @relation(fields: [userId], references: [id])
+  agency               Agency?       @relation(fields: [agencyId], references: [id])
   slotInstances        SlotInstance[]
   contracts            Contract[]
   eventParticipations  EventParticipation[]
@@ -134,6 +139,32 @@ model Athlete {
   withdrawalRequests   WithdrawalRequest[]
 
   @@map("athletes")
+}
+
+// ============================================
+// Agency (에이전시 - 선수 대리 관리)
+// ============================================
+
+model Agency {
+  id              String      @id @default(uuid())
+  userId          String      @unique @map("user_id")
+  name            String
+  bizNo           String?     @map("biz_no")
+  contactEmail    String      @map("contact_email")
+  contactPhone    String?     @map("contact_phone")
+  contactName     String?     @map("contact_name")
+  website         String?
+  description     String?
+  kycStatus       KycStatus   @default(NOT_SUBMITTED) @map("kyc_status")
+  kycDocuments    Json?       @map("kyc_documents")
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user            User        @relation(fields: [userId], references: [id])
+  athletes        Athlete[]
+
+  @@map("agencies")
 }
 
 // ============================================

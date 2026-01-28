@@ -59,7 +59,58 @@ export class AuthService {
           name: data.name,
         },
       });
+    } else if (data.role === 'AGENCY') {
+      await prisma.agency.create({
+        data: {
+          userId: user.id,
+          name: data.name,
+          contactEmail: data.email,
+          bizNo: data.bizNo,
+        },
+      });
     }
+
+    return this.generateTokens(user.id, user.email, user.role);
+  }
+
+  // Agency Registration
+  async registerAgency(data: {
+    email: string;
+    password: string;
+    name: string;
+    bizNo?: string;
+    contactName?: string;
+    contactPhone?: string;
+  }): Promise<TokenResponse> {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictError('이미 등록된 이메일입니다');
+    }
+
+    const passwordHash = await bcrypt.hash(data.password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        passwordHash,
+        role: 'AGENCY',
+      },
+    });
+
+    // Create Agency profile
+    await prisma.agency.create({
+      data: {
+        userId: user.id,
+        name: data.name,
+        contactEmail: data.email,
+        bizNo: data.bizNo,
+        contactName: data.contactName,
+        contactPhone: data.contactPhone,
+      },
+    });
 
     return this.generateTokens(user.id, user.email, user.role);
   }

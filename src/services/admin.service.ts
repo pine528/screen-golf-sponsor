@@ -7,7 +7,7 @@ import { settingsService } from './settings.service';
 export class AdminService {
   // KYC Management
   async getPendingKyc() {
-    const [brands, athletes] = await Promise.all([
+    const [brands, athletes, agencies] = await Promise.all([
       prisma.brand.findMany({
         where: { kycStatus: 'PENDING' },
         orderBy: { createdAt: 'asc' },
@@ -32,6 +32,18 @@ export class AdminService {
           },
         },
       }),
+      prisma.agency.findMany({
+        where: { kycStatus: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+        },
+      }),
     ]);
 
     // kycDocuments에서 businessNumber 추출하여 최상위로 노출
@@ -40,7 +52,12 @@ export class AdminService {
       businessNumber: (brand.kycDocuments as any)?.businessNumber || null,
     }));
 
-    return { brands: brandsWithBusinessNumber, athletes };
+    const agenciesWithBusinessNumber = agencies.map(agency => ({
+      ...agency,
+      businessNumber: (agency.kycDocuments as any)?.businessNumber || agency.bizNo || null,
+    }));
+
+    return { brands: brandsWithBusinessNumber, athletes, agencies: agenciesWithBusinessNumber };
   }
 
   async reviewBrandKyc(brandId: string, status: KycStatus, notes?: string) {
@@ -105,6 +122,37 @@ export class AdminService {
     return updatedAthlete;
   }
 
+  async reviewAgencyKyc(agencyId: string, status: KycStatus, notes?: string) {
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      include: { user: true },
+    });
+    if (!agency) {
+      throw new NotFoundError('Agency not found');
+    }
+
+    const updatedAgency = await prisma.agency.update({
+      where: { id: agencyId },
+      data: {
+        kycStatus: status,
+        kycDocuments: {
+          ...((agency.kycDocuments as any) || {}),
+          reviewNotes: notes,
+          reviewedAt: new Date(),
+        },
+      },
+    });
+
+    // Send email notification
+    if (status === 'APPROVED') {
+      emailService.sendKycApprovedNotification(agency.user.email, agency.name, 'AGENCY');
+    } else if (status === 'REJECTED') {
+      emailService.sendKycRejectedNotification(agency.user.email, agency.name, 'AGENCY', notes || '서류 검토 결과 승인이 거절되었습니다.');
+    }
+
+    return updatedAgency;
+  }
+
   // Dashboard Stats
   async getDashboardStats() {
     const [
@@ -112,6 +160,8 @@ export class AdminService {
       pendingBrandKyc,
       totalAthletes,
       pendingAthleteKyc,
+      totalAgencies,
+      pendingAgencyKyc,
       totalEvents,
       upcomingEvents,
       liveAuctions,
@@ -123,6 +173,8 @@ export class AdminService {
       prisma.brand.count({ where: { kycStatus: 'PENDING' } }),
       prisma.athlete.count(),
       prisma.athlete.count({ where: { kycStatus: 'PENDING' } }),
+      prisma.agency.count(),
+      prisma.agency.count({ where: { kycStatus: 'PENDING' } }),
       prisma.event.count(),
       prisma.event.count({ where: { status: 'UPCOMING' } }),
       prisma.auction.count({ where: { status: 'LIVE' } }),
@@ -137,6 +189,7 @@ export class AdminService {
     return {
       brands: { total: totalBrands, pendingKyc: pendingBrandKyc },
       athletes: { total: totalAthletes, pendingKyc: pendingAthleteKyc },
+      agencies: { total: totalAgencies, pendingKyc: pendingAgencyKyc },
       events: { total: totalEvents, upcoming: upcomingEvents },
       auctions: { live: liveAuctions },
       contracts: { total: totalContracts },

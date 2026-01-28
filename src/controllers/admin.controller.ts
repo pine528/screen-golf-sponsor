@@ -48,6 +48,17 @@ export class AdminController {
     }
   }
 
+  async reviewAgencyKyc(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { agencyId } = req.params;
+      const { status, notes } = req.body;
+      const agency = await adminService.reviewAgencyKyc(agencyId, status, notes);
+      sendSuccess(res, agency);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Slot Templates
   async createSlotTemplate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {

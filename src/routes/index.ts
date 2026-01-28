@@ -32,6 +32,7 @@ import brandBillingRoutes from './brand.billing.routes';
 import adminTaxInvoiceRoutes from './admin.taxInvoice.routes';
 import { feeInfoRouter, adminFeePolicyRouter } from './feePolicy.routes';
 import pointTopupRoutes from './pointTopup.routes';
+import agencyRoutes from './agency.routes';
 
 const router = Router();
 
@@ -77,6 +78,7 @@ router.use('/admin/penalties', adminPenaltyRoutes);
 router.use('/reports', reportRoutes);
 router.use('/exposure', exposureRoutes);
 router.use('/seasons', seasonRoutes);
+router.use('/agencies', agencyRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

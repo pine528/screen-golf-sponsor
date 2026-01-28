@@ -11,6 +11,7 @@ export interface AuthRequest extends Request {
     athleteId?: string;
     adminId?: string;
     fanId?: string;
+    agencyId?: string;
   };
 }
 
