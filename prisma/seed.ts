@@ -89,6 +89,29 @@ async function main() {
   });
   console.log('Athlete user created:', athleteUser.email);
 
+  // Create Agency User
+  const agencyPassword = await bcrypt.hash('agency123!', 12);
+  const agencyUser = await prisma.user.upsert({
+    where: { email: 'agency@example.com' },
+    update: {},
+    create: {
+      email: 'agency@example.com',
+      passwordHash: agencyPassword,
+      role: 'AGENCY',
+      agency: {
+        create: {
+          name: '프로골프 매니지먼트',
+          bizNo: '987-65-43210',
+          contactEmail: 'agency@example.com',
+          contactPhone: '010-9876-5432',
+          contactName: '박매니저',
+          kycStatus: 'APPROVED',
+        },
+      },
+    },
+  });
+  console.log('Agency user created:', agencyUser.email);
+
   // Create Slot Templates (Top 6 Slots)
   const slotTemplates = [
     {
