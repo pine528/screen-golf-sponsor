@@ -124,12 +124,22 @@ async function main() {
       fan: {
         create: {
           nickname: '테스트팬',
-          pointBalance: 10000, // 초기 포인트 지급
         },
       },
     },
   });
   console.log('Fan user created:', fanUser.email);
+
+  // 팬 초기 포인트 지급 (PointWallet)
+  await prisma.pointWallet.upsert({
+    where: { userId: fanUser.id },
+    update: {},
+    create: {
+      userId: fanUser.id,
+      balance: 10000,
+    },
+  });
+  console.log('Fan initial points granted: 10,000P');
 
   // Create Slot Templates (Top 6 Slots)
   const slotTemplates = [
