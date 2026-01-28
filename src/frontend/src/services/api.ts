@@ -55,6 +55,17 @@ class ApiService {
     );
   }
 
+  // Generic HTTP methods
+  async get<T = any>(url: string, params?: any): Promise<ApiResponse<T>> {
+    const response = await this.client.get<ApiResponse<T>>(url, { params });
+    return response.data;
+  }
+
+  async post<T = any>(url: string, data?: any): Promise<ApiResponse<T>> {
+    const response = await this.client.post<ApiResponse<T>>(url, data);
+    return response.data;
+  }
+
   // Auth
   async login(email: string, password: string) {
     const response = await this.client.post<ApiResponse<any>>('/auth/login', { email, password });
@@ -79,6 +90,19 @@ class ApiService {
 
   async fanLogin(email: string, password: string) {
     const response = await this.client.post<ApiResponse<any>>('/auth/fan/login', { email, password });
+    return response.data;
+  }
+
+  // Agency Auth
+  async agencyRegister(data: {
+    email: string;
+    password: string;
+    name: string;
+    bizNo?: string;
+    contactName?: string;
+    contactPhone?: string;
+  }) {
+    const response = await this.client.post<ApiResponse<any>>('/auth/agency/register', data);
     return response.data;
   }
 
@@ -242,6 +266,21 @@ class ApiService {
 
   async getMyWinningBids() {
     const response = await this.client.get<ApiResponse<any[]>>('/auctions/my-winning-bids');
+    return response.data;
+  }
+
+  async getFeaturedAuctions() {
+    const response = await this.client.get<ApiResponse<any[]>>('/auctions/featured');
+    return response.data;
+  }
+
+  async startAuction(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/auctions/${id}/start`);
+    return response.data;
+  }
+
+  async cancelAuction(id: string, reason?: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/auctions/${id}/cancel`, { reason });
     return response.data;
   }
 
@@ -447,6 +486,44 @@ class ApiService {
     return response.data;
   }
 
+  // Admin Featured Auctions
+  async createFeaturedAuction(data: {
+    athleteId: string;
+    eventId: string;
+    slotTemplateId: string;
+    startAt: string;
+    endAt: string;
+    reservePrice?: number;
+  }) {
+    // Backend expects auctionEndAt instead of endAt
+    const payload = {
+      athleteId: data.athleteId,
+      eventId: data.eventId,
+      slotTemplateId: data.slotTemplateId,
+      reservePrice: data.reservePrice,
+      auctionEndAt: data.endAt, // Map endAt to auctionEndAt
+    };
+    const response = await this.client.post<ApiResponse<any>>('/admin/featured-auctions', payload);
+    return response.data;
+  }
+
+  async bulkCreateFeaturedAuctions(items: Array<{
+    athleteId: string;
+    eventId: string;
+    slotTemplateId: string;
+    startAt: string;
+    endAt: string;
+    reservePrice?: number;
+  }>) {
+    const response = await this.client.post<ApiResponse<any>>('/admin/featured-auctions/bulk', { items });
+    return response.data;
+  }
+
+  async getAdminFeaturedAuctions() {
+    const response = await this.client.get<ApiResponse<any[]>>('/admin/featured-auctions');
+    return response.data;
+  }
+
   // Upload
   async uploadFile(file: File, type: 'asset' | 'kyc' | 'verification' | 'profile') {
     const formData = new FormData();
@@ -593,6 +670,11 @@ class ApiService {
 
   async getActiveVoteEvents(params?: any) {
     const response = await this.client.get<ApiResponse<any[]>>('/votes/active', { params });
+    return response.data;
+  }
+
+  async getEndedVoteEvents(params?: any) {
+    const response = await this.client.get<ApiResponse<any[]>>('/votes/ended', { params });
     return response.data;
   }
 
@@ -746,6 +828,39 @@ class ApiService {
     const response = await this.client.get<ApiResponse<any[]>>('/payments/stats/daily', {
       params: { days },
     });
+    return response.data;
+  }
+
+  // ============================================
+  // Admin Topup (브랜드 충전 관리)
+  // ============================================
+
+  async getAdminTopups(params?: { status?: string; provider?: string; brandId?: string; limit?: number; offset?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/topups', { params });
+    return response.data;
+  }
+
+  async getAdminTopupStats() {
+    const response = await this.client.get<ApiResponse<any>>('/admin/finance/topups/stats');
+    return response.data;
+  }
+
+  async getAdminTopupDetail(id: string) {
+    const response = await this.client.get<ApiResponse<any>>(`/admin/finance/topups/${id}`);
+    return response.data;
+  }
+
+  // ============================================
+  // Admin Point Topup API (포인트 충전 관리)
+  // ============================================
+
+  async getAdminPointTopups(params?: { status?: string; limit?: number; offset?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/point-topups/admin/all', { params });
+    return response.data;
+  }
+
+  async getAdminPointTopupStats() {
+    const response = await this.client.get<ApiResponse<any>>('/point-topups/admin/stats');
     return response.data;
   }
 
@@ -1000,6 +1115,11 @@ class ApiService {
     return response.data;
   }
 
+  async getAdminFans(params?: { email?: string; page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/admin/entities/fans', { params });
+    return response.data;
+  }
+
   async deleteAdminBrand(brandId: string) {
     const response = await this.client.delete<ApiResponse<any>>(`/admin/entities/brands/${brandId}`);
     return response.data;
@@ -1201,6 +1321,7 @@ class ApiService {
     winnersCount: number;
     startsAt: string;
     endsAt: string;
+    creatorPrizePool?: number;  // Seed (상금포인트)
   }) {
     const response = await this.client.post<ApiResponse<any>>('/fan-votes/create', data);
     return response.data;
@@ -1251,6 +1372,47 @@ class ApiService {
     const response = await this.client.post<ApiResponse<any>>(`/fan-votes/admin/${id}/settle`, {
       resultOptionIndex,
     });
+    return response.data;
+  }
+
+  // Admin: 정산 완료된 투표 삭제
+  async deleteFanVote(id: string) {
+    const response = await this.client.delete<ApiResponse<any>>(`/fan-votes/admin/${id}`);
+    return response.data;
+  }
+
+  // ============================================
+  // Brand Vote Creation
+  // ============================================
+
+  // Brand: 투표 생성
+  async createBrandVote(data: {
+    title: string;
+    question: string;
+    options: string[];
+    entryFeePoints: number;
+    winnersCount: number;
+    startsAt: string;
+    endsAt: string;
+    sponsorContribution?: number;
+    sponsorBannerUrl?: string;
+    sponsorLogoUrl?: string;
+    sponsorMessage?: string;
+    sponsorLinkUrl?: string;
+  }) {
+    const response = await this.client.post<ApiResponse<any>>('/fan-votes/brand/create', data);
+    return response.data;
+  }
+
+  // Brand: 내가 만든 투표 목록
+  async getBrandCreatedVotes(params?: { page?: number; pageSize?: number }) {
+    const response = await this.client.get<ApiResponse<any>>('/fan-votes/brand/my/events', { params });
+    return response.data;
+  }
+
+  // Brand: 투표 제출 (DRAFT -> SUBMITTED)
+  async submitBrandVote(id: string) {
+    const response = await this.client.post<ApiResponse<any>>(`/fan-votes/brand/${id}/submit`);
     return response.data;
   }
 
@@ -2292,6 +2454,175 @@ class ApiService {
       invoiceNumber,
       confirmText,
     });
+    return response.data;
+  }
+
+  // ============================================
+  // Point Topup (포인트 충전)
+  // ============================================
+
+  // 충전 생성 (Checkout 세션)
+  async createPointTopup(data: { amount: number; provider?: 'TOSS' | 'STRIPE' }) {
+    const response = await this.client.post('/point-topups/create', data);
+    return response.data;
+  }
+
+  // 결제 확인
+  async confirmPointTopup(topupId: string, paymentKey: string) {
+    const response = await this.client.post(`/point-topups/${topupId}/confirm`, { paymentKey });
+    return response.data;
+  }
+
+  // 내 충전 내역
+  async getMyPointTopups(params: { status?: string; limit?: number; offset?: number } = {}) {
+    const response = await this.client.get('/point-topups/my', { params });
+    return response.data;
+  }
+
+  // 단일 충전 조회
+  async getPointTopupById(id: string) {
+    const response = await this.client.get(`/point-topups/${id}`);
+    return response.data;
+  }
+
+  // orderId로 조회
+  async getPointTopupByOrderId(orderId: string) {
+    const response = await this.client.get(`/point-topups/order/${orderId}`);
+    return response.data;
+  }
+
+  // ============================================
+  // Donations (팬→선수 후원)
+  // ============================================
+
+  // 후원 가능한 선수 목록 조회
+  async getDonationAthletes(params?: { page?: number; limit?: number; search?: string }) {
+    const response = await this.client.get('/donations/athletes', { params });
+    return response.data;
+  }
+
+  // 후원 생성
+  async createDonation(data: {
+    athleteId: string;
+    amount: number;
+    message?: string;
+    isAnonymous?: boolean;
+  }) {
+    const response = await this.client.post('/donations', data);
+    return response.data;
+  }
+
+  // 내 후원 내역 조회 (팬용)
+  async getMyDonations(params?: { page?: number; limit?: number }) {
+    const response = await this.client.get('/donations/my', { params });
+    return response.data;
+  }
+
+  // 내가 받은 후원 목록 조회 (선수용)
+  async getReceivedDonations(params?: { page?: number; limit?: number }) {
+    const response = await this.client.get('/donations/received', { params });
+    return response.data;
+  }
+
+  // ============================================
+  // Point Withdrawals (포인트 출금 - 선수용)
+  // ============================================
+
+  // 출금 가능 잔액 조회
+  async getPointWithdrawalBalance() {
+    const response = await this.client.get('/point-withdrawals/balance');
+    return response.data;
+  }
+
+  // 포인트 출금 요청 생성
+  async createPointWithdrawal(data: {
+    amount: number;
+    bankName: string;
+    bankAccountNumber: string;
+    accountHolder: string;
+    reason?: string;
+  }) {
+    const response = await this.client.post('/point-withdrawals', data);
+    return response.data;
+  }
+
+  // 내 출금 요청 목록 조회
+  async getMyPointWithdrawals(params?: { status?: string; page?: number; limit?: number }) {
+    const response = await this.client.get('/point-withdrawals/my', { params });
+    return response.data;
+  }
+
+  // ============================================
+  // Admin Point Withdrawals (관리자 포인트 출금 관리)
+  // ============================================
+
+  // 모든 포인트 출금 요청 목록
+  async getAdminPointWithdrawals(params?: { status?: string; page?: number; limit?: number }) {
+    const response = await this.client.get('/admin/point-withdrawals', { params });
+    return response.data;
+  }
+
+  // 포인트 출금 승인
+  async approvePointWithdrawal(id: string) {
+    const response = await this.client.post(`/admin/point-withdrawals/${id}/approve`);
+    return response.data;
+  }
+
+  // 포인트 출금 거부
+  async rejectPointWithdrawal(id: string, reason?: string) {
+    const response = await this.client.post(`/admin/point-withdrawals/${id}/reject`, { reason });
+    return response.data;
+  }
+
+  // 포인트 출금 지급 완료
+  async completePointWithdrawal(id: string, payoutReference?: string) {
+    const response = await this.client.post(`/admin/point-withdrawals/${id}/complete`, { payoutReference });
+    return response.data;
+  }
+
+  // ============================================
+  // Agency-Athlete Connection Requests (에이전시-선수 연결 요청)
+  // ============================================
+
+  // 에이전시: 연결 가능한 선수 검색
+  async searchAvailableAthletes(params?: { q?: string; tour?: string; page?: number; limit?: number }) {
+    const response = await this.client.get('/agencies/athletes/search', { params });
+    return response.data;
+  }
+
+  // 에이전시: 연결 요청 발송
+  async sendConnectionRequest(athleteId: string, message?: string) {
+    const response = await this.client.post('/agencies/athletes/request', { athleteId, message });
+    return response.data;
+  }
+
+  // 에이전시: 보낸 요청 목록
+  async getSentConnectionRequests(params?: { status?: string; page?: number; limit?: number }) {
+    const response = await this.client.get('/agencies/requests/sent', { params });
+    return response.data;
+  }
+
+  // 에이전시: 요청 취소
+  async cancelConnectionRequest(requestId: string) {
+    const response = await this.client.delete(`/agencies/requests/${requestId}`);
+    return response.data;
+  }
+
+  // 선수: 받은 연결 요청 목록
+  async getAgencyRequests(params?: { status?: string; page?: number; limit?: number }) {
+    const response = await this.client.get('/athletes/agency-requests', { params });
+    return response.data;
+  }
+
+  // 선수: 연결 요청 승인
+  async approveAgencyRequest(requestId: string) {
+    const response = await this.client.post(`/athletes/agency-requests/${requestId}/approve`);
+    return response.data;
+  }
+
+  // 선수: 연결 요청 거부
+  async rejectAgencyRequest(requestId: string, reason?: string) {
+    const response = await this.client.post(`/athletes/agency-requests/${requestId}/reject`, { reason });
     return response.data;
   }
 }

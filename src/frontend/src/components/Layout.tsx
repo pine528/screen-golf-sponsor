@@ -41,6 +41,8 @@ import {
   UserCog,
   Receipt,
   FileCheck,
+  Coins,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils';
@@ -176,8 +178,11 @@ export function Layout({ children }: LayoutProps) {
     { path: '/brand/billing', label: '청구/명세서', icon: Receipt },
     { path: '/campaigns', label: '캠페인', icon: Megaphone },
     { path: '/brand/sponsored-votes', label: '후원 투표', icon: Heart },
+    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
     { path: '/brand/reports/roi', label: 'ROI 리포트', icon: TrendingUp },
-    { path: '/votes', label: '투표', icon: Vote },
+    { path: '/votes', label: '투표 참여', icon: Vote },
+    { path: '/points', label: '내 포인트', icon: Trophy },
+    { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/profile', label: '프로필', icon: User },
   ];
 
@@ -186,9 +191,13 @@ export function Layout({ children }: LayoutProps) {
     { path: '/my-slots', label: '슬롯 관리', icon: Calendar },
     { path: '/contracts', label: '계약/오퍼', icon: FileText },
     { path: '/athlete/pending-signatures', label: '서명 대기', icon: PenLine },
+    { path: '/athlete/agency-requests', label: '에이전시 요청', icon: Building2 },
     { path: '/settlements', label: '정산', icon: Wallet },
     { path: '/athlete/withdrawals', label: '출금 관리', icon: Banknote },
-    { path: '/votes', label: '투표', icon: Vote },
+    { path: '/votes', label: '투표 참여', icon: Vote },
+    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
+    { path: '/points', label: '내 포인트', icon: Trophy },
+    { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/profile', label: '프로필', icon: User },
   ];
 
@@ -196,14 +205,17 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin', label: '대시보드', icon: LayoutDashboard },
     { path: '/admin/events', label: '이벤트 관리', icon: Calendar },
     { path: '/admin/auctions', label: '경매 모니터링', icon: Gavel },
+    { path: '/admin/featured-auctions', label: '추천 경매', icon: Star },
     { path: '/admin/entities', label: '등록 회원', icon: Users },
     { path: '/admin/kyc', label: 'KYC 심사', icon: User },
     { path: '/admin/brand-registrations', label: '브랜드 신청', icon: Building2 },
     { path: '/admin/reviews', label: '검수 관리', icon: FileText },
     { path: '/admin/votes', label: '투표 이벤트', icon: Vote },
-    { path: '/admin/fan-votes', label: '팬 투표 심사', icon: ListChecks },
+    { path: '/admin/points', label: '포인트 관리', icon: Coins },
+    { path: '/admin/fan-votes', label: '투표 심사', icon: ListChecks },
     { path: '/admin/payments', label: '결제 관리', icon: CreditCard },
     { path: '/admin/finance', label: '재무 콘솔', icon: Wallet },
+    { path: '/admin/finance/withdrawals', label: '출금 관리', icon: Banknote },
     { path: '/admin/finance/tax-invoices', label: '세금계산서', icon: FileCheck },
     { path: '/admin/reconciliation', label: '대사 관리', icon: Shield },
     { path: '/admin/users', label: '관리자 관리', icon: UserCog },
@@ -223,6 +235,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
     { path: '/fan/badges', label: '내 뱃지', icon: Award },
     { path: '/points', label: '내 포인트', icon: Trophy },
+    { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/shop', label: '포인트샵', icon: Gift },
     { path: '/orders', label: '교환내역', icon: ShoppingBag },
     { path: '/ranking', label: '랭킹', icon: Star },
@@ -230,29 +243,43 @@ export function Layout({ children }: LayoutProps) {
     { path: '/brand-register', label: '브랜드 등록', icon: Building2 },
   ];
 
+  const agencyNavItems = [
+    { path: '/agency', label: '대시보드', icon: Home },
+    { path: '/agency/athletes', label: '소속 선수', icon: Users },
+    { path: '/agency/athletes/search', label: '선수 검색/연결', icon: User },
+    { path: '/agency/requests', label: '보낸 요청', icon: FileText },
+    { path: '/agency/athletes/register', label: '새 선수 등록', icon: User },
+    { path: '/profile', label: '프로필', icon: Briefcase },
+  ];
+
+  const role = user?.role as string;
   const navItems =
-    user?.role === 'ADMIN'
+    role === 'ADMIN'
       ? adminNavItems
-      : user?.role === 'ATHLETE'
+      : role === 'ATHLETE'
       ? athleteNavItems
-      : user?.role === 'FAN'
+      : role === 'FAN'
       ? fanNavItems
+      : role === 'AGENCY'
+      ? agencyNavItems
       : brandNavItems;
 
   const getRoleLabel = () => {
-    switch (user?.role) {
+    switch (role) {
       case 'ADMIN': return '관리자';
       case 'ATHLETE': return '선수';
       case 'FAN': return '팬';
+      case 'AGENCY': return '에이전시';
       default: return '브랜드';
     }
   };
 
   const getRoleColor = () => {
-    switch (user?.role) {
+    switch (role) {
       case 'ADMIN': return 'text-violet-600';
       case 'ATHLETE': return 'text-emerald-600';
       case 'FAN': return 'text-amber-600';
+      case 'AGENCY': return 'text-indigo-600';
       default: return 'text-sky-600';
     }
   };
@@ -267,11 +294,11 @@ export function Layout({ children }: LayoutProps) {
       {/* Mobile Header - only show when logged in */}
       {user && (
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4">
-        <Link to={user?.role === 'FAN' ? '/fan' : '/dashboard'} className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/25">
             <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
           </div>
-          <span className="font-bold text-slate-900 tracking-tight">SPONSOR</span>
+          <span className="font-bold text-slate-900 tracking-tight">SPONPIK</span>
         </Link>
         <div className="flex items-center gap-2">
           {/* Mobile Notification Bell */}
@@ -321,13 +348,13 @@ export function Layout({ children }: LayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 lg:h-16 px-4 lg:px-6 border-b border-slate-200">
-            <Link to={user?.role === 'FAN' ? '/fan' : '/dashboard'} className="flex items-center gap-3" onClick={closeMobileMenu}>
+            <Link to="/" className="flex items-center gap-3" onClick={closeMobileMenu}>
               <div className="relative">
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                   <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
                 </div>
               </div>
-              <span className="font-bold text-slate-900 tracking-tight">SPONSOR</span>
+              <span className="font-bold text-slate-900 tracking-tight">SPONPIK</span>
             </Link>
             <button
               onClick={closeMobileMenu}
@@ -474,7 +501,7 @@ export function Layout({ children }: LayoutProps) {
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                   <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="font-bold text-slate-900 tracking-tight text-lg">SPONSOR</span>
+                <span className="font-bold text-slate-900 tracking-tight text-lg">SPONPIK</span>
               </Link>
               <div className="flex items-center gap-3">
                 <Link

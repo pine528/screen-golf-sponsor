@@ -20,6 +20,7 @@ enum UserRole {
   FINANCE   // 재무/출금 관리 권한
   SUPPORT   // 고객지원 (읽기 전용)
   AUDITOR   // 감사 (읽기 전용)
+  AGENCY    // 에이전시 (선수 대리 관리)
 }
 
 enum KycStatus {
@@ -43,6 +44,7 @@ model User {
   athlete       Athlete?
   admin         Admin?
   fan           Fan?
+  agency        Agency?
   auditLogs     AuditLog[]
   votes         Vote[]
   pointLedgers  PointLedger[]
@@ -50,6 +52,12 @@ model User {
   pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
   fanVoteWins    FanVoteWinner[]
   redemptionOrders RedemptionOrder[]
+  pointTransfersFrom PointTransfer[] @relation("PointTransferFrom")
+  pointTransfersTo   PointTransfer[] @relation("PointTransferTo")
+  pointTopups        PointTopup[]
+  donationsSent      Donation[] @relation("DonationFrom")
+  pointWithdrawals   PointWithdrawal[] @relation("PointWithdrawals")
+  processedWithdrawals PointWithdrawal[] @relation("ProcessedPointWithdrawals")
 
   @@map("users")
 }
@@ -118,10 +126,13 @@ model Athlete {
   kycDocuments        Json?         @map("kyc_documents")
   bankAccount         Json?         @map("bank_account")
   taxInfo             Json?         @map("tax_info")
+  agencyId            String?       @map("agency_id")
+  agencyAssignedAt    DateTime?     @map("agency_assigned_at")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
   user                 User          @relation(fields: [userId], references: [id])
+  agency               Agency?       @relation(fields: [agencyId], references: [id])
   slotInstances        SlotInstance[]
   contracts            Contract[]
   eventParticipations  EventParticipation[]
@@ -129,8 +140,67 @@ model Athlete {
   payoutItems          PayoutItem[]
   favoritedBy          FavoriteAthlete[]
   withdrawalRequests   WithdrawalRequest[]
+  donationsReceived    Donation[]
+  agencyRequests       AgencyAthleteRequest[]
 
   @@map("athletes")
+}
+
+// ============================================
+// Agency (에이전시 - 선수 대리 관리)
+// ============================================
+
+model Agency {
+  id              String      @id @default(uuid())
+  userId          String      @unique @map("user_id")
+  name            String
+  bizNo           String?     @map("biz_no")
+  contactEmail    String      @map("contact_email")
+  contactPhone    String?     @map("contact_phone")
+  contactName     String?     @map("contact_name")
+  website         String?
+  description     String?
+  kycStatus       KycStatus   @default(NOT_SUBMITTED) @map("kyc_status")
+  kycDocuments    Json?       @map("kyc_documents")
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user             User        @relation(fields: [userId], references: [id])
+  athletes         Athlete[]
+  athleteRequests  AgencyAthleteRequest[]
+
+  @@map("agencies")
+}
+
+// ============================================
+// Agency-Athlete Connection Request
+// ============================================
+
+enum AgencyAthleteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model AgencyAthleteRequest {
+  id              String                      @id @default(uuid())
+  agencyId        String                      @map("agency_id")
+  athleteId       String                      @map("athlete_id")
+  status          AgencyAthleteRequestStatus  @default(PENDING)
+  message         String?
+  rejectedReason  String?                     @map("rejected_reason")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+  respondedAt     DateTime?                   @map("responded_at")
+
+  agency          Agency                      @relation(fields: [agencyId], references: [id])
+  athlete         Athlete                     @relation(fields: [athleteId], references: [id])
+
+  @@index([athleteId, status])
+  @@index([agencyId, status])
+  @@map("agency_athlete_requests")
 }
 
 // ============================================
@@ -315,6 +385,8 @@ model SlotTemplate {
   categoryExclusivityGroup String?      @map("category_exclusivity_group")
   defaultReservePrice     Int           @default(100000) @map("default_reserve_price")
   eventOverrideAllowed    Boolean       @default(true) @map("event_override_allowed")
+  duration                Int?          @map("duration")                  // 노출 시간 (초)
+  estimatedImpressions    Int?          @map("estimated_impressions")     // 예상 노출 (회)
   isActive                Boolean       @default(true) @map("is_active")
   createdAt               DateTime      @default(now()) @map("created_at")
   updatedAt               DateTime      @updatedAt @map("updated_at")
@@ -383,6 +455,7 @@ model Auction {
   currentPrice    Int           @default(0) @map("current_price")
   status          AuctionStatus @default(SCHEDULED)
   winningBidId    String?       @map("winning_bid_id")
+  isFeatured      Boolean       @default(false) @map("is_featured")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -776,10 +849,15 @@ enum NotificationType {
   FAN_VOTE_APPROVED
   FAN_VOTE_SETTLED
   FAN_VOTE_WIN
+  FAN_VOTE_DELETED
   REDEMPTION_FULFILLED
   WITHDRAWAL_APPROVED
   WITHDRAWAL_REJECTED
   WITHDRAWAL_PAID
+  AGENCY_CONNECTION_REQUEST
+  AGENCY_CONNECTION_APPROVED
+  AGENCY_CONNECTION_REJECTED
+  AGENCY_CONNECTION_CANCELLED
 }
 
 model Notification {
@@ -871,6 +949,42 @@ model AthleteVotePoint {
 }
 
 // ============================================
+// Fee Policy (수수료 정책 관리)
+// ============================================
+
+enum FeePolicyType {
+  FAN_VOTE_OPEN     // 개설 수수료 (Seed의 2%)
+  FAN_VOTE_ENTRY    // 참여 수수료 (Entry의 10%)
+  FAN_VOTE_SETTLE   // 정산 수수료 (상금풀의 2%)
+}
+
+model FeePolicy {
+  id                    String          @id @default(uuid())
+  type                  FeePolicyType
+
+  // 수수료 계산 파라미터
+  ratePercent           Decimal         @map("rate_percent") @db.Decimal(5, 4)   // 예: 0.0200 = 2%
+  minAmount             Decimal         @map("min_amount") @db.Decimal(18, 0)    // 최소 금액
+  maxAmount             Decimal         @map("max_amount") @db.Decimal(18, 0)    // 최대 금액
+
+  // Entry Fee 전용: 플랫폼/개설자 배분율
+  platformSharePercent  Decimal?        @map("platform_share_percent") @db.Decimal(5, 4)  // 0.7000 = 70%
+  creatorSharePercent   Decimal?        @map("creator_share_percent") @db.Decimal(5, 4)   // 0.3000 = 30%
+
+  isActive              Boolean         @default(true) @map("is_active")
+  effectiveFrom         DateTime        @map("effective_from")
+  effectiveTo           DateTime?       @map("effective_to")
+  description           String?
+
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  @@unique([type, effectiveFrom])
+  @@index([type, isActive, effectiveFrom])
+  @@map("fee_policies")
+}
+
+// ============================================
 // Point System (원장 기반 포인트 시스템)
 // ============================================
 
@@ -880,8 +994,22 @@ enum PointTxReason {
   VOTE_WIN_PAYOUT
   VOTE_CREATE_FEE
   VOTE_POT_REMAINDER
+  VOTE_CREATOR_PRIZE      // 생성자 상금 차감 (정산 시)
+  VOTE_OPEN_FEE           // 개설 수수료 (Seed의 2%)
+  VOTE_ENTRY_PLATFORM     // 참여 수수료 - 플랫폼 몫 (70%)
+  VOTE_ENTRY_CREATOR      // 참여 수수료 - 개설자 리워드 (30%)
+  VOTE_SETTLEMENT_FEE     // 정산 수수료 (상금풀의 2%)
+  VOTE_REFUND             // 투표 삭제 시 환불
   REDEEM_GOODS
   REDEEM_CANCEL_REFUND
+  POINT_TRANSFER_SEND     // 포인트 전송 (차감)
+  POINT_TRANSFER_RECEIVE  // 포인트 수신 (적립)
+  POINT_TOPUP             // 포인트 충전
+  POINT_TOPUP_REFUND      // 포인트 충전 환불
+  DONATION_SEND           // 후원 발송 (팬)
+  DONATION_RECEIVE        // 후원 수신 (선수)
+  DONATION_FEE            // 후원 수수료 (플랫폼)
+  POINT_WITHDRAWAL        // 포인트 출금
 }
 
 model PointWallet {
@@ -913,6 +1041,54 @@ model PointLedgerTx {
   @@unique([userId, reason, refType, refId], name: "unique_point_tx")
   @@index([userId, createdAt])
   @@map("point_ledger_txs")
+}
+
+// ============================================
+// Point Topup (포인트 충전 - 현금 결제)
+// ============================================
+
+enum PointTopupStatus {
+  CREATED      // 결제 세션 생성됨
+  PENDING      // PG 결제 진행 중
+  PAID         // 결제 완료, 포인트 지급됨
+  FAILED       // 결제 실패
+  CANCELED     // 사용자 취소
+  REFUNDED     // 환불 완료
+}
+
+model PointTopup {
+  id                  String              @id @default(uuid())
+  userId              String              @map("user_id")
+  user                User                @relation(fields: [userId], references: [id])
+
+  // 결제 정보
+  amount              Decimal             @db.Decimal(18, 0)  // 결제 금액 (원)
+  pointsToGrant       Decimal             @map("points_to_grant") @db.Decimal(18, 0)  // 지급 포인트
+  currency            String              @default("KRW")
+  status              PointTopupStatus    @default(CREATED)
+
+  // PG 연동 정보
+  provider            PaymentProvider     @default(TOSS)
+  providerPaymentKey  String?             @unique @map("provider_payment_key")
+  providerOrderId     String              @unique @map("provider_order_id")
+
+  // 결제 URL
+  checkoutUrl         String?             @map("checkout_url")
+  checkoutExpiresAt   DateTime?           @map("checkout_expires_at")
+
+  // 완료 정보
+  paidAt              DateTime?           @map("paid_at")
+  failedAt            DateTime?           @map("failed_at")
+  failReason          String?             @map("fail_reason")
+  refundedAt          DateTime?           @map("refunded_at")
+  refundReason        String?             @map("refund_reason")
+
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@index([providerOrderId])
+  @@map("point_topups")
 }
 
 // Legacy model - to be migrated
@@ -961,6 +1137,15 @@ model FanVoteEvent {
   approvedAt          DateTime?       @map("approved_at")
   settledAt           DateTime?       @map("settled_at")
 
+  // 생성자 역할 및 상금 설정
+  creatorRole         String          @default("FAN") @map("creator_role")  // FAN, BRAND, ATHLETE, ADMIN
+  creatorPrizePool    Decimal         @default(0) @map("creator_prize_pool") @db.Decimal(18, 0)  // 생성자가 거는 상금 (= Seed)
+  distributionPercent Int             @default(100) @map("distribution_percent")  // 환원 비율 (1-100%)
+
+  // v1.0 수수료 체계: 개설 수수료
+  openFeeCharged      Decimal?        @map("open_fee_charged") @db.Decimal(18, 0)  // 개설 수수료 (차감됨)
+  openFeeChargedAt    DateTime?       @map("open_fee_charged_at")  // 개설 수수료 차감 시점
+
   // Phase G: Sponsor fields
   sponsorBrandId      String?         @map("sponsor_brand_id")
   sponsorContribution Decimal?        @map("sponsor_contribution") @db.Decimal(18, 0)
@@ -1003,6 +1188,14 @@ model FanVoteEntry {
   userId          String          @map("user_id")
   optionIndex     Int             @map("option_index")
   paidPoints      Decimal         @map("paid_points") @db.Decimal(18, 0)
+
+  // v1.0 수수료 분해 필드
+  grossEntry      Decimal?        @map("gross_entry") @db.Decimal(18, 0)       // 총 참여비 (= paidPoints)
+  entryDeduction  Decimal?        @map("entry_deduction") @db.Decimal(18, 0)   // 공제액 (10%)
+  platformFee     Decimal?        @map("platform_fee") @db.Decimal(18, 0)      // 플랫폼 몫 (70%)
+  creatorReward   Decimal?        @map("creator_reward") @db.Decimal(18, 0)    // 개설자 몫 (30%)
+  netToPool       Decimal?        @map("net_to_pool") @db.Decimal(18, 0)       // 상금풀 적립 (90%)
+
   createdAt       DateTime        @default(now()) @map("created_at")
 
   event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -1024,6 +1217,18 @@ model FanVoteSettlement {
   payoutEach      Decimal         @map("payout_each") @db.Decimal(18, 0)
   remainder       Decimal         @db.Decimal(18, 0)
   decidedByAdminId String         @map("decided_by_admin_id")
+
+  // v1.0 정산 상세 내역
+  totalEntryFees        Decimal?  @map("total_entry_fees") @db.Decimal(18, 0)         // 참여비 총액
+  totalEntryDeductions  Decimal?  @map("total_entry_deductions") @db.Decimal(18, 0)   // 참여 수수료 총액
+  seedPoints            Decimal?  @map("seed_points") @db.Decimal(18, 0)              // Seed (개설자 상금)
+  netPoolFromEntries    Decimal?  @map("net_pool_from_entries") @db.Decimal(18, 0)    // 참여자 기여 (90%)
+  grossPool             Decimal?  @map("gross_pool") @db.Decimal(18, 0)               // 총 상금풀 (Seed + 참여자기여)
+  settlementFee         Decimal?  @map("settlement_fee") @db.Decimal(18, 0)           // 정산 수수료 (2%)
+  winnerPayout          Decimal?  @map("winner_payout") @db.Decimal(18, 0)            // 1등 지급 총액
+  totalPlatformRevenue  Decimal?  @map("total_platform_revenue") @db.Decimal(18, 0)   // 플랫폼 총 수익
+  totalCreatorReward    Decimal?  @map("total_creator_reward") @db.Decimal(18, 0)     // 개설자 총 리워드
+
   createdAt       DateTime        @default(now()) @map("created_at")
 
   event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -2027,4 +2232,84 @@ model TaxInvoiceRequest {
 
   @@index([status, requestedAt])
   @@map("tax_invoice_requests")
+}
+
+// ============================================
+// Point Transfer (포인트 전송)
+// ============================================
+
+model PointTransfer {
+  id            String   @id @default(uuid())
+  fromUserId    String   @map("from_user_id")
+  toUserId      String   @map("to_user_id")
+  amount        Decimal  @db.Decimal(18, 0)
+  message       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  fromUser      User     @relation("PointTransferFrom", fields: [fromUserId], references: [id])
+  toUser        User     @relation("PointTransferTo", fields: [toUserId], references: [id])
+
+  @@index([fromUserId, createdAt])
+  @@index([toUserId, createdAt])
+  @@map("point_transfers")
+}
+
+// ============================================
+// Donation (팬→선수 후원)
+// ============================================
+
+model Donation {
+  id              String   @id @default(uuid())
+  donorUserId     String   @map("donor_user_id")
+  athleteId       String   @map("athlete_id")
+  amount          Decimal  @db.Decimal(18, 0)               // 총 후원 금액
+  platformFee     Decimal  @map("platform_fee") @db.Decimal(18, 0)  // 수수료 (2%)
+  netAmount       Decimal  @map("net_amount") @db.Decimal(18, 0)    // 선수 수령액
+  message         String?
+  isAnonymous     Boolean  @default(false) @map("is_anonymous")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  donorUser       User     @relation("DonationFrom", fields: [donorUserId], references: [id])
+  athlete         Athlete  @relation(fields: [athleteId], references: [id])
+
+  @@index([donorUserId, createdAt])
+  @@index([athleteId, createdAt])
+  @@map("donations")
+}
+
+// ============================================
+// Point Withdrawal (포인트 출금 - 선수용)
+// ============================================
+
+enum PointWithdrawalStatus {
+  REQUESTED     // 출금 요청
+  APPROVED      // 승인됨
+  REJECTED      // 거부됨
+  PAID          // 지급 완료
+}
+
+model PointWithdrawal {
+  id                  String                @id @default(uuid())
+  userId              String                @map("user_id")
+  amount              Decimal               @db.Decimal(18, 0)  // 출금 요청 금액 (포인트)
+  bankName            String                @map("bank_name")
+  bankAccountNumber   String                @map("bank_account_number")
+  bankAccountMasked   String                @map("bank_account_masked")  // 마스킹된 계좌번호
+  accountHolder       String                @map("account_holder")
+  status              PointWithdrawalStatus @default(REQUESTED)
+  requestedReason     String?               @map("requested_reason")
+  adminNote           String?               @map("admin_note")
+  payoutReference     String?               @map("payout_reference")  // 이체 참조번호
+  processedBy         String?               @map("processed_by")      // 처리한 관리자 ID
+  createdAt           DateTime              @default(now()) @map("created_at")
+  approvedAt          DateTime?             @map("approved_at")
+  rejectedAt          DateTime?             @map("rejected_at")
+  paidAt              DateTime?             @map("paid_at")
+
+  user                User                  @relation("PointWithdrawals", fields: [userId], references: [id])
+  admin               User?                 @relation("ProcessedPointWithdrawals", fields: [processedBy], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("point_withdrawals")
 }
