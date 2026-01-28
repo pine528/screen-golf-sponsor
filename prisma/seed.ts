@@ -112,6 +112,25 @@ async function main() {
   });
   console.log('Agency user created:', agencyUser.email);
 
+  // Create Fan User
+  const fanPassword = await bcrypt.hash('test123!', 12);
+  const fanUser = await prisma.user.upsert({
+    where: { email: 'fan@example.com' },
+    update: {},
+    create: {
+      email: 'fan@example.com',
+      passwordHash: fanPassword,
+      role: 'FAN',
+      fan: {
+        create: {
+          nickname: '테스트팬',
+          pointBalance: 10000, // 초기 포인트 지급
+        },
+      },
+    },
+  });
+  console.log('Fan user created:', fanUser.email);
+
   // Create Slot Templates (Top 6 Slots)
   const slotTemplates = [
     {
