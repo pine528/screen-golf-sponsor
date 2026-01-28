@@ -184,6 +184,68 @@ export class AgencyController {
   }
 
   /**
+   * POST /agencies/athletes/:athleteId/slots - 선수 슬롯 생성
+   */
+  async createAthleteSlot(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id || !req.user?.agencyId) {
+        throw new ForbiddenError('Not authenticated as agency');
+      }
+
+      const { athleteId } = req.params;
+      const { eventId, templateId, reservePrice } = req.body;
+
+      if (!eventId || !templateId) {
+        throw new BadRequestError('eventId and templateId are required');
+      }
+
+      const slot = await agencyService.createAthleteSlot(
+        req.user.agencyId,
+        req.user.id,
+        athleteId,
+        { eventId, templateId, reservePrice }
+      );
+
+      sendSuccess(res, slot, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /agencies/athletes/:athleteId/slots/bulk - 선수 슬롯 일괄 생성
+   */
+  async bulkCreateAthleteSlots(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id || !req.user?.agencyId) {
+        throw new ForbiddenError('Not authenticated as agency');
+      }
+
+      const { athleteId } = req.params;
+      const { eventId, templateIds } = req.body;
+
+      if (!eventId) {
+        throw new BadRequestError('eventId is required');
+      }
+
+      if (!templateIds || !Array.isArray(templateIds) || templateIds.length === 0) {
+        throw new BadRequestError('templateIds array is required');
+      }
+
+      const slots = await agencyService.bulkCreateAthleteSlots(
+        req.user.agencyId,
+        req.user.id,
+        athleteId,
+        { eventId, templateIds }
+      );
+
+      sendSuccess(res, slots, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /agencies/athletes/:athleteId/slots/:slotId/sale-mode - 슬롯 판매모드 설정
    */
   async updateAthleteSlotSaleMode(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

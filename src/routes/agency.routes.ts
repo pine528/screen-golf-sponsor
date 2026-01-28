@@ -35,6 +35,8 @@ router.patch('/athletes/:athleteId/bank-account', requireKycApproved, agencyCont
 
 // 선수 슬롯 관리
 router.get('/athletes/:athleteId/slots', agencyController.getAthleteSlots);
+router.post('/athletes/:athleteId/slots', requireKycApproved, agencyController.createAthleteSlot);
+router.post('/athletes/:athleteId/slots/bulk', requireKycApproved, agencyController.bulkCreateAthleteSlots);
 router.patch(
   '/athletes/:athleteId/slots/:slotId/sale-mode',
   requireKycApproved,
