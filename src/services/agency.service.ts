@@ -673,6 +673,445 @@ export class AgencyService {
       totalContractValue: completedContracts._sum.priceFinal || 0,
     };
   }
+
+  // ============================================
+  // 선수 대리 기능 (에이전시가 선수 대신 수행)
+  // ============================================
+
+  /**
+   * 에이전시가 선수 프로필 수정
+   */
+  async updateAthleteProfile(
+    agencyUserId: string,
+    athleteId: string,
+    data: {
+      name?: string;
+      realName?: string;
+      bio?: string;
+      profileImageUrl?: string;
+      socialLinks?: any;
+      blockedCategories?: string[];
+    }
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedAthlete = await tx.athlete.update({
+        where: { id: athleteId },
+        data: {
+          ...data,
+          updatedAt: new Date(),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: agencyUserId,
+          action: 'AGENCY_UPDATE_ATHLETE_PROFILE',
+          entityType: 'ATHLETE',
+          entityId: athleteId,
+          oldValue: {
+            name: athlete.name,
+            realName: athlete.realName,
+            bio: athlete.bio,
+            profileImageUrl: athlete.profileImageUrl,
+          },
+          newValue: data,
+        },
+      });
+
+      return updatedAthlete;
+    });
+
+    return result;
+  }
+
+  /**
+   * 에이전시가 선수 KYC 대신 제출
+   */
+  async submitAthleteKyc(
+    agencyUserId: string,
+    athleteId: string,
+    documents: { type: string; url: string }[]
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+
+    if (athlete.kycStatus === 'APPROVED') {
+      throw new BadRequestError('Athlete KYC already approved');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedAthlete = await tx.athlete.update({
+        where: { id: athleteId },
+        data: {
+          kycStatus: 'PENDING',
+          kycDocuments: {
+            documents,
+            submittedAt: new Date().toISOString(),
+            submittedByAgency: true,
+            agencyUserId,
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: agencyUserId,
+          action: 'AGENCY_SUBMIT_ATHLETE_KYC',
+          entityType: 'ATHLETE',
+          entityId: athleteId,
+          newValue: {
+            kycStatus: 'PENDING',
+            documentCount: documents.length,
+          },
+        },
+      });
+
+      return updatedAthlete;
+    });
+
+    return result;
+  }
+
+  /**
+   * 에이전시가 선수 은행 계좌 업데이트
+   */
+  async updateAthleteBankAccount(
+    agencyUserId: string,
+    athleteId: string,
+    data: { bankName: string; accountNumber: string; accountHolder: string }
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedAthlete = await tx.athlete.update({
+        where: { id: athleteId },
+        data: {
+          bankAccount: data,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: agencyUserId,
+          action: 'AGENCY_UPDATE_ATHLETE_BANK',
+          entityType: 'ATHLETE',
+          entityId: athleteId,
+          newValue: {
+            bankName: data.bankName,
+            // 계좌번호 마스킹
+            accountNumber: data.accountNumber.slice(0, 4) + '****',
+          },
+        },
+      });
+
+      return updatedAthlete;
+    });
+
+    return result;
+  }
+
+  /**
+   * 에이전시가 선수 상세 정보 조회 (프로필, KYC, 은행 정보 포함)
+   */
+  async getAthleteDetail(agencyUserId: string, athleteId: string) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      include: {
+        user: {
+          select: { id: true, email: true, isActive: true, createdAt: true },
+        },
+        _count: {
+          select: {
+            slotInstances: true,
+            contracts: true,
+            withdrawalRequests: true,
+          },
+        },
+      },
+    });
+
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+
+    return athlete;
+  }
+
+  /**
+   * 에이전시가 선수 정산 내역 조회
+   */
+  async getAthleteSettlements(
+    agencyUserId: string,
+    athleteId: string,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [payoutItems, total] = await Promise.all([
+      prisma.payoutItem.findMany({
+        where: { athleteId },
+        include: {
+          batch: {
+            select: { id: true, status: true, createdAt: true },
+          },
+          escrow: {
+            select: { id: true, status: true, athletePayout: true },
+          },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.payoutItem.count({ where: { athleteId } }),
+    ]);
+
+    return {
+      payoutItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * 에이전시가 선수 출금 내역 조회
+   */
+  async getAthleteWithdrawals(
+    agencyUserId: string,
+    athleteId: string,
+    page: number = 1,
+    limit: number = 20
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [withdrawals, total] = await Promise.all([
+      prisma.withdrawalRequest.findMany({
+        where: { athleteId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.withdrawalRequest.count({ where: { athleteId } }),
+    ]);
+
+    return {
+      withdrawals,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * 에이전시가 선수 계약 내역 조회
+   */
+  async getAthleteContracts(
+    agencyUserId: string,
+    athleteId: string,
+    page: number = 1,
+    limit: number = 20,
+    status?: string
+  ) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const skip = (page - 1) * limit;
+    const where: any = { athleteId };
+    if (status) {
+      where.status = status;
+    }
+
+    const [contracts, total] = await Promise.all([
+      prisma.contract.findMany({
+        where,
+        include: {
+          brand: { select: { id: true, name: true } },
+          auction: {
+            include: {
+              slotInstance: {
+                include: {
+                  event: { select: { id: true, name: true, dateStart: true } },
+                  slotTemplate: { select: { id: true, code: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.contract.count({ where }),
+    ]);
+
+    return {
+      contracts,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * 에이전시가 선수 성과 통계 조회
+   */
+  async getAthletePerformance(agencyUserId: string, athleteId: string) {
+    const canManage = await this.canManageAthlete(agencyUserId, athleteId);
+    if (!canManage) {
+      throw new ForbiddenError('Not authorized to manage this athlete');
+    }
+
+    const [
+      totalSlots,
+      soldSlots,
+      openSlots,
+      totalContracts,
+      activeContracts,
+      completedContracts,
+      totalEarnings,
+      pendingPayouts,
+      totalWithdrawals,
+    ] = await Promise.all([
+      prisma.slotInstance.count({ where: { athleteId } }),
+      prisma.slotInstance.count({ where: { athleteId, status: 'SOLD' } }),
+      prisma.slotInstance.count({ where: { athleteId, status: { in: ['OPEN', 'IN_AUCTION'] } } }),
+      prisma.contract.count({ where: { athleteId } }),
+      prisma.contract.count({ where: { athleteId, status: 'ACTIVE' } }),
+      prisma.contract.count({ where: { athleteId, status: { in: ['COMPLETED', 'VERIFIED'] } } }),
+      prisma.contract.aggregate({
+        where: { athleteId, status: { in: ['ACTIVE', 'COMPLETED', 'VERIFIED'] } },
+        _sum: { priceFinal: true },
+      }),
+      prisma.payoutItem.aggregate({
+        where: { athleteId, batch: { status: 'PENDING' } },
+        _sum: { amount: true },
+      }),
+      prisma.withdrawalRequest.aggregate({
+        where: { athleteId, status: 'PAID' },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      slots: {
+        total: totalSlots,
+        sold: soldSlots,
+        open: openSlots,
+      },
+      contracts: {
+        total: totalContracts,
+        active: activeContracts,
+        completed: completedContracts,
+      },
+      earnings: {
+        total: Number(totalEarnings._sum?.priceFinal || 0),
+        pending: Number(pendingPayouts._sum?.amount || 0),
+        withdrawn: Number(totalWithdrawals._sum?.amount || 0),
+      },
+    };
+  }
+
+  /**
+   * 에이전시가 모든 관리 선수의 종합 성과 조회
+   */
+  async getAllAthletesPerformance(agencyId: string, agencyUserId: string) {
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      include: { athletes: { select: { id: true, name: true, profileImageUrl: true } } },
+    });
+
+    if (!agency) {
+      throw new NotFoundError('Agency not found');
+    }
+
+    if (agency.userId !== agencyUserId) {
+      throw new ForbiddenError('Not authorized');
+    }
+
+    const athleteIds = agency.athletes.map((a) => a.id);
+
+    if (athleteIds.length === 0) {
+      return [];
+    }
+
+    const performances = await Promise.all(
+      agency.athletes.map(async (athlete) => {
+        const [soldSlots, activeContracts, earnings] = await Promise.all([
+          prisma.slotInstance.count({ where: { athleteId: athlete.id, status: 'SOLD' } }),
+          prisma.contract.count({ where: { athleteId: athlete.id, status: 'ACTIVE' } }),
+          prisma.contract.aggregate({
+            where: { athleteId: athlete.id, status: { in: ['ACTIVE', 'COMPLETED', 'VERIFIED'] } },
+            _sum: { priceFinal: true },
+          }),
+        ]);
+
+        return {
+          athlete: {
+            id: athlete.id,
+            name: athlete.name,
+            profileImageUrl: athlete.profileImageUrl,
+          },
+          soldSlots,
+          activeContracts,
+          totalEarnings: earnings._sum.priceFinal || 0,
+        };
+      })
+    );
+
+    return performances;
+  }
 }
 
 export const agencyService = new AgencyService();

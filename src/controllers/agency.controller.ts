@@ -256,6 +256,203 @@ export class AgencyController {
       next(error);
     }
   }
+
+  // ============================================
+  // 선수 대리 기능 (에이전시가 선수 대신 수행)
+  // ============================================
+
+  /**
+   * GET /agencies/athletes/:athleteId/detail - 선수 상세 정보 조회
+   */
+  async getAthleteDetail(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const athlete = await agencyService.getAthleteDetail(req.user.id, athleteId);
+      sendSuccess(res, athlete);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /agencies/athletes/:athleteId/profile - 선수 프로필 수정
+   */
+  async updateAthleteProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const { name, realName, bio, profileImageUrl, socialLinks, blockedCategories } = req.body;
+
+      const athlete = await agencyService.updateAthleteProfile(req.user.id, athleteId, {
+        name,
+        realName,
+        bio,
+        profileImageUrl,
+        socialLinks,
+        blockedCategories,
+      });
+
+      sendSuccess(res, athlete);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /agencies/athletes/:athleteId/kyc - 선수 KYC 대신 제출
+   */
+  async submitAthleteKyc(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const { documents } = req.body;
+
+      if (!documents || !Array.isArray(documents) || documents.length === 0) {
+        throw new BadRequestError('Documents are required');
+      }
+
+      const athlete = await agencyService.submitAthleteKyc(req.user.id, athleteId, documents);
+      sendSuccess(res, athlete);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /agencies/athletes/:athleteId/bank-account - 선수 은행 계좌 업데이트
+   */
+  async updateAthleteBankAccount(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const { bankName, accountNumber, accountHolder } = req.body;
+
+      if (!bankName || !accountNumber || !accountHolder) {
+        throw new BadRequestError('Bank name, account number, and account holder are required');
+      }
+
+      const athlete = await agencyService.updateAthleteBankAccount(req.user.id, athleteId, {
+        bankName,
+        accountNumber,
+        accountHolder,
+      });
+
+      sendSuccess(res, athlete);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /agencies/athletes/:athleteId/settlements - 선수 정산 내역 조회
+   */
+  async getAthleteSettlements(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const result = await agencyService.getAthleteSettlements(req.user.id, athleteId, page, limit);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /agencies/athletes/:athleteId/withdrawals - 선수 출금 내역 조회
+   */
+  async getAthleteWithdrawals(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const result = await agencyService.getAthleteWithdrawals(req.user.id, athleteId, page, limit);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /agencies/athletes/:athleteId/contracts - 선수 계약 내역 조회
+   */
+  async getAthleteContracts(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
+
+      const result = await agencyService.getAthleteContracts(req.user.id, athleteId, page, limit, status);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /agencies/athletes/:athleteId/performance - 선수 성과 통계 조회
+   */
+  async getAthletePerformance(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ForbiddenError('Not authenticated');
+      }
+
+      const { athleteId } = req.params;
+      const performance = await agencyService.getAthletePerformance(req.user.id, athleteId);
+      sendSuccess(res, performance);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /agencies/athletes/performance - 모든 관리 선수의 성과 조회
+   */
+  async getAllAthletesPerformance(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id || !req.user?.agencyId) {
+        throw new ForbiddenError('Not authenticated as agency');
+      }
+
+      const performances = await agencyService.getAllAthletesPerformance(
+        req.user.agencyId,
+        req.user.id
+      );
+
+      sendSuccess(res, performances);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const agencyController = new AgencyController();
