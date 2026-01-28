@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { agencyController } from '../controllers/agency.controller';
+import { agencyAthleteRequestController } from '../controllers/agencyAthleteRequest.controller';
 import { authenticate, authorize, requireKycApproved } from '../middleware/auth';
 
 const router = Router();
@@ -13,6 +14,12 @@ router.get('/me', agencyController.getMe);
 router.patch('/me', agencyController.updateMe);
 router.post('/me/kyc', agencyController.submitKyc);
 router.get('/stats', agencyController.getStats);
+
+// 선수 연결 요청 관련 (신규 기능)
+router.get('/athletes/search', requireKycApproved, agencyAthleteRequestController.searchAthletes);
+router.post('/athletes/request', requireKycApproved, agencyAthleteRequestController.createRequest);
+router.get('/requests/sent', agencyAthleteRequestController.getSentRequests);
+router.delete('/requests/:requestId', agencyAthleteRequestController.cancelRequest);
 
 // 선수 관리 (KYC 승인 필수)
 router.post('/athletes', requireKycApproved, agencyController.registerAthlete);

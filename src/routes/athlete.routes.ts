@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { athleteController } from '../controllers/athlete.controller';
+import { agencyAthleteRequestController } from '../controllers/agencyAthleteRequest.controller';
 import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -67,6 +68,28 @@ router.post('/me/kyc', authenticate, authorize('ATHLETE'), athleteController.sub
  * @desc Get athlete's contracts pending signature
  */
 router.get('/me/pending-signatures', authenticate, authorize('ATHLETE'), athleteController.getPendingSignatures);
+
+/**
+ * ★ 에이전시 연결 요청 관리 (선수용)
+ */
+
+/**
+ * @route GET /athletes/agency-requests
+ * @desc Get agency connection requests received by athlete
+ */
+router.get('/agency-requests', authenticate, authorize('ATHLETE'), agencyAthleteRequestController.getReceivedRequests);
+
+/**
+ * @route POST /athletes/agency-requests/:requestId/approve
+ * @desc Approve an agency connection request
+ */
+router.post('/agency-requests/:requestId/approve', authenticate, authorize('ATHLETE'), agencyAthleteRequestController.approveRequest);
+
+/**
+ * @route POST /athletes/agency-requests/:requestId/reject
+ * @desc Reject an agency connection request
+ */
+router.post('/agency-requests/:requestId/reject', authenticate, authorize('ATHLETE'), agencyAthleteRequestController.rejectRequest);
 
 /**
  * @route GET /athletes/:id

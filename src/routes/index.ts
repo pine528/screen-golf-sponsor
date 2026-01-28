@@ -33,6 +33,8 @@ import adminTaxInvoiceRoutes from './admin.taxInvoice.routes';
 import { feeInfoRouter, adminFeePolicyRouter } from './feePolicy.routes';
 import pointTopupRoutes from './pointTopup.routes';
 import agencyRoutes from './agency.routes';
+import donationRoutes from './donation.routes';
+import { pointWithdrawalRoutes, adminPointWithdrawalRoutes } from './pointWithdrawal.routes';
 
 const router = Router();
 
@@ -79,6 +81,9 @@ router.use('/reports', reportRoutes);
 router.use('/exposure', exposureRoutes);
 router.use('/seasons', seasonRoutes);
 router.use('/agencies', agencyRoutes);
+router.use('/donations', donationRoutes);
+router.use('/point-withdrawals', pointWithdrawalRoutes);
+router.use('/admin/point-withdrawals', adminPointWithdrawalRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

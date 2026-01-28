@@ -55,6 +55,9 @@ model User {
   pointTransfersFrom PointTransfer[] @relation("PointTransferFrom")
   pointTransfersTo   PointTransfer[] @relation("PointTransferTo")
   pointTopups        PointTopup[]
+  donationsSent      Donation[] @relation("DonationFrom")
+  pointWithdrawals   PointWithdrawal[] @relation("PointWithdrawals")
+  processedWithdrawals PointWithdrawal[] @relation("ProcessedPointWithdrawals")
 
   @@map("users")
 }
@@ -137,6 +140,8 @@ model Athlete {
   payoutItems          PayoutItem[]
   favoritedBy          FavoriteAthlete[]
   withdrawalRequests   WithdrawalRequest[]
+  donationsReceived    Donation[]
+  agencyRequests       AgencyAthleteRequest[]
 
   @@map("athletes")
 }
@@ -161,10 +166,41 @@ model Agency {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  user            User        @relation(fields: [userId], references: [id])
-  athletes        Athlete[]
+  user             User        @relation(fields: [userId], references: [id])
+  athletes         Athlete[]
+  athleteRequests  AgencyAthleteRequest[]
 
   @@map("agencies")
+}
+
+// ============================================
+// Agency-Athlete Connection Request
+// ============================================
+
+enum AgencyAthleteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model AgencyAthleteRequest {
+  id              String                      @id @default(uuid())
+  agencyId        String                      @map("agency_id")
+  athleteId       String                      @map("athlete_id")
+  status          AgencyAthleteRequestStatus  @default(PENDING)
+  message         String?
+  rejectedReason  String?                     @map("rejected_reason")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+  respondedAt     DateTime?                   @map("responded_at")
+
+  agency          Agency                      @relation(fields: [agencyId], references: [id])
+  athlete         Athlete                     @relation(fields: [athleteId], references: [id])
+
+  @@index([athleteId, status])
+  @@index([agencyId, status])
+  @@map("agency_athlete_requests")
 }
 
 // ============================================
@@ -818,6 +854,10 @@ enum NotificationType {
   WITHDRAWAL_APPROVED
   WITHDRAWAL_REJECTED
   WITHDRAWAL_PAID
+  AGENCY_CONNECTION_REQUEST
+  AGENCY_CONNECTION_APPROVED
+  AGENCY_CONNECTION_REJECTED
+  AGENCY_CONNECTION_CANCELLED
 }
 
 model Notification {
@@ -966,6 +1006,10 @@ enum PointTxReason {
   POINT_TRANSFER_RECEIVE  // 포인트 수신 (적립)
   POINT_TOPUP             // 포인트 충전
   POINT_TOPUP_REFUND      // 포인트 충전 환불
+  DONATION_SEND           // 후원 발송 (팬)
+  DONATION_RECEIVE        // 후원 수신 (선수)
+  DONATION_FEE            // 후원 수수료 (플랫폼)
+  POINT_WITHDRAWAL        // 포인트 출금
 }
 
 model PointWallet {
@@ -2208,4 +2252,64 @@ model PointTransfer {
   @@index([fromUserId, createdAt])
   @@index([toUserId, createdAt])
   @@map("point_transfers")
+}
+
+// ============================================
+// Donation (팬→선수 후원)
+// ============================================
+
+model Donation {
+  id              String   @id @default(uuid())
+  donorUserId     String   @map("donor_user_id")
+  athleteId       String   @map("athlete_id")
+  amount          Decimal  @db.Decimal(18, 0)               // 총 후원 금액
+  platformFee     Decimal  @map("platform_fee") @db.Decimal(18, 0)  // 수수료 (2%)
+  netAmount       Decimal  @map("net_amount") @db.Decimal(18, 0)    // 선수 수령액
+  message         String?
+  isAnonymous     Boolean  @default(false) @map("is_anonymous")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  donorUser       User     @relation("DonationFrom", fields: [donorUserId], references: [id])
+  athlete         Athlete  @relation(fields: [athleteId], references: [id])
+
+  @@index([donorUserId, createdAt])
+  @@index([athleteId, createdAt])
+  @@map("donations")
+}
+
+// ============================================
+// Point Withdrawal (포인트 출금 - 선수용)
+// ============================================
+
+enum PointWithdrawalStatus {
+  REQUESTED     // 출금 요청
+  APPROVED      // 승인됨
+  REJECTED      // 거부됨
+  PAID          // 지급 완료
+}
+
+model PointWithdrawal {
+  id                  String                @id @default(uuid())
+  userId              String                @map("user_id")
+  amount              Decimal               @db.Decimal(18, 0)  // 출금 요청 금액 (포인트)
+  bankName            String                @map("bank_name")
+  bankAccountNumber   String                @map("bank_account_number")
+  bankAccountMasked   String                @map("bank_account_masked")  // 마스킹된 계좌번호
+  accountHolder       String                @map("account_holder")
+  status              PointWithdrawalStatus @default(REQUESTED)
+  requestedReason     String?               @map("requested_reason")
+  adminNote           String?               @map("admin_note")
+  payoutReference     String?               @map("payout_reference")  // 이체 참조번호
+  processedBy         String?               @map("processed_by")      // 처리한 관리자 ID
+  createdAt           DateTime              @default(now()) @map("created_at")
+  approvedAt          DateTime?             @map("approved_at")
+  rejectedAt          DateTime?             @map("rejected_at")
+  paidAt              DateTime?             @map("paid_at")
+
+  user                User                  @relation("PointWithdrawals", fields: [userId], references: [id])
+  admin               User?                 @relation("ProcessedPointWithdrawals", fields: [processedBy], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("point_withdrawals")
 }
