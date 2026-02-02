@@ -632,6 +632,23 @@ async function main() {
   }
   console.log('Slot templates created:', slotTemplates.length);
 
+  // Clean up legacy slot templates (SG-xx codes from old system)
+  const validCodes = slotTemplates.map(t => t.code);
+  const deletedLegacy = await prisma.slotTemplate.deleteMany({
+    where: {
+      code: {
+        notIn: validCodes,
+      },
+      // Only delete templates that have no slot instances
+      slotInstances: {
+        none: {},
+      },
+    },
+  });
+  if (deletedLegacy.count > 0) {
+    console.log(`Legacy slot templates cleaned up: ${deletedLegacy.count}`);
+  }
+
   // Create Forbidden Categories
   const forbiddenCategories = [
     { code: 'TOBACCO', name: '담배/니코틴', description: '모든 담배 및 니코틴 관련 제품' },
