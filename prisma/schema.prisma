@@ -1026,10 +1026,17 @@ enum PointTxReason {
   DONATION_RECEIVE        // 후원 수신 (선수)
   DONATION_FEE            // 후원 수수료 (플랫폼)
   POINT_WITHDRAWAL        // 포인트 출금
-  // FanVote 레거시
+  // FanVote 레거시 (기존 데이터 호환용 - 삭제 금지)
   VOTE_ENTRY_FEE          // 투표 참여비 (레거시)
   VOTE_WIN_PAYOUT         // 투표 당첨금 (레거시)
   VOTE_CREATE_FEE         // 투표 생성비 (레거시)
+  VOTE_OPEN_FEE           // 투표 개설비 (레거시)
+  VOTE_POT_REMAINDER      // 정산 잔여금 (레거시)
+  VOTE_CREATOR_PRIZE      // 개설자 상금 (레거시)
+  VOTE_ENTRY_PLATFORM     // 참여비 플랫폼몫 (레거시)
+  VOTE_ENTRY_CREATOR      // 참여비 개설자몫 (레거시)
+  VOTE_SETTLEMENT_FEE     // 정산 수수료 (레거시)
+  VOTE_REFUND             // 투표 환불 (레거시)
   // 리워드풀 기반 무료 투표 시스템
   VOTE_MICRO_REWARD       // 참여 시 마이크로 보상
   VOTE_FINAL_REWARD       // 정산 시 정답 보상
