@@ -983,4 +983,681 @@ const taxAmount = totalAmount - supplyAmount; // 세액 (10%)
 
 ---
 
+## [2026-01-21] 환경변수 검증 체계 정리 - 서버 죽음 방지
+
+### 변경 사항
+- **validateEnv() 수정**: PORTONE_SECRET 필수 검증 제거
+  - 실제 코드는 Toss/Stripe provider 사용 (PORTONE 미사용)
+  - 결제 provider는 조건부 로드로 graceful degradation
+  - secretKey 없으면 해당 provider가 비활성화됨 (서버 죽지 않음)
+- **.env.example 업데이트**: 전체 환경변수 목록 정리
+  - 결제 연동 (TOSS_*, STRIPE_*)
+  - 프로덕션 필수 (BANK_ACCOUNT_ENC_KEY, CORS_ORIGIN 등)
+  - 선택 설정 (경매, 파일 업로드, 외부 서비스)
+- **docs/ENV_SETUP.md 신규 생성**: 환경변수 가이드 문서
+
+### 영향받는 파일
+- `src/backend/src/config/index.ts` - PORTONE_SECRET 검증 제거
+- `src/backend/.env.example` - 환경변수 목록 업데이트
+- `docs/ENV_SETUP.md` (신규) - 환경변수 설정 가이드
+
+### 문제 해결
+| 이슈 | 원인 | 해결 |
+|------|------|------|
+| 운영에서 서버 죽음 | validateEnv()가 PORTONE_SECRET 필수 요구 | 검증 제거, 주석으로 대체 |
+| 불일치 | PORTONE 코드에서 미사용 | Toss/Stripe 조건부 로드 확인 |
+| 문서 부재 | 환경변수 가이드 없음 | ENV_SETUP.md 생성 |
+
+### 참고
+- 결제 provider 키는 `payments/providers/index.ts`에서 조건부 로드
+- Toss 사용 시: `TOSS_SECRET_KEY`, `TOSS_WEBHOOK_SECRET`
+- Stripe 사용 시: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+- 빌드 성공 확인, 서버 시작 시 죽지 않음 검증
+
+---
+
+## [2026-01-21] 팬 로그인/가입 후 인증 상태 갱신 수정
+
+### 변경 사항
+- **FanLogin.tsx**: 로그인 성공 후 `checkAuth()` 호출 추가
+- **FanRegister.tsx**: 가입 성공 후 `checkAuth()` 호출 추가
+- 토큰 저장 후 Zustand 상태 갱신으로 ProtectedRoute 통과
+
+### 문제 해결
+| 이슈 | 원인 | 해결 |
+|------|------|------|
+| 팬 로그인 후 /fan 튕김 | localStorage만 저장, useAuth 상태 미갱신 | checkAuth() 호출 추가 |
+
+### 영향받는 파일
+- `src/frontend/src/pages/fan/FanLogin.tsx` - useAuth import, checkAuth 호출
+- `src/frontend/src/pages/fan/FanRegister.tsx` - useAuth import, checkAuth 호출
+
+### 참고
+- checkAuth()는 getMe API 호출하여 user 정보 + isAuthenticated 설정
+- 기존 useAuth.ts 로직 재사용 (최소 변경)
+
+---
+
+## [2026-01-21] 결제 연동 PortOne V2 단일화 - 환경변수 정리
+
+### 변경 사항
+- **결제 연동 변경**: Toss 직접 연동 → PortOne V2 + TossPayments 채널
+- **환경변수 정리**:
+  - 백엔드: `PORTONE_V2_API_SECRET`, `PORTONE_STORE_ID`, `PORTONE_CHANNEL_KEY`
+  - 프론트엔드: `VITE_PORTONE_STORE_ID`, `VITE_PORTONE_CHANNEL_KEY`
+- **기존 TOSS_* 환경변수** 주석 처리 (비활성화)
+
+### 영향받는 파일
+- `src/backend/src/config/index.ts` - PortOne V2 환경변수 안내 주석
+- `src/backend/.env.example` - PortOne V2 환경변수 추가
+- `src/frontend/.env.example` - VITE_PORTONE_* 추가
+- `docs/ENV_SETUP.md` - 결제 연동 섹션 PortOne V2로 변경
+
+### 참고
+- 현재는 환경변수 체계만 정리 (실제 어댑터 구현은 별도 작업)
+- PortOne V2 설정 절차는 `docs/ENV_SETUP.md` 참조
+
+---
+
+## [2026-01-22] 디버깅/패칭 - 라우트 순서 및 링크 수정
+
+### 변경 사항
+- **A) 백엔드 Express 라우트 순서 수정** (치명적 버그)
+  - `admin.finance.routes.ts`: `/withdrawals/batches`, `/withdrawals/metrics`를 `/:id` 위로 이동
+  - `campaign.routes.ts`: `/recommended-athletes`를 `/:id` 위로 이동
+  - `contract.routes.ts`: `/settlements`를 `/:id` 위로 이동
+- **B) 프론트엔드 링크/라우트 불일치 수정**
+  - `Auctions.tsx`: `/brand/contracts/` → `/contracts/`
+  - `CampaignDetail.tsx`: `/brand/campaigns` → `/campaigns`
+  - `FanVoteResult.tsx`: `/fan-votes` → `/votes`
+  - `SeasonLeaderboard.tsx`: `/seasons` → `/ranking`
+- **C) Admin Topups 페이지 추가**
+  - `FinanceTopups.tsx` 신규 생성 (브랜드 충전 내역 조회)
+  - App.tsx에 `/admin/finance/topups` 라우트 등록
+
+### 영향받는 파일
+- `src/backend/src/routes/admin.finance.routes.ts`
+- `src/backend/src/routes/campaign.routes.ts`
+- `src/backend/src/routes/contract.routes.ts`
+- `src/frontend/src/pages/Auctions.tsx`
+- `src/frontend/src/pages/brand/CampaignDetail.tsx`
+- `src/frontend/src/pages/fan/FanVoteResult.tsx`
+- `src/frontend/src/pages/fan/SeasonLeaderboard.tsx`
+- `src/frontend/src/pages/admin/finance/FinanceTopups.tsx` (신규)
+- `src/frontend/src/pages/admin/finance/index.ts`
+- `src/frontend/src/App.tsx`
+
+### 참고
+- Express는 라우트 선언 순서대로 매칭 → 특정 경로가 `:id` 뒤에 있으면 404 발생
+- 프론트엔드 링크가 존재하지 않는 라우트를 가리키면 빈 페이지/404
+- 빌드 테스트 통과 확인 (Backend: tsc, Frontend: tsc + vite build)
+
+---
+
+## [2026-01-22] 디버깅/패칭 2차 - 깨진 링크 제거
+
+### 변경 사항
+- **Auctions.tsx**: 존재하지 않는 `/slots/${slot.id}` 링크 제거
+  - 즉시구매 슬롯 목록의 "상세 보기" 버튼이 없는 라우트로 연결됨
+  - 클릭 시 홈으로 리다이렉트되는 버그
+  - 해결: Link 컴포넌트 삭제, BRAND 사용자는 "즉시구매" 버튼만 표시
+
+### 영향받는 파일
+- `src/frontend/src/pages/Auctions.tsx` - Line 516-524 삭제
+
+### 검증
+- TypeScript 빌드 통과
+- Vite 프로덕션 빌드 통과 (2527 modules, 7.60s)
+
+---
+
+## [2026-01-22] 디버깅/패칭 3차 - 추가 링크 버그 수정
+
+### 변경 사항
+- **AuctionDetail.tsx**: `/contracts?highlight=...` → `/contracts/...`
+  - highlight 쿼리파라미터가 지원되지 않아 계약 상세 페이지로 직접 연결
+- **FinanceEscrowDetail.tsx**: `/contracts?highlight=...` → `/contracts/...`
+  - 동일한 문제로 계약 상세 페이지로 직접 연결
+- **AdminEntityDetail.tsx**: 존재하지 않는 라우트 링크 제거
+  - `/admin/contracts` - 라우트 없음 → 링크 제거
+  - `/admin/slots` - 라우트 없음 → 링크 제거
+  - 출금 목록, 에스크로 목록 링크는 유지 (라우트 존재)
+
+### 영향받는 파일
+- `src/frontend/src/pages/AuctionDetail.tsx`
+- `src/frontend/src/pages/admin/finance/FinanceEscrowDetail.tsx`
+- `src/frontend/src/pages/admin/AdminEntityDetail.tsx`
+
+### 검증
+- TypeScript 빌드 통과
+- Vite 프로덕션 빌드 통과 (2527 modules, 7.76s)
+
+---
+
+## [2026-01-22] 경매 최고가 갱신 버그 수정
+
+### 변경 사항
+- **brand.service.ts**: `getMyBids()` 메서드에서 `currentHighest` 계산 로직 수정
+  - 기존: `auction.bids[0]?.currentProxy` (최고 입찰자의 프록시 금액)
+  - 수정: `auction.currentPrice` (공식 현재 최고가 = 2차가 경매 공개가)
+  - 이슈: 내 입찰 탭에서 "현재 최고가"가 갱신되지 않는 문제
+
+### 원인 분석
+- 입찰 시 `bid.service.ts`에서 `auction.currentPrice`를 정상 업데이트
+- 그러나 `brand.service.ts`에서 `currentHighest`를 `bids[0].currentProxy`로 계산
+- `currentProxy`는 각 입찰자의 프록시 금액이고, `currentPrice`가 공식 최고가
+
+### 영향받는 파일
+- `src/backend/src/services/brand.service.ts`
+
+### 검증
+- TypeScript 빌드 통과
+
+---
+
+## [2026-01-22] 입찰 P2002 중복 에러 수정
+
+### 변경 사항
+- **bid.service.ts**: `placeBid()` 메서드에서 기존 입찰 조회 방식 수정
+  - 기존: `auction.bids.find()` (트랜잭션 외부에서 조회, stale data 가능)
+  - 수정: `tx.bid.findUnique({ where: { auctionId_brandId: ... }})`
+  - 트랜잭션 내에서 직접 조회하여 race condition 방지
+
+### 원인 분석
+- Bid 모델에 `@@unique([auctionId, brandId])` 제약 존재
+- 기존 입찰이 있는데 `auction.bids` 배열에서 찾지 못하면 create 시도
+- P2002 unique constraint violation → "Resource already exists" 409 에러
+
+### 영향받는 파일
+- `src/backend/src/services/bid.service.ts`
+
+### 검증
+- TypeScript 빌드 통과
+
+---
+
+## [2026-01-22] 추천 경매 (Featured Auctions) 기능 구현
+
+### 변경 사항
+- **Auction 모델**: `isFeatured` Boolean 필드 추가
+- **Admin 서비스**: 추천 경매 생성 기능 (`createFeaturedAuction`, `bulkCreateFeaturedAuctions`)
+  - 슬롯 인스턴스 + 경매를 원자적 트랜잭션으로 생성
+  - 즉시 LIVE 상태로 시작 가능
+- **Public API**: `/auctions/featured` 엔드포인트 (비로그인 조회 가능)
+- **Admin UI**: 추천 경매 관리 페이지 (`/admin/featured-auctions`)
+- **Auctions 페이지**: 상단에 추천 경매 섹션 노출 (황금색 배경)
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` - Auction.isFeatured 추가
+- `src/backend/src/services/admin.service.ts` - 추천 경매 생성 메서드
+- `src/backend/src/services/auction.service.ts` - getFeaturedAuctions 메서드
+- `src/backend/src/controllers/admin.controller.ts` - 추천 경매 컨트롤러
+- `src/backend/src/controllers/auction.controller.ts` - getFeatured 메서드
+- `src/backend/src/routes/admin.routes.ts` - 추천 경매 라우트
+- `src/backend/src/routes/auction.routes.ts` - /auctions/featured 라우트
+- `src/frontend/src/services/api.ts` - API 메서드 추가
+- `src/frontend/src/pages/admin/AdminFeaturedAuctions.tsx` - 신규 페이지
+- `src/frontend/src/pages/Auctions.tsx` - 추천 경매 섹션 추가
+- `src/frontend/src/components/Layout.tsx` - 네비게이션 메뉴 추가
+- `src/frontend/src/App.tsx` - 라우트 등록
+
+### 검증
+- Backend TypeScript 빌드 통과
+- Frontend TypeScript/Vite 빌드 통과
+
+---
+
+## [2026-01-22] 슬롯 3D 시각화 + 경매 등록 슬롯 표시 버그 수정
+
+### 변경 사항
+- **버그 수정**: 선수가 슬롯에 경매 설정 시 슬롯이 사라지는 문제 해결
+  - `athleteService.getAvailableSlots`에서 `IN_AUCTION`, `RESERVED` 상태도 포함하도록 수정
+  - `MySlots.tsx`에서 계약 정보 접근 경로 수정 (`slot.contract` → `slot.auction?.contract`)
+- **3D 시각화**: Three.js 기반 슬롯 부착 위치 3D 시각화 컴포넌트 추가
+  - 모자(Cap): 정면/측면 로고 위치 표시, 자동 회전
+  - 셔츠(Shirt): 정면/등판/소매 로고 위치 표시
+  - 2D/3D 토글 버튼으로 전환 가능
+
+### 영향받는 파일
+- `src/backend/src/services/athlete.service.ts` - getAvailableSlots 쿼리 수정
+- `src/frontend/src/pages/MySlots.tsx` - contract 접근 경로 수정
+- `src/frontend/src/components/SlotVisualization.tsx` - 3D 지원 추가
+- `src/frontend/src/components/SlotVisualization3D.tsx` - 신규 (Three.js 3D 컴포넌트)
+- `src/frontend/package.json` - three, @react-three/fiber, @react-three/drei 패키지 추가
+
+### 참고
+- Three.js React 18 호환 버전 사용: three@0.160, @react-three/fiber@8.15, @react-three/drei@9.88
+- 3D 모델은 기하학적 메시로 직접 구성 (외부 모델 파일 없음)
+
+---
+
+## [2026-01-22] 경매+즉시구매 동시 설정 버그 수정
+
+### 문제
+- 슬롯에 경매와 즉시구매를 동시에 활성화하면 즉시구매 탭에서 해당 슬롯이 표시되지 않음
+- 원인: 경매 활성화 시 슬롯 상태가 `IN_AUCTION`으로 변경되지만, 즉시구매 탭은 `status: 'OPEN'`만 조회
+
+### 변경 사항
+- **백엔드**: `slotInstanceService.list()`에 `enableDirectBuy` 필터 추가
+- **백엔드**: `slotInstanceController.list()`에서 `enableDirectBuy` 쿼리 파라미터 처리
+- **프론트엔드**: 즉시구매 탭 쿼리를 `status: 'OPEN'` → `enableDirectBuy: true`로 변경
+- **프론트엔드**: RESERVED/SOLD 상태 슬롯은 목록에서 제외
+
+### 영향받는 파일
+- `src/backend/src/services/slot.service.ts` - list() 함수에 enableDirectBuy 필터 추가
+- `src/backend/src/controllers/slot.controller.ts` - 쿼리 파라미터 추출 수정
+- `src/frontend/src/pages/Auctions.tsx` - 즉시구매 슬롯 쿼리 로직 수정
+
+### 검증
+- Backend/Frontend TypeScript 빌드 통과
+
+---
+
+## [2026-01-22] 슬롯 생성 모달 중복 체크 버그 수정
+
+### 문제
+- 슬롯 생성 모달에서 이미 존재하는 슬롯이 선택 가능하게 표시됨
+- 원인: 페이지의 이벤트 필터에 따라 `existingSlots`가 제한적으로 로드됨
+- 모달에서 다른 이벤트를 선택하면 해당 이벤트의 기존 슬롯 정보가 없어서 중복 필터링 실패
+
+### 변경 사항
+- **CreateSlotModal**: 별도의 `useQuery`로 전체 슬롯 목록 조회
+- `allExistingSlots`를 사용하여 모든 이벤트의 슬롯을 중복 체크
+
+### 영향받는 파일
+- `src/frontend/src/pages/MySlots.tsx` - CreateSlotModal 컴포넌트 수정
+
+### 검증
+- Frontend TypeScript 빌드 통과
+
+---
+
+## [2026-01-22] 3D 베이스볼 캡 LatheGeometry 기반 구현
+
+### 변경 사항
+- **크라운**: BufferGeometry → LatheGeometry + Bezier 프로파일 곡선으로 변경
+- **챙**: ExtrudeGeometry + vertex bend로 아래로 휘어지는 곡면 구현
+- **머티리얼**: MeshPhysicalMaterial (transmission:0, clearcoat:0, roughness:0.85)
+- 사용하지 않는 import 정리 (useThree, useFrame, Line, useEffect)
+- 미사용 유틸리티 파일 삭제 (createBaseballCap.ts)
+
+### 영향받는 파일
+- `src/frontend/src/components/SlotVisualization3D.tsx` - 캡 지오메트리 전면 재구성
+
+### 검증
+- Frontend TypeScript 빌드 통과
+- Git push 완료 (commit: 8754812)
+
+---
+
+## [2026-01-22] 모자 측면 뷰 SVG 대폭 개선
+
+### 변경 사항
+- **챙 길이 대폭 증가**: x=25 → x=-50까지 연장 (실제 야구모자 비율)
+- **챙 입체감**: 상면/하면/두께를 분리하여 3D 느낌 표현
+- **스티칭 라인**: 점선 패스로 봉제선 표현
+- **크라운 형태**: 앞이 낮고 뒤가 높은 실제 캡 실루엣
+- **디테일 추가**: 패널 구분선, 아일릿(환기구멍), 탑 버튼
+- **그라데이션 개선**: 4개 gradient로 입체감 향상
+- **viewBox 확장**: 512x400 → 550x420
+
+### 영향받는 파일
+- `src/frontend/src/components/SlotVisualization.tsx` - CapSideView 전면 재구성
+
+### 검증
+- Frontend TypeScript 빌드 통과
+- Git push 완료 (commit: 642cf7b)
+
+---
+
+## [2026-01-23] 팬 투표 페이지 버그 수정 (Timezone + 화이트스크린)
+
+### 변경 사항
+- **화이트스크린 수정**: VoteDetail.tsx에서 `stats.optionStats.sort()` 호출 시 undefined 체크 추가
+  - `stats?.optionStats && Array.isArray(stats.optionStats)` 방어 코드 추가
+- **Backend 필드명 수정**: vote.service.ts `getVoteEventStats()`에서 `options` → `optionStats`로 변경
+- **Timezone 이슈 해결**: `listActiveVoteEvents()`에서 날짜 필터링 제거
+  - 서버 UTC 시간과 사용자 KST 시간 불일치 문제
+  - 이제 ACTIVE 상태만으로 투표 노출 여부 결정
+  - 관리자가 activate/close 버튼으로 직접 관리
+- **디버그 로그 정리**: Votes.tsx에서 개발용 console.log 제거
+
+### 영향받는 파일
+- `src/frontend/src/pages/fan/VoteDetail.tsx` - undefined 체크 추가
+- `src/frontend/src/pages/fan/Votes.tsx` - 디버그 로그 제거
+- `src/backend/src/services/vote.service.ts` - optionStats 필드명, 날짜 필터 제거
+
+### 참고
+- 관리자 투표 상태 플로우: DRAFT → ACTIVE (activate) → CLOSED (close) → SETTLED (settle)
+- startAt/endAt은 팬에게 표시용 정보로만 사용 (실제 필터링에 사용하지 않음)
+
+---
+
+## [2026-01-23] 투표 시스템 버그 수정 및 포인트 배분 로직 개선
+
+### 변경 사항
+- **투표 제출 403 오류 수정**: `submitVote()`에서 날짜 검증 로직 제거
+  - 서버 UTC와 클라이언트 KST 시간 불일치로 인한 오류
+  - ACTIVE 상태 검사만으로 투표 가능 여부 판단
+- **포인트 지급 시스템 수정**: vote.service.ts에서 `pointService.adjustPoints()` 사용
+  - 기존: `User.pointBalance` + `PointLedger` (프론트엔드 미사용)
+  - 수정: `PointWallet` + `PointLedgerTx` (프론트엔드 조회용)
+- **관리자 포인트 지급 페이지 추가**: AdminPoints.tsx
+  - 이메일로 팬 사용자 검색
+  - 선택 사용자에게 포인트 지급 (사유 입력 가능)
+- **투표 정산 n분의1 배분 방식 변경**:
+  - 기존: 정답자 각자에게 `pointsPerCorrect` 고정 지급
+  - 수정: 총 상금 풀(`pointsPerCorrect`)을 정답자 수로 나눠 균등 배분
+  - 나머지(remainder)는 플랫폼 귀속
+
+### 영향받는 파일
+- `src/backend/src/services/vote.service.ts` - 날짜 검증 제거, PointWallet 사용, n분의1 배분
+- `src/backend/src/routes/admin.entities.routes.ts` - GET /admin/entities/fans 추가
+- `src/frontend/src/pages/admin/AdminPoints.tsx` - 신규 생성
+- `src/frontend/src/services/api.ts` - getAdminFans() 메서드 추가
+- `src/frontend/src/App.tsx` - AdminPoints 라우트 추가
+- `src/frontend/src/components/Layout.tsx` - 포인트 관리 네비게이션 추가
+
+### 참고
+- 투표 정산 공식: `payoutEach = floor(totalPrizePool / correctCount)`
+- 정답자 0명인 경우 전액 플랫폼 귀속
+
+---
+
+## [2026-01-23] 비로그인 경매/인벤토리 조회 버그 수정
+
+### 변경 사항
+- **비로그인 사용자 경매 조회 가능**: `/auctions`, `/auctions/live`, `/auctions/ending-soon`, `/auctions/:id`
+- **비로그인 사용자 인벤토리 조회 가능**: `/slots/instances`, `/slots/instances/available`
+- **비로그인 사용자 이벤트 조회 가능**: `/events`, `/events/upcoming`, `/events/:id`
+- `authenticate` 미들웨어를 `optionalAuth`로 변경하여 비로그인도 데이터 조회 가능
+- 입찰/구매 등 쓰기 작업은 여전히 인증 필수
+
+### 영향받는 파일
+- `src/backend/src/routes/auction.routes.ts` - GET 라우트 optionalAuth 적용
+- `src/backend/src/routes/slot.routes.ts` - GET /instances, GET /instances/available optionalAuth 적용
+- `src/backend/src/routes/event.routes.ts` - GET 라우트 optionalAuth 적용
+
+### 참고
+- 기존에 `/auctions/featured`만 optionalAuth로 비로그인 접근 가능했음
+- 투표 조회와 마찬가지로 경매/인벤토리도 비로그인 사용자에게 열람 허용
+- 실제 입찰/구매 행위는 프론트엔드에서 로그인 체크 후 진행
+
+---
+
+## [2026-01-23] 브랜드 투표 생성 기능 추가
+
+### 변경 사항
+- **Backend**: 브랜드가 투표를 생성할 수 있는 API 추가
+  - `POST /fan-votes/brand/create` - 브랜드 투표 생성
+  - `GET /fan-votes/brand/my/events` - 브랜드가 만든 투표 목록
+  - `POST /fan-votes/brand/:id/submit` - 브랜드 투표 제출 (DRAFT → SUBMITTED)
+- **Frontend**: 브랜드 투표 생성/관리 페이지 추가
+  - `BrandVoteCreate.tsx` - 브랜드 투표 생성 폼 (스폰서 기여금, 배너, 로고, 메시지, 링크 입력 가능)
+  - `BrandVotes.tsx` - 브랜드가 만든 투표 목록 및 관리
+- **네비게이션**: 브랜드 메뉴에 "내 투표" 항목 추가
+
+### 영향받는 파일
+- `src/backend/src/services/fanVote.service.ts` - createByBrand, submitBrandVote, getBrandCreatedEvents 추가
+- `src/backend/src/controllers/fanVote.controller.ts` - 브랜드 투표 컨트롤러 메서드 추가
+- `src/backend/src/routes/fanVote.routes.ts` - 브랜드 투표 라우트 추가
+- `src/frontend/src/services/api.ts` - createBrandVote, getBrandCreatedVotes, submitBrandVote 추가
+- `src/frontend/src/pages/brand/BrandVoteCreate.tsx` - 신규 생성
+- `src/frontend/src/pages/brand/BrandVotes.tsx` - 신규 생성
+- `src/frontend/src/App.tsx` - 라우트 추가 (/brand/votes, /brand/votes/create)
+- `src/frontend/src/components/Layout.tsx` - 브랜드 네비게이션에 "내 투표" 추가
+
+### 참고
+- 브랜드 투표도 팬 투표와 동일한 정산 로직 적용 (총 포인트 풀 → 정답자에게 배분)
+- 브랜드 생성 투표는 자동으로 스폰서로 설정되며, 기여금이 상금 풀에 추가됨
+- 관리자 승인 후 투표가 활성화됨
+
+---
+
+## [2026-01-23] 투표 생성/제출 시 역할(FAN/ATHLETE/BRAND) 구분 처리
+
+### 변경 사항
+- **문제**: 선수(ATHLETE)가 투표를 만들어도 `creatorRole`이 항상 'FAN'으로 저장됨
+- **원인**: `/fan-votes/create` 엔드포인트가 모든 역할(FAN, ATHLETE, BRAND)에서 `createByFan` 서비스 메서드만 호출
+- **해결**: 컨트롤러에서 사용자 역할에 따라 적절한 서비스 메서드 호출
+  - ATHLETE → `createByAthlete` (creatorRole: 'ATHLETE')
+  - BRAND → `createByBrand` (creatorRole: 'BRAND')
+  - FAN → `createByFan` (creatorRole: 'FAN')
+- `submitFanVote` 컨트롤러도 역할별 분기 처리 추가
+- 알림 메시지에 역할 레이블 표시 ("선수 투표 승인 요청" 등)
+
+### 영향받는 파일
+- `src/backend/src/controllers/fanVote.controller.ts` - createByFan, submitFanVote 역할별 분기 처리
+- `src/backend/src/services/fanVote.service.ts` - submitFanVote 알림 메시지에 역할 레이블 추가
+
+### 참고
+- 이제 관리자 투표 심사 페이지에서 "선수", "브랜드", "팬" 뱃지가 정확히 표시됨
+- 기존에 생성된 투표는 이미 저장된 creatorRole 값을 유지 (마이그레이션 불필요)
+
+---
+
+## [2026-01-23] 관리자 투표 삭제 기능 확장 - 모든 상태 삭제 가능
+
+### 변경 사항
+- **Backend**: `adminDeleteEvent` 서비스 메서드 추가
+  - DRAFT/SUBMITTED: 바로 삭제 (수수료 미청구 상태)
+  - ACTIVE/CLOSED: Seed + 개설수수료 환불 후 삭제
+  - SETTLED: 바로 삭제 (이미 정산 완료)
+- `PointTxReason` enum에 `VOTE_REFUND` 추가
+- `NotificationType` enum에 `FAN_VOTE_DELETED` 추가
+- 삭제 시 개설자에게 알림 발송 (환불 금액 포함)
+- **Frontend**: 관리자 투표 심사 페이지에서 모든 상태에 삭제 버튼 표시
+  - ACTIVE/CLOSED 삭제 시 환불 경고 메시지
+  - 삭제 완료 후 모든 탭 쿼리 무효화
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` - VOTE_REFUND, FAN_VOTE_DELETED enum 값 추가
+- `src/backend/src/services/fanVote.service.ts` - adminDeleteEvent 메서드 추가
+- `src/backend/src/controllers/fanVote.controller.ts` - deleteSettledEvent 수정
+- `src/frontend/src/pages/admin/AdminFanVotes.tsx` - 삭제 버튼 모든 상태에 추가
+
+### 참고
+- 기존 `deleteSettledEvent`는 레거시 호환을 위해 유지 (내부적으로 `adminDeleteEvent` 호출)
+- 참여비 환불은 하지 않음 (이미 참여자에게서 차감됨, 개설자 리워드로 지급됨)
+
+---
+
+## [2026-01-28] 에이전시(Agency) 기능 구현
+
+### 변경 사항
+- **새 역할**: UserRole.AGENCY 추가 - 선수를 대신하여 슬롯/계약을 관리하는 대리인
+- **스키마 추가**: Agency 모델, Athlete.agencyId 추가
+- **Backend**: AgencyService, AgencyController, agency.routes.ts 신규 생성
+- **Auth 확장**: 미들웨어에 agencyId 추가, canManageAthlete 헬퍼 함수
+- **Admin KYC**: 에이전시 KYC 심사 기능 추가 (getPendingKyc, reviewAgencyKyc)
+- **Frontend**: 에이전시 회원가입, 대시보드, 선수 등록/관리 페이지
+
+### 에이전시 기능
+- 회원가입 및 KYC 인증
+- KYC 승인 후 선수 등록 가능
+- 소속 선수 슬롯 판매모드 설정
+- 소속 선수 대신 계약 서명
+- 서명 대기 계약 목록 조회
+
+### Backend 파일
+- `src/backend/prisma/schema.prisma` - AGENCY enum, Agency 모델, Athlete.agencyId
+- `src/backend/src/services/agency.service.ts` (신규)
+- `src/backend/src/controllers/agency.controller.ts` (신규)
+- `src/backend/src/routes/agency.routes.ts` (신규)
+- `src/backend/src/middleware/auth.ts` - agencyId, canManageAthlete
+- `src/backend/src/services/auth.service.ts` - AGENCY case 추가
+- `src/backend/src/services/admin.service.ts` - 에이전시 KYC 심사
+- `src/backend/src/services/email.service.ts` - KYC 알림에 AGENCY 지원
+- `src/backend/src/types/index.ts` - agencyId 추가
+
+### Frontend 파일
+- `src/frontend/src/pages/Register.tsx` - AGENCY 역할 선택 추가
+- `src/frontend/src/pages/agency/AgencyDashboard.tsx` (신규)
+- `src/frontend/src/pages/agency/AgencyAthletes.tsx` (신규)
+- `src/frontend/src/pages/agency/AgencyAthleteRegister.tsx` (신규)
+- `src/frontend/src/pages/agency/index.ts` (신규)
+- `src/frontend/src/components/Layout.tsx` - AGENCY 네비게이션 추가
+- `src/frontend/src/App.tsx` - /agency/* 라우트 등록
+- `src/frontend/src/types/index.ts` - UserRole에 AGENCY 추가
+
+### 비즈니스 규칙
+- 에이전시 KYC 승인 필수: 선수 등록 전 KYC가 APPROVED여야 함
+- 선수 1명 = 1개 에이전시: 동시에 여러 에이전시 소속 불가
+- 출금 권한 분리: 에이전시는 선수 출금 대리 불가 (보안)
+
+---
+
+## [2026-01-28] 에이전시 슬롯 판매모드 설정 시 409 Conflict 오류 수정
+
+### 변경 사항
+- `updateAthleteSlotSaleMode`에서 경매 재활성화 시 409 Conflict 오류 발생 버그 수정
+- 원인: 기존 경매가 ENDED/CANCELLED/UNSOLD 상태일 때 새 경매를 CREATE 시도 → `slotInstanceId` UNIQUE 제약 위반
+- 해결: 기존 경매가 있으면 항상 UPDATE, 없을 때만 CREATE
+- 재활성화 시 `totalExtended`, `winningBidId` 초기화 추가
+
+### 영향받는 파일
+- `src/backend/src/services/agency.service.ts` - updateAthleteSlotSaleMode 메서드 수정
+
+### 참고
+- `slotInstanceId`는 Auction 테이블에서 UNIQUE 제약이 있어 슬롯당 1개 경매만 존재 가능
+- 경매 종료/취소 후 재경매 시에도 기존 레코드를 재활용함
+
+---
+
+## [2026-01-29] Phase 2 슬롯 정책 시스템 구현 (v2)
+
+### 변경 사항
+- **Prisma 스키마 확장**: SlotTemplate에 v2 필드 추가 (phase, category, grade, nameKr, nameEn, uiHeadline, uiCopy, tags, openRule, exclusivityGroup, tournamentReserved, reserveMinKrw, reserveRecKrw)
+- **Event.tournamentRules**: 대회별 슬롯 운영 규칙 JSON 필드 추가
+- **phase2Unlock.service.ts 신규**: Phase 2 자동 오픈 판정 로직 구현
+- **tournamentRules.controller.ts 신규**: 대회 규칙 및 슬롯 가용성 API
+- **tournamentRules.routes.ts 신규**: Public/Auth/Admin 라우트 분리
+- **seed.ts 업데이트**: 6개 → 16개 v2 슬롯 템플릿 (CAP 5, TOP 9, PANTS 2)
+- **Frontend 타입 확장**: TournamentRules, SlotAvailability 인터페이스 추가
+- **api.ts 확장**: getTournamentRules, getSlotAvailability, approvePhase2Slots 등
+
+### 핵심 로직
+- Phase 1 (CAP+TOP): 항상 먼저 오픈
+- Phase 2 (PANTS): Phase 1 유효 슬롯이 모두 SOLD/RESERVED일 때만 오픈
+- chestReservedSide, sleeveReservedSide: CHEST/SLEEVE 그룹 좌/우 대회 점유
+- phase2UnlockMode: AUTO(즉시) / ADMIN_APPROVE(수동)
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` - SlotTemplate v2 필드, Event.tournamentRules
+- `src/backend/prisma/seed.ts` - 16개 슬롯 템플릿 데이터
+- `src/backend/src/services/phase2Unlock.service.ts` (신규)
+- `src/backend/src/controllers/tournamentRules.controller.ts` (신규)
+- `src/backend/src/routes/tournamentRules.routes.ts` (신규)
+- `src/backend/src/routes/index.ts` - 라우트 등록
+- `src/frontend/src/types/index.ts` - v2 타입 추가
+- `src/frontend/src/services/api.ts` - v2 API 메서드 추가
+
+### 참고
+- v2 폴더의 GTOUR_슬롯운영_브랜드카피_패키지_v1_1 문서 기반 구현
+- TypeScript 빌드 성공 확인 (Backend + Frontend)
+
+---
+
+## [2026-01-29] v2 비즈니스 검증 로직 구현 (4가지)
+
+### 변경 사항
+- **phase2EligibleMinDaysBefore 검증**: 대회 종료 N일 전부터만 Phase 2 오픈 가능
+- **maxSlotsPerBrandPerPlayer 검증**: 브랜드당 동일 선수 최대 슬롯 수 제한
+- **prohibitedCategories 검증**: 금지 카테고리 브랜드 입찰/즉시구매 차단
+- **creativeApprovalRequired 검증**: 크리에이티브 사전 승인 필요 여부 (향후 확장용 스텁)
+
+### 구현 내용
+1. `phase2Unlock.service.ts`에 4가지 검증 함수 추가:
+   - `checkPhase2MinDaysBefore()` - 최소 선행일 검증
+   - `validateMaxSlotsPerBrand()` - 브랜드당 최대 슬롯 수 검증
+   - `validateProhibitedCategories()` - 금지 카테고리 검증
+   - `validateCreativeApproval()` - 크리에이티브 승인 검증 (스텁)
+   - `validateTournamentRulesForBid()` - 통합 검증 함수
+
+2. `slot.service.ts` - processBuyNow()에 대회 규칙 검증 추가
+3. `bid.service.ts` - placeBid()에 대회 규칙 검증 추가
+
+### 영향받는 파일
+- `src/backend/src/services/phase2Unlock.service.ts` - 검증 함수 추가
+- `src/backend/src/services/slot.service.ts` - 즉시구매 검증 적용
+- `src/backend/src/services/bid.service.ts` - 입찰 검증 적용
+
+### 참고
+- creativeApprovalRequired는 이제 BrandEventCreativeApproval 모델로 완전 구현됨
+
+---
+
+## [2026-01-29] BrandEventCreativeApproval 모델 및 API 구현
+
+### 변경 사항
+- **Prisma 모델**: `BrandEventCreativeApproval` 추가 (브랜드+대회별 사전 크리에이티브 승인)
+- **PreApprovalStatus enum**: SUBMITTED → UNDER_REVIEW → APPROVED/REJECTED
+- **서비스**: `creativeApproval.service.ts` - 제출, 승인, 거부, 조회 로직
+- **컨트롤러/라우트**: Brand API + Admin API 분리
+- **validateCreativeApproval 연결**: 실제 DB 조회로 승인 상태 검증
+
+### 모델 구조
+```prisma
+model BrandEventCreativeApproval {
+  brandId, eventId  // @@unique
+  fileUrl, fileName, fileType, fileSizeBytes
+  status: PreApprovalStatus
+  reviewNotes, reviewedBy, reviewedAt
+}
+```
+
+### API 엔드포인트
+| API | 설명 |
+|-----|------|
+| POST /api/brand/creative-approvals | 크리에이티브 승인 요청 제출 |
+| GET /api/brand/creative-approvals | 내 요청 목록 |
+| GET /api/brand/creative-approvals/events/:eventId | 특정 대회 승인 상태 |
+| GET /api/admin/creative-approvals | 전체 요청 목록 (Admin) |
+| GET /api/admin/creative-approvals/stats | 통계 (Admin) |
+| POST /api/admin/creative-approvals/:id/approve | 승인 (Admin) |
+| POST /api/admin/creative-approvals/:id/reject | 거부 (Admin) |
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` - BrandEventCreativeApproval 모델, relations 추가
+- `src/backend/src/services/creativeApproval.service.ts` (신규)
+- `src/backend/src/controllers/creativeApproval.controller.ts` (신규)
+- `src/backend/src/routes/creativeApproval.routes.ts` (신규)
+- `src/backend/src/routes/index.ts` - 라우트 등록
+- `src/backend/src/services/phase2Unlock.service.ts` - validateCreativeApproval 실제 구현
+
+### 참고
+- 입찰/즉시구매 시 대회에 creativeApprovalRequired=true면 사전 승인 필수
+- REJECTED 상태에서 재제출 가능
+- TypeScript 빌드 성공 확인 (Backend + Frontend)
+
+---
+
+## [2026-02-02] Vote V2 리워드풀 시스템 버그 수정
+
+### 변경 사항
+- **seed.ts**: rewardPool upsert 시 `update: {}` 비어있어 availableTodayEp가 리셋되지 않는 문제 수정
+  - `update: { availableTodayEp: BigInt(500_000) }` 추가
+- **voteV2.controller.ts**: getVoteById BigInt 직렬화 오류 수정
+  - `participations`, `_count` 필드 스프레드에서 제외
+  - userParticipation BigInt 필드 명시적 toString() 변환
+- **voteV2.routes.ts**: 리워드풀 상태 조회 API 공개 (authenticate → optionalAuth)
+- **VoteV2Detail.tsx**: 참여 후 페이지 새로고침 오류 수정 (await 추가, 에러 상태 관리 개선)
+- **Layout.tsx**: Brand/Athlete 메뉴에 투표 생성/내가 만든 투표 추가
+- **Home.tsx**: 메인 페이지 투표 링크 경로 수정 (`/votes/${id}`)
+
+### 영향받는 파일
+- `src/backend/prisma/seed.ts`
+- `src/backend/src/controllers/voteV2.controller.ts`
+- `src/backend/src/routes/voteV2.routes.ts`
+- `src/frontend/src/pages/fan/VoteV2Detail.tsx`
+- `src/frontend/src/components/Layout.tsx`
+- `src/frontend/src/pages/Home.tsx`
+
+### 참고
+- 참여 보상 0 EP 문제 원인: availableTodayEp 부족 → seed 재실행으로 해결
+- 리워드풀 상태: http://localhost:4000/api/votes-v2/reward-pool/status 에서 확인 가능
+- BigInt 직렬화: Prisma에서 반환하는 BigInt는 JSON으로 직렬화 시 명시적 .toString() 필요
+
+---
+
 *이 파일은 기록 전용입니다. 작업 시작 시 자동 로드하지 마세요.*

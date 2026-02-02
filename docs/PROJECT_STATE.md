@@ -1,6 +1,6 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-01-21 (Phase 11-2A - 브랜드 청구/명세서)
+> 최종 업데이트: 2026-02-02 (Vote V2 리워드풀 시스템)
 
 ---
 
@@ -453,6 +453,114 @@
 - `/brand/billing` (BrandBilling.tsx) - 거래명세서/청구정보/세금계산서 탭
 - `/admin/finance/tax-invoices` (AdminTaxInvoices.tsx) - 관리자 세금계산서 관리
 
+### 1.17 추천 경매 (Featured Auctions)
+
+어드민이 유명 선수의 슬롯을 선택하여 전체 공개 경매로 설정하는 기능.
+
+**모델 변경**:
+- `Auction.isFeatured` (Boolean) - 추천 경매 여부
+
+**API**:
+| API | 설명 |
+|-----|------|
+| POST /api/admin/featured-auctions | 추천 경매 생성 (슬롯+경매 원자적 생성) |
+| POST /api/admin/featured-auctions/bulk | 대량 추천 경매 생성 |
+| GET /api/admin/featured-auctions | 추천 경매 목록 (Admin) |
+| GET /api/auctions/featured | 추천 경매 목록 (Public) |
+
+**프론트엔드**:
+- `/admin/featured-auctions` (AdminFeaturedAuctions.tsx) - 추천 경매 관리
+- `/auctions` - 상단에 추천 경매 섹션 노출
+
+### 1.18 에이전시 (Agency)
+
+바쁜 선수를 대신하여 슬롯 관리, 계약 서명 등을 수행하는 대리인 역할.
+
+**모델**:
+- `Agency`: 에이전시 정보 (name, bizNo, contactEmail, kycStatus 등)
+- `Athlete.agencyId`: 에이전시 소속 여부
+
+**역할**: `UserRole.AGENCY` 추가
+
+**에이전시가 할 수 있는 일**:
+- 소속 선수 등록 (KYC 승인 후)
+- 소속 선수의 슬롯 판매 모드 설정
+- 소속 선수의 계약 서명 (대리)
+- 소속 선수의 프로필/KYC 관리
+
+**에이전시가 할 수 없는 일**:
+- 선수의 출금 요청 (금전 관련 보안)
+- 브랜드 기능 (입찰, 즉시구매)
+- 다른 에이전시 소속 선수 관리
+
+| API | 설명 |
+|-----|------|
+| POST /api/auth/agency/register | 에이전시 회원가입 |
+| GET /api/agencies/me | 내 에이전시 프로필 |
+| PATCH /api/agencies/me | 프로필 수정 |
+| POST /api/agencies/me/kyc | KYC 제출 |
+| GET /api/agencies/stats | 에이전시 통계 |
+| POST /api/agencies/athletes | 선수 등록 (KYC 승인 필수) |
+| GET /api/agencies/athletes | 소속 선수 목록 |
+| DELETE /api/agencies/athletes/:id | 선수 해제 |
+| GET /api/agencies/athletes/:id/slots | 선수 슬롯 조회 |
+| PATCH /api/agencies/athletes/:id/slots/:slotId/sale-mode | 판매모드 설정 |
+| POST /api/agencies/athletes/:id/contracts/:contractId/sign | 대리 서명 |
+| GET /api/agencies/pending-signatures | 서명 대기 계약 목록 |
+| POST /api/admin/kyc/agencies/:id/review | Admin KYC 심사 |
+
+**프론트엔드**:
+- `/agency` (AgencyDashboard) - 에이전시 대시보드
+- `/agency/athletes` (AgencyAthletes) - 소속 선수 목록
+- `/agency/athletes/register` (AgencyAthleteRegister) - 선수 등록
+
+### 1.19 Phase 2 슬롯 정책 (v2)
+
+**개요**: 대회별 슬롯 운영 규칙과 Phase 2 자동/수동 오픈 시스템.
+
+**슬롯 구조**:
+- **Phase 1 (CAP+TOP)**: 16개 슬롯 중 14개 - 항상 먼저 오픈
+- **Phase 2 (PANTS)**: 2개 슬롯 - Phase 1 유효 슬롯이 모두 SOLD/RESERVED일 때만 오픈
+- **등급**: S/A/B (reserveMinKrw, reserveRecKrw로 권장 시작가 제공)
+
+**TournamentRules (Event.tournamentRules JSON)**:
+| 필드 | 설명 |
+|------|------|
+| chestReservedSide | CHEST 좌/우 대회 점유 (LEFT/RIGHT/NONE) |
+| sleeveReservedSide | SLEEVE 좌/우 대회 점유 |
+| reservedSlotCodes | 대회가 점유한 슬롯 코드 목록 |
+| disabledSlotCodes | 비활성화된 슬롯 코드 목록 |
+| phase2UnlockMode | AUTO(즉시) / ADMIN_APPROVE(수동) |
+
+**API**:
+| API | 설명 |
+|-----|------|
+| GET /api/slot-templates | v2 슬롯 템플릿 목록 |
+| GET /api/events/:id/tournament-rules | 대회 규칙 조회 |
+| GET /api/events/:id/athletes/:athleteId/slot-availability | 슬롯 가용성 조회 |
+| PUT /api/admin/events/:id/tournament-rules | 대회 규칙 수정 (Admin) |
+| POST /api/admin/events/:id/athletes/:athleteId/approve-phase2 | Phase 2 수동 승인 |
+| GET /api/admin/events/:id/slot-summary | 대회 슬롯 요약 (Admin) |
+
+**서비스**: `phase2UnlockService` (phase2Unlock.service.ts)
+- `isPhase2Eligible()`: Phase 2 오픈 가능 여부 판단
+- `getOpenSlotsForPlayer()`: 선수별 오픈 가능 슬롯 목록
+- `approvePhase2Slots()`: 관리자 Phase 2 수동 승인
+- `validateTournamentRulesForBid()`: 입찰/즉시구매 대회 규칙 통합 검증
+
+**입찰/즉시구매 검증** (slot.service.ts, bid.service.ts):
+| 검증 | 설명 |
+|------|------|
+| phase2EligibleMinDaysBefore | 대회 종료 N일 전부터만 Phase 2 오픈 가능 |
+| maxSlotsPerBrandPerPlayer | 브랜드당 동일 선수 최대 슬롯 수 제한 |
+| prohibitedCategories | 금지 카테고리 브랜드 차단 (tobacco, alcohol 등) |
+| creativeApprovalRequired | 크리에이티브 사전 승인 필요 여부 |
+
+**사전 크리에이티브 승인** (BrandEventCreativeApproval):
+- **상태**: SUBMITTED → UNDER_REVIEW → APPROVED/REJECTED
+- Brand: POST /api/brand/creative-approvals (제출), GET .../events/:eventId (상태 조회)
+- Admin: GET /api/admin/creative-approvals, POST .../:id/approve, POST .../:id/reject
+
 ---
 
 ## 2. FAN 기능
@@ -468,28 +576,32 @@
 | GET /api/points/ranking | 포인트 TOP 랭킹 (공개) |
 | POST /api/points/admin/grant | 관리자 포인트 지급 |
 
-### 2.2 유료 투표 (FanVote)
-- **모델**: `FanVoteEvent`, `FanVoteEntry`, `FanVoteSettlement`, `FanVoteWinner`
-- **상태**: DRAFT → SUBMITTED → ACTIVE → CLOSED → SETTLED
+### 2.2 무료 투표 V2 (Vote V2 + RewardPool)
+- **모델**: `VoteV2`, `VoteV2Participation`, `RewardPool`
+- **상태**: OPEN → CLOSED → SETTLED / CANCELED
+- **템플릿**: OX, MULTIPLE_CHOICE, PREDICT_SCORE, WINNER, CUSTOM
+
+**리워드풀 시스템**:
+- 중앙 리워드풀에서 보상 지급 (플랫폼 운영)
+- **배수 M**: 풀 잔액에 따라 0.2~1.0 (가용액 1M~10M EP 기준 선형 보간)
+- **마이크로 보상**: 참여 즉시 `BASE_MICRO_REWARD(15) × M` EP 지급
+- **정답 보상**: 정산 시 1/n 균등 분배 (최대 50,000 EP)
+- **일일 가용액**: `availableTodayEp` - 매일 리셋 (풀 가용액의 5%)
 
 | API | 설명 |
 |-----|------|
-| GET /api/fan-votes/active | 진행중 투표 |
-| GET /api/fan-votes/ended | 종료된 투표 |
-| POST /api/fan-votes/:id/enter | 투표 참여 (포인트 차감) |
-| POST /api/fan-votes/create | 팬이 투표 생성 |
-| POST /api/fan-votes/:id/submit | 투표 제출 (검토 요청) |
-| GET /api/fan-votes/:id/result | 결과 조회 |
-| POST /api/fan-votes/admin/:id/approve | 관리자 승인 |
-| POST /api/fan-votes/admin/:id/settle | 관리자 정산 |
-| POST /api/fan-votes/:id/sponsor | 브랜드 투표 후원 |
-| POST /api/fan-votes/:id/track-engagement | 스폰서 노출/클릭 추적 |
+| GET /api/votes-v2/reward-pool/status | 리워드풀 상태 조회 (공개) |
+| POST /api/votes-v2/reward-pool/deposit | 리워드풀 충전 (Admin) |
+| POST /api/votes-v2/reward-pool/reset-daily | 일일 가용액 리셋 (Admin/Cron) |
+| GET /api/votes-v2 | 투표 목록 |
+| GET /api/votes-v2/:id | 투표 상세 (참여 정보 포함) |
+| POST /api/votes-v2/:id/participate | 투표 참여 (무료, 마이크로 보상) |
+| POST /api/votes-v2/user/create | 사용자 투표 생성 (본인 포인트 사용) |
+| GET /api/votes-v2/user/my-votes | 내가 생성한 투표 |
+| POST /api/votes-v2/:id/settle | 투표 정산 (Admin) |
+| POST /api/votes-v2/cron/close-expired | 만료 투표 마감 (Cron) |
 
-**투표 스폰서십 (Phase G)**:
-- 브랜드가 투표 후원 가능 (contributionAmount, bannerUrl, logoUrl, message, linkUrl)
-- `SponsorEngagement`: 배너 노출(impressions), 배너 클릭(bannerClicks), 링크 클릭(linkClicks) 추적
-- GET /api/brands/me/sponsored-votes: 브랜드 후원 투표 목록
-- GET /api/brands/me/sponsor-stats: 후원 통계 집계
+**프론트엔드**: `/votes` (VoteV2List), `/votes/:id` (VoteV2Detail), `/votes/create` (VoteCreate)
 
 ### 2.3 포인트샵
 - **모델**: `ShopItem`, `RedemptionOrder`
@@ -566,6 +678,11 @@
 
 ## 4. 스키마 주요 모델
 
+### 에이전시 관련
+```
+Agency (userId, name, bizNo, kycStatus), Athlete.agencyId
+```
+
 ### 원화 관련
 ```
 Wallet, LedgerTx, Escrow, PayoutBatch, PayoutItem, WithdrawalRequest, WithdrawalBatch, TopupPayment, RefundRequest, WebhookEventLog, ReconciliationRun, ReconciliationIssue
@@ -576,9 +693,9 @@ Wallet, LedgerTx, Escrow, PayoutBatch, PayoutItem, WithdrawalRequest, Withdrawal
 PointWallet, PointLedgerTx
 ```
 
-### 팬 투표 관련
+### 투표 V2 관련
 ```
-FanVoteEvent, FanVoteEntry, FanVoteSettlement, FanVoteWinner, SponsorEngagement
+VoteV2, VoteV2Participation, RewardPool
 ```
 
 ### 시즌 관련
@@ -603,9 +720,10 @@ Notification (NotificationType enum)
 | 경로 | 컴포넌트 | 설명 |
 |------|----------|------|
 | /fan | FanDashboard | 팬 메인 대시보드 |
-| /votes | FanVotes | 투표 목록 |
-| /votes/:id | FanVoteDetail | 투표 상세/참여 |
-| /votes/create | FanVoteCreate | 투표 생성 |
+| /votes | VoteV2List | 무료 투표 목록 (V2) |
+| /votes/:id | VoteV2Detail | 투표 상세/참여 (리워드풀) |
+| /votes/create | VoteCreate | 투표 생성 (본인 포인트) |
+| /votes/my-created | MyCreatedVotes | 내가 만든 투표 |
 | /points | FanPoints | 포인트 내역 |
 | /shop | Shop | 포인트샵 |
 | /shop/:id | ShopDetail | 상품 상세 |
@@ -631,6 +749,9 @@ Notification (NotificationType enum)
 | /admin/users | AdminUsers | 관리자 관리 (RBAC) |
 | /admin/finance/tax-invoices | AdminTaxInvoices | 세금계산서 관리 |
 | /brand/billing | BrandBilling | 브랜드 청구/명세서/세금계산서 |
+| /agency | AgencyDashboard | 에이전시 대시보드 |
+| /agency/athletes | AgencyAthletes | 소속 선수 목록 |
+| /agency/athletes/register | AgencyAthleteRegister | 선수 등록 |
 
 ---
 
