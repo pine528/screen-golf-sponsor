@@ -633,46 +633,43 @@ async function main() {
   console.log('Slot templates created:', slotTemplates.length);
 
   // Clean up legacy slot templates (SG-xx codes from old system)
+  // Step 1: Find all legacy templates (codes not in the new v2 template list)
   const validCodes = slotTemplates.map(t => t.code);
-  const deletedLegacy = await prisma.slotTemplate.deleteMany({
+  const legacyTemplates = await prisma.slotTemplate.findMany({
     where: {
       code: {
         notIn: validCodes,
       },
-      // Only delete templates that have no slot instances
-      slotInstances: {
-        none: {},
-      },
     },
+    select: { id: true, code: true },
   });
-  if (deletedLegacy.count > 0) {
-    console.log(`Legacy slot templates cleaned up: ${deletedLegacy.count}`);
-  }
 
-  // Update remaining legacy templates with v2 fields (for templates with existing slot instances)
-  const legacyMappings: Record<string, { category: SlotCategory; grade: SlotGrade; phase: number }> = {
-    'SG-01': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
-    'SG-02': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
-    'SG-03': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
-    'SG-04': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
-    'SG-05': { category: SlotCategory.CAP, grade: SlotGrade.A, phase: 1 },
-    'SG-06': { category: SlotCategory.CAP, grade: SlotGrade.B, phase: 1 },
-  };
+  if (legacyTemplates.length > 0) {
+    const legacyTemplateIds = legacyTemplates.map(t => t.id);
+    console.log(`Found ${legacyTemplates.length} legacy templates to remove:`, legacyTemplates.map(t => t.code));
 
-  for (const [code, mapping] of Object.entries(legacyMappings)) {
-    await prisma.slotTemplate.updateMany({
+    // Step 2: Delete all slotInstances connected to legacy templates
+    const deletedInstances = await prisma.slotInstance.deleteMany({
       where: {
-        code,
-        category: null, // Only update if not already set
-      },
-      data: {
-        category: mapping.category,
-        grade: mapping.grade,
-        phase: mapping.phase,
+        templateId: {
+          in: legacyTemplateIds,
+        },
       },
     });
+    if (deletedInstances.count > 0) {
+      console.log(`Deleted ${deletedInstances.count} slot instances from legacy templates`);
+    }
+
+    // Step 3: Delete the legacy templates themselves
+    const deletedTemplates = await prisma.slotTemplate.deleteMany({
+      where: {
+        id: {
+          in: legacyTemplateIds,
+        },
+      },
+    });
+    console.log(`Legacy slot templates removed: ${deletedTemplates.count}`);
   }
-  console.log('Legacy templates updated with v2 fields');
 
   // Create Forbidden Categories
   const forbiddenCategories = [
