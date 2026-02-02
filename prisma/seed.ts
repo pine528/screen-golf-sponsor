@@ -633,100 +633,46 @@ async function main() {
   console.log('Slot templates created:', slotTemplates.length);
 
   // Clean up legacy slot templates (SG-xx codes from old system)
-  // Step 1: Find all legacy templates (codes not in the new v2 template list)
-  const validCodes = slotTemplates.map(t => t.code);
-  const legacyTemplates = await prisma.slotTemplate.findMany({
-    where: {
-      code: {
-        notIn: validCodes,
-      },
-    },
-    select: { id: true, code: true },
-  });
-
-  if (legacyTemplates.length > 0) {
-    const legacyTemplateIds = legacyTemplates.map(t => t.id);
-    console.log(`Found ${legacyTemplates.length} legacy templates to remove:`, legacyTemplates.map(t => t.code));
-
-    // Find all slot instances connected to legacy templates
-    const legacySlotInstances = await prisma.slotInstance.findMany({
-      where: {
-        templateId: {
-          in: legacyTemplateIds,
-        },
-      },
-      select: { id: true },
+  // Wrapped in try-catch to prevent seed failure
+  try {
+    const validCodes = slotTemplates.map(t => t.code);
+    const legacyTemplates = await prisma.slotTemplate.findMany({
+      where: { code: { notIn: validCodes } },
+      select: { id: true, code: true },
     });
-    const legacySlotInstanceIds = legacySlotInstances.map(s => s.id);
 
-    if (legacySlotInstanceIds.length > 0) {
-      // Find all auctions connected to legacy slot instances
-      const legacyAuctions = await prisma.auction.findMany({
-        where: {
-          slotInstanceId: {
-            in: legacySlotInstanceIds,
-          },
-        },
+    if (legacyTemplates.length > 0) {
+      const legacyTemplateIds = legacyTemplates.map(t => t.id);
+      console.log(`Found ${legacyTemplates.length} legacy templates to remove:`, legacyTemplates.map(t => t.code));
+
+      const legacySlotInstances = await prisma.slotInstance.findMany({
+        where: { templateId: { in: legacyTemplateIds } },
         select: { id: true },
       });
-      const legacyAuctionIds = legacyAuctions.map(a => a.id);
+      const legacySlotInstanceIds = legacySlotInstances.map(s => s.id);
 
-      if (legacyAuctionIds.length > 0) {
-        // Delete bids first
-        const deletedBids = await prisma.bid.deleteMany({
-          where: {
-            auctionId: {
-              in: legacyAuctionIds,
-            },
-          },
+      if (legacySlotInstanceIds.length > 0) {
+        const legacyAuctions = await prisma.auction.findMany({
+          where: { slotInstanceId: { in: legacySlotInstanceIds } },
+          select: { id: true },
         });
-        if (deletedBids.count > 0) {
-          console.log(`Deleted ${deletedBids.count} bids from legacy auctions`);
+        const legacyAuctionIds = legacyAuctions.map(a => a.id);
+
+        if (legacyAuctionIds.length > 0) {
+          await prisma.bid.deleteMany({ where: { auctionId: { in: legacyAuctionIds } } });
+          await prisma.contract.deleteMany({ where: { auctionId: { in: legacyAuctionIds } } });
+          await prisma.auction.deleteMany({ where: { id: { in: legacyAuctionIds } } });
         }
-
-        // Delete contracts connected to legacy auctions
-        const deletedContracts = await prisma.contract.deleteMany({
-          where: {
-            auctionId: {
-              in: legacyAuctionIds,
-            },
-          },
-        });
-        if (deletedContracts.count > 0) {
-          console.log(`Deleted ${deletedContracts.count} contracts from legacy auctions`);
-        }
-
-        // Delete auctions
-        const deletedAuctions = await prisma.auction.deleteMany({
-          where: {
-            id: {
-              in: legacyAuctionIds,
-            },
-          },
-        });
-        console.log(`Deleted ${deletedAuctions.count} auctions from legacy slot instances`);
+        await prisma.slotInstance.deleteMany({ where: { id: { in: legacySlotInstanceIds } } });
       }
 
-      // Delete slot instances
-      const deletedInstances = await prisma.slotInstance.deleteMany({
-        where: {
-          id: {
-            in: legacySlotInstanceIds,
-          },
-        },
+      const deletedTemplates = await prisma.slotTemplate.deleteMany({
+        where: { id: { in: legacyTemplateIds } },
       });
-      console.log(`Deleted ${deletedInstances.count} slot instances from legacy templates`);
+      console.log(`Legacy slot templates removed: ${deletedTemplates.count}`);
     }
-
-    // Delete the legacy templates themselves
-    const deletedTemplates = await prisma.slotTemplate.deleteMany({
-      where: {
-        id: {
-          in: legacyTemplateIds,
-        },
-      },
-    });
-    console.log(`Legacy slot templates removed: ${deletedTemplates.count}`);
+  } catch (error) {
+    console.warn('Warning: Could not clean up legacy templates (non-fatal):', error);
   }
 
   // Create Forbidden Categories
