@@ -646,7 +646,7 @@ async function main() {
       console.log(`Found ${legacyTemplates.length} legacy templates to remove:`, legacyTemplates.map(t => t.code));
 
       const legacySlotInstances = await prisma.slotInstance.findMany({
-        where: { templateId: { in: legacyTemplateIds } },
+        where: { slotTemplateId: { in: legacyTemplateIds } },
         select: { id: true },
       });
       const legacySlotInstanceIds = legacySlotInstances.map(s => s.id);
