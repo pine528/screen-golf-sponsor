@@ -649,6 +649,31 @@ async function main() {
     console.log(`Legacy slot templates cleaned up: ${deletedLegacy.count}`);
   }
 
+  // Update remaining legacy templates with v2 fields (for templates with existing slot instances)
+  const legacyMappings: Record<string, { category: SlotCategory; grade: SlotGrade; phase: number }> = {
+    'SG-01': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
+    'SG-02': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
+    'SG-03': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
+    'SG-04': { category: SlotCategory.TOP, grade: SlotGrade.A, phase: 1 },
+    'SG-05': { category: SlotCategory.CAP, grade: SlotGrade.A, phase: 1 },
+    'SG-06': { category: SlotCategory.CAP, grade: SlotGrade.B, phase: 1 },
+  };
+
+  for (const [code, mapping] of Object.entries(legacyMappings)) {
+    await prisma.slotTemplate.updateMany({
+      where: {
+        code,
+        category: null, // Only update if not already set
+      },
+      data: {
+        category: mapping.category,
+        grade: mapping.grade,
+        phase: mapping.phase,
+      },
+    });
+  }
+  console.log('Legacy templates updated with v2 fields');
+
   // Create Forbidden Categories
   const forbiddenCategories = [
     { code: 'TOBACCO', name: '담배/니코틴', description: '모든 담배 및 니코틴 관련 제품' },
