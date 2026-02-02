@@ -5,6 +5,7 @@ import { BidResult } from '../types';
 import { auctionService } from './auction.service';
 import { socketService } from './socket.service';
 import { conflictService } from './conflict.service';
+import { phase2UnlockService } from './phase2Unlock.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export class BidService {
@@ -92,6 +93,17 @@ export class BidService {
       brandCategory: brand.category,
       excludeAuctionId: auctionId, // 현재 경매는 제외
     });
+
+    // ★ v2: 대회 규칙 통합 검증 (maxSlotsPerBrandPerPlayer, prohibitedCategories, creativeApprovalRequired)
+    const tournamentValidation = await phase2UnlockService.validateTournamentRulesForBid(
+      auction.slotInstance.eventId,
+      auction.slotInstance.athleteId,
+      brandId,
+      brand.category
+    );
+    if (!tournamentValidation.valid) {
+      throw new BadRequestError(tournamentValidation.errors.join(' '));
+    }
 
     // Check for existing brand bids in same auction
     const existingBid = auction.bids.find((b) => b.brandId === brandId);

@@ -29,6 +29,7 @@ interface SlotSaleModeData {
   directBuyPrice?: number;
   auctionMinBid?: number;
   auctionEndAt?: Date;
+  isPublic?: boolean;
 }
 
 export class AgencyService {
@@ -388,7 +389,7 @@ export class AgencyService {
           select: { id: true, code: true, name: true, bodyPart: true },
         },
         auction: {
-          select: { id: true, status: true, currentPrice: true, endAt: true },
+          select: { id: true, status: true, currentPrice: true, endAt: true, isFeatured: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -659,6 +660,7 @@ export class AgencyService {
               // 종료/취소/유찰 상태에서 재활성화 시 초기화
               totalExtended: 0,
               winningBidId: null,
+              isFeatured: data.isPublic ?? slot.auction.isFeatured,
             },
           });
         } else {
@@ -674,6 +676,7 @@ export class AgencyService {
               softCloseSec: 120,
               maxExtensionSec: 600,
               minBidIncrement: 10000,
+              isFeatured: data.isPublic ?? false,
             },
           });
         }

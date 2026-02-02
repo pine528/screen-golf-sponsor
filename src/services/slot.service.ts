@@ -4,6 +4,7 @@ import { BodyPart, MaterialRule, SlotStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { notificationService } from './notification.service';
 import { conflictService } from './conflict.service';
+import { phase2UnlockService } from './phase2Unlock.service';
 
 export class SlotTemplateService {
   async create(data: {
@@ -345,6 +346,7 @@ export class SlotInstanceService {
       directBuyPrice?: number | null;
       auctionMinBid?: number | null;
       auctionEndAt?: Date | null;
+      isPublic?: boolean;
     }
   ) {
     const slot = await prisma.slotInstance.findUnique({
@@ -419,33 +421,21 @@ export class SlotInstanceService {
         const startPrice = Number(auctionMinBid);
 
         if (slot.auction) {
-          // 기존 경매가 있으면 상태에 따라 처리
-          if (slot.auction.status === 'SCHEDULED' || slot.auction.status === 'LIVE') {
-            // 활성 경매는 업데이트
-            await tx.auction.update({
-              where: { id: slot.auction.id },
-              data: {
-                endAt: new Date(auctionEndAt),
-                currentPrice: startPrice,
-                status: 'LIVE', // 즉시 LIVE로 변경
-              },
-            });
-          } else {
-            // ★ 종료/취소/유찰 경매가 있으면 새 경매 생성 (기존 경매는 그대로 둠)
-            await tx.auction.create({
-              data: {
-                slotInstanceId: slotId,
-                startAt: now,
-                endAt: new Date(auctionEndAt),
-                originalEndAt: new Date(auctionEndAt),
-                currentPrice: startPrice,
-                status: 'LIVE',
-                softCloseSec: 120,
-                maxExtensionSec: 600,
-                minBidIncrement: 10000,
-              },
-            });
-          }
+          // 기존 경매가 있으면 항상 UPDATE (slotInstanceId가 UNIQUE이므로 새로 생성 불가)
+          await tx.auction.update({
+            where: { id: slot.auction.id },
+            data: {
+              startAt: now,
+              endAt: new Date(auctionEndAt),
+              originalEndAt: new Date(auctionEndAt),
+              currentPrice: startPrice,
+              status: 'LIVE',
+              isFeatured: data.isPublic ?? slot.auction.isFeatured,
+              // 종료/취소/유찰 상태에서 재활성화 시 초기화
+              totalExtended: 0,
+              winningBidId: null,
+            },
+          });
         } else {
           // 새 경매 생성 - 즉시 LIVE 상태로
           await tx.auction.create({
@@ -459,6 +449,7 @@ export class SlotInstanceService {
               softCloseSec: 120,
               maxExtensionSec: 600,
               minBidIncrement: 10000,
+              isFeatured: data.isPublic ?? false,
             },
           });
         }
@@ -560,6 +551,17 @@ export class SlotInstanceService {
       brandCategory: brand.category,
       excludeSlotId: slotId, // 현재 슬롯은 제외
     });
+
+    // ★ v2: 대회 규칙 통합 검증 (maxSlotsPerBrandPerPlayer, prohibitedCategories, creativeApprovalRequired)
+    const tournamentValidation = await phase2UnlockService.validateTournamentRulesForBid(
+      slot.eventId,
+      slot.athleteId,
+      brandId,
+      brand.category
+    );
+    if (!tournamentValidation.valid) {
+      throw new BadRequestError(tournamentValidation.errors.join(' '));
+    }
 
     // 활성 계약 존재 여부 확인 (슬롯당 1개 제한)
     const existingContract = await prisma.contract.findFirst({

@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { brandController } from '../controllers/brand.controller';
-import { fanVoteController } from '../controllers/fanVote.controller';
 import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
@@ -66,22 +65,6 @@ router.get('/me/wins', authenticate, authorize('BRAND'), brandController.getMyWi
  * @desc Get brand's wallet and recent transactions
  */
 router.get('/me/wallet', authenticate, authorize('BRAND'), brandController.getMyWallet);
-
-/**
- * ★ Phase G: Vote Sponsorship
- */
-
-/**
- * @route GET /brands/me/sponsored-votes
- * @desc Get brand's sponsored votes
- */
-router.get('/me/sponsored-votes', authenticate, authorize('BRAND'), fanVoteController.getSponsoredVotes.bind(fanVoteController));
-
-/**
- * @route GET /brands/me/sponsor-stats
- * @desc Get brand's sponsor engagement stats
- */
-router.get('/me/sponsor-stats', authenticate, authorize('BRAND'), fanVoteController.getSponsorStats.bind(fanVoteController));
 
 /**
  * @route GET /brands/:id

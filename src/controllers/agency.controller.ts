@@ -255,7 +255,7 @@ export class AgencyController {
       }
 
       const { athleteId, slotId } = req.params;
-      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt } = req.body;
+      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt, isPublic } = req.body;
 
       const slot = await agencyService.updateAthleteSlotSaleMode(
         req.user.id,
@@ -267,6 +267,7 @@ export class AgencyController {
           directBuyPrice,
           auctionMinBid,
           auctionEndAt: auctionEndAt ? new Date(auctionEndAt) : undefined,
+          isPublic,
         }
       );
 

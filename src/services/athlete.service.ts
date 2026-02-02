@@ -261,6 +261,7 @@ export class AthleteService {
             currentPrice: true,
             startAt: true,
             endAt: true,
+            isFeatured: true,
             _count: { select: { bids: true } },
             // Contract는 Auction을 통해 연결됨 (1:1 관계)
             contract: {

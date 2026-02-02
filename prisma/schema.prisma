@@ -46,11 +46,9 @@ model User {
   fan           Fan?
   agency        Agency?
   auditLogs     AuditLog[]
-  votes         Vote[]
   pointLedgers  PointLedger[]
   pointWallet   PointWallet?
   pointLedgerTxs PointLedgerTx[] @relation("PointLedgerTxs")
-  fanVoteWins    FanVoteWinner[]
   redemptionOrders RedemptionOrder[]
   pointTransfersFrom PointTransfer[] @relation("PointTransferFrom")
   pointTransfersTo   PointTransfer[] @relation("PointTransferTo")
@@ -98,11 +96,10 @@ model Brand {
   bids            Bid[]
   contracts       Contract[]
   campaigns       Campaign[]
-  sponsoredVoteEvents VoteEvent[]
-  sponsoredFanVotes FanVoteEvent[] @relation("SponsoredVotes")
   payments        Payment[]
   favoritedBy     FavoriteBrand[]
   billingProfile  BillingProfile?
+  creativeApprovals BrandEventCreativeApproval[]
 
   @@map("brands")
 }
@@ -136,7 +133,6 @@ model Athlete {
   slotInstances        SlotInstance[]
   contracts            Contract[]
   eventParticipations  EventParticipation[]
-  votePoints           AthleteVotePoint[]
   payoutItems          PayoutItem[]
   favoritedBy          FavoriteAthlete[]
   withdrawalRequests   WithdrawalRequest[]
@@ -319,9 +315,24 @@ model Event {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
+  // v2 Tournament Rules (JSON)
+  // {
+  //   chestReservedSide: "LEFT"|"RIGHT"|"NONE",
+  //   sleeveReservedSide: "LEFT"|"RIGHT"|"NONE",
+  //   reservedSlotCodes: string[],
+  //   disabledSlotCodes: string[],
+  //   phase2UnlockPolicy: "ALL_PHASE1_EFFECTIVE_SLOTS_FILLED",
+  //   phase2UnlockMode: "AUTO"|"ADMIN_APPROVE",
+  //   phase2EligibleMinDaysBefore: number,
+  //   creativeApprovalRequired: boolean,
+  //   prohibitedCategories: string[],
+  //   maxSlotsPerBrandPerPlayer: number
+  // }
+  tournamentRules   Json?     @map("tournament_rules")
+
   slotInstances     SlotInstance[]
   participations    EventParticipation[]
-  voteEvents        VoteEvent[]
+  creativeApprovals BrandEventCreativeApproval[]
 
   @@map("events")
 }
@@ -352,14 +363,45 @@ model EventParticipation {
 // ============================================
 
 enum BodyPart {
+  // CAP (모자)
+  CAP_FRONT
+  CAP_BRIM_TOP
+  CAP_SIDE_L
+  CAP_SIDE_R
+  CAP_BACK
+  // TOP (상의)
+  CHEST_L
+  CHEST_R
+  COLLAR_L
+  COLLAR_R
+  SLEEVE_L
+  SLEEVE_R
+  BACK_SHOULDER_L
+  BACK_SHOULDER_R
+  // PANTS (하의) - Phase 2
+  PANTS_HIP_SIDE_FACING
+  PANTS_THIGH_SIDE_FACING
+  // Legacy (backward compatibility)
   SHIRT_CHEST_LEFT
   SHIRT_CHEST_RIGHT
   SHIRT_SLEEVE_LEFT
   SHIRT_SLEEVE_RIGHT
   CAP_SIDE_LEFT
-  CAP_BACK
   PANTS_BELT
   SHIRT_BACK
+}
+
+enum SlotGrade {
+  S
+  A
+  B
+  C
+}
+
+enum SlotCategory {
+  CAP
+  TOP
+  PANTS
 }
 
 enum MaterialRule {
@@ -390,6 +432,24 @@ model SlotTemplate {
   isActive                Boolean       @default(true) @map("is_active")
   createdAt               DateTime      @default(now()) @map("created_at")
   updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  // v2 Phase Policy Fields
+  phase                   Int           @default(1)                       // 1: 기본 오픈, 2: 조건부 확장
+  category                SlotCategory? @map("slot_category")             // CAP, TOP, PANTS
+  grade                   SlotGrade?                                      // S, A, B, C
+  nameKr                  String?       @map("name_kr")                   // 한국어 이름
+  nameEn                  String?       @map("name_en")                   // 영어 이름
+  uiHeadline              String?       @map("ui_headline")               // UI 헤드라인 (10-14자)
+  uiCopy                  String?       @map("ui_copy")                   // UI 설명 (1문장)
+  tags                    String[]      @default([])                      // 태그 배열
+  openRule                String?       @map("open_rule")                 // 오픈 규칙 설명
+  exclusivityGroup        String?       @map("exclusivity_group")         // 배타적 그룹 (CHEST, SLEEVE, etc.)
+  tournamentReserved      Boolean       @default(false) @map("tournament_reserved") // 대회 설정으로 점유 가능 여부
+  recSizeMm               String?       @map("rec_size_mm")               // 권장 사이즈 (예: "60x30")
+  material                String?                                         // 재질 규격
+  reserveMinKrw           Int?          @map("reserve_min_krw")           // 최소 예약가 (원)
+  reserveRecKrw           Int?          @map("reserve_rec_krw")           // 권장 예약가 (원)
+  reserveReason           String?       @map("reserve_reason")            // 예약가 산정 사유
 
   slotInstances           SlotInstance[]
 
@@ -555,6 +615,40 @@ model CreativeAsset {
   contract        Contract    @relation(fields: [contractId], references: [id])
 
   @@map("creative_assets")
+}
+
+// ============================================
+// Pre-Bid Creative Approval (v2)
+// 입찰 전 사전 크리에이티브 승인
+// ============================================
+
+enum PreApprovalStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model BrandEventCreativeApproval {
+  id              String              @id @default(uuid())
+  brandId         String              @map("brand_id")
+  eventId         String              @map("event_id")
+  fileUrl         String              @map("file_url")
+  fileName        String?             @map("file_name")
+  fileType        String?             @map("file_type")
+  fileSizeBytes   Int?                @map("file_size_bytes")
+  status          PreApprovalStatus   @default(SUBMITTED)
+  reviewNotes     String?             @map("review_notes")
+  reviewedBy      String?             @map("reviewed_by")
+  reviewedAt      DateTime?           @map("reviewed_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  brand           Brand               @relation(fields: [brandId], references: [id])
+  event           Event               @relation(fields: [eventId], references: [id])
+
+  @@unique([brandId, eventId])
+  @@map("brand_event_creative_approvals")
 }
 
 // ============================================
@@ -877,85 +971,17 @@ model Notification {
 }
 
 // ============================================
-// Vote/Point System (팬 참여 시스템)
-// ============================================
-
-enum VoteEventStatus {
-  DRAFT
-  ACTIVE
-  CLOSED
-  SETTLED
-}
-
-enum VoteQuestionType {
-  PREDICTION     // 경기 결과 예측
-  QUIZ           // 퀴즈
-  POLL           // 여론조사
-}
-
-model VoteEvent {
-  id              String           @id @default(uuid())
-  eventId         String?          @map("event_id")
-  title           String
-  description     String?
-  questionType    VoteQuestionType @map("question_type")
-  question        String
-  options         Json             // [{id: string, label: string, athleteId?: string}]
-  correctOptionId String?          @map("correct_option_id")
-  pointsPerCorrect Int             @default(100) @map("points_per_correct")
-  sponsorBrandId  String?          @map("sponsor_brand_id")
-  startAt         DateTime         @map("start_at")
-  endAt           DateTime         @map("end_at")
-  status          VoteEventStatus  @default(DRAFT)
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-
-  event           Event?           @relation(fields: [eventId], references: [id])
-  sponsorBrand    Brand?           @relation(fields: [sponsorBrandId], references: [id])
-  votes           Vote[]
-  athletePoints   AthleteVotePoint[]
-
-  @@map("vote_events")
-}
-
-model Vote {
-  id              String      @id @default(uuid())
-  voteEventId     String      @map("vote_event_id")
-  userId          String      @map("user_id")
-  selectedOptionId String     @map("selected_option_id")
-  isCorrect       Boolean?    @map("is_correct")
-  pointsEarned    Int         @default(0) @map("points_earned")
-  createdAt       DateTime    @default(now()) @map("created_at")
-
-  voteEvent       VoteEvent   @relation(fields: [voteEventId], references: [id])
-  user            User        @relation(fields: [userId], references: [id])
-
-  @@unique([voteEventId, userId])
-  @@map("votes")
-}
-
-model AthleteVotePoint {
-  id              String      @id @default(uuid())
-  voteEventId     String      @map("vote_event_id")
-  athleteId       String      @map("athlete_id")
-  points          Int         @default(0)
-  createdAt       DateTime    @default(now()) @map("created_at")
-
-  voteEvent       VoteEvent   @relation(fields: [voteEventId], references: [id])
-  athlete         Athlete     @relation(fields: [athleteId], references: [id])
-
-  @@unique([voteEventId, athleteId])
-  @@map("athlete_vote_points")
-}
-
-// ============================================
 // Fee Policy (수수료 정책 관리)
 // ============================================
 
 enum FeePolicyType {
-  FAN_VOTE_OPEN     // 개설 수수료 (Seed의 2%)
-  FAN_VOTE_ENTRY    // 참여 수수료 (Entry의 10%)
-  FAN_VOTE_SETTLE   // 정산 수수료 (상금풀의 2%)
+  PLATFORM_FEE     // 플랫폼 일반 수수료
+  SPONSOR_FEE      // 스폰서십 수수료
+  TRANSACTION_FEE  // 거래 수수료
+  // FanVote 관련 (레거시)
+  FAN_VOTE_OPEN    // 팬 투표 개설
+  FAN_VOTE_ENTRY   // 팬 투표 참여
+  FAN_VOTE_SETTLE  // 팬 투표 정산
 }
 
 model FeePolicy {
@@ -990,16 +1016,6 @@ model FeePolicy {
 
 enum PointTxReason {
   ADMIN_GRANT
-  VOTE_ENTRY_FEE
-  VOTE_WIN_PAYOUT
-  VOTE_CREATE_FEE
-  VOTE_POT_REMAINDER
-  VOTE_CREATOR_PRIZE      // 생성자 상금 차감 (정산 시)
-  VOTE_OPEN_FEE           // 개설 수수료 (Seed의 2%)
-  VOTE_ENTRY_PLATFORM     // 참여 수수료 - 플랫폼 몫 (70%)
-  VOTE_ENTRY_CREATOR      // 참여 수수료 - 개설자 리워드 (30%)
-  VOTE_SETTLEMENT_FEE     // 정산 수수료 (상금풀의 2%)
-  VOTE_REFUND             // 투표 삭제 시 환불
   REDEEM_GOODS
   REDEEM_CANCEL_REFUND
   POINT_TRANSFER_SEND     // 포인트 전송 (차감)
@@ -1010,6 +1026,18 @@ enum PointTxReason {
   DONATION_RECEIVE        // 후원 수신 (선수)
   DONATION_FEE            // 후원 수수료 (플랫폼)
   POINT_WITHDRAWAL        // 포인트 출금
+  // FanVote 레거시
+  VOTE_ENTRY_FEE          // 투표 참여비 (레거시)
+  VOTE_WIN_PAYOUT         // 투표 당첨금 (레거시)
+  VOTE_CREATE_FEE         // 투표 생성비 (레거시)
+  // 리워드풀 기반 무료 투표 시스템
+  VOTE_MICRO_REWARD       // 참여 시 마이크로 보상
+  VOTE_FINAL_REWARD       // 정산 시 정답 보상
+  REWARD_POOL_DEPOSIT     // 풀 충전 (스폰서 수익)
+  REWARD_POOL_RETURN      // 잔여분 풀 반환
+  // 사용자 투표 생성
+  VOTE_CREATE_SEED        // 투표 생성 시드머니 (차감)
+  VOTE_CREATE_SEED_REFUND // 투표 취소 시 시드머니 환불
 }
 
 model PointWallet {
@@ -1106,148 +1134,6 @@ model PointLedger {
   user            User        @relation(fields: [userId], references: [id])
 
   @@map("point_ledgers")
-}
-
-// ============================================
-// Fan Vote System (팬 투표 시스템)
-// ============================================
-
-enum FanVoteStatus {
-  DRAFT
-  SUBMITTED
-  ACTIVE
-  CLOSED
-  SETTLED
-}
-
-model FanVoteEvent {
-  id                  String          @id @default(uuid())
-  creatorUserId       String          @map("creator_user_id")
-  title               String
-  question            String
-  options             Json            // string[]
-  entryFeePoints      Decimal         @default(0) @map("entry_fee_points") @db.Decimal(18, 0)
-  createFeePoints     Decimal         @default(0) @map("create_fee_points") @db.Decimal(18, 0)
-  winnersCount        Int             @default(1) @map("winners_count")
-  status              FanVoteStatus   @default(DRAFT)
-  startsAt            DateTime        @map("starts_at")
-  endsAt              DateTime        @map("ends_at")
-  resultOptionIndex   Int?            @map("result_option_index")
-  submittedAt         DateTime?       @map("submitted_at")
-  approvedAt          DateTime?       @map("approved_at")
-  settledAt           DateTime?       @map("settled_at")
-
-  // 생성자 역할 및 상금 설정
-  creatorRole         String          @default("FAN") @map("creator_role")  // FAN, BRAND, ATHLETE, ADMIN
-  creatorPrizePool    Decimal         @default(0) @map("creator_prize_pool") @db.Decimal(18, 0)  // 생성자가 거는 상금 (= Seed)
-  distributionPercent Int             @default(100) @map("distribution_percent")  // 환원 비율 (1-100%)
-
-  // v1.0 수수료 체계: 개설 수수료
-  openFeeCharged      Decimal?        @map("open_fee_charged") @db.Decimal(18, 0)  // 개설 수수료 (차감됨)
-  openFeeChargedAt    DateTime?       @map("open_fee_charged_at")  // 개설 수수료 차감 시점
-
-  // Phase G: Sponsor fields
-  sponsorBrandId      String?         @map("sponsor_brand_id")
-  sponsorContribution Decimal?        @map("sponsor_contribution") @db.Decimal(18, 0)
-  sponsorBannerUrl    String?         @map("sponsor_banner_url")
-  sponsorLogoUrl      String?         @map("sponsor_logo_url")
-  sponsorMessage      String?         @map("sponsor_message")
-  sponsorLinkUrl      String?         @map("sponsor_link_url")
-
-  createdAt           DateTime        @default(now()) @map("created_at")
-  updatedAt           DateTime        @updatedAt @map("updated_at")
-
-  entries             FanVoteEntry[]
-  settlement          FanVoteSettlement?
-  winners             FanVoteWinner[]
-  sponsorBrand        Brand?          @relation("SponsoredVotes", fields: [sponsorBrandId], references: [id])
-  sponsorEngagement   SponsorEngagement?
-
-  @@index([status, startsAt, endsAt])
-  @@index([creatorUserId])
-  @@index([sponsorBrandId])
-  @@map("fan_vote_events")
-}
-
-model SponsorEngagement {
-  id                String       @id @default(uuid())
-  eventId           String       @unique @map("event_id")
-  bannerImpressions Int          @default(0) @map("banner_impressions")
-  bannerClicks      Int          @default(0) @map("banner_clicks")
-  linkClicks        Int          @default(0) @map("link_clicks")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
-
-  event             FanVoteEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@map("sponsor_engagements")
-}
-
-model FanVoteEntry {
-  id              String          @id @default(uuid())
-  eventId         String          @map("event_id")
-  userId          String          @map("user_id")
-  optionIndex     Int             @map("option_index")
-  paidPoints      Decimal         @map("paid_points") @db.Decimal(18, 0)
-
-  // v1.0 수수료 분해 필드
-  grossEntry      Decimal?        @map("gross_entry") @db.Decimal(18, 0)       // 총 참여비 (= paidPoints)
-  entryDeduction  Decimal?        @map("entry_deduction") @db.Decimal(18, 0)   // 공제액 (10%)
-  platformFee     Decimal?        @map("platform_fee") @db.Decimal(18, 0)      // 플랫폼 몫 (70%)
-  creatorReward   Decimal?        @map("creator_reward") @db.Decimal(18, 0)    // 개설자 몫 (30%)
-  netToPool       Decimal?        @map("net_to_pool") @db.Decimal(18, 0)       // 상금풀 적립 (90%)
-
-  createdAt       DateTime        @default(now()) @map("created_at")
-
-  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([eventId, userId], name: "unique_fan_vote_entry")
-  @@index([userId, createdAt])
-  @@map("fan_vote_entries")
-}
-
-// ============================================
-// Fan Vote Settlement (정산)
-// ============================================
-
-model FanVoteSettlement {
-  id              String          @id @default(uuid())
-  eventId         String          @unique @map("event_id")
-  potTotal        Decimal         @map("pot_total") @db.Decimal(18, 0)
-  winnersCount    Int             @map("winners_count")
-  payoutEach      Decimal         @map("payout_each") @db.Decimal(18, 0)
-  remainder       Decimal         @db.Decimal(18, 0)
-  decidedByAdminId String         @map("decided_by_admin_id")
-
-  // v1.0 정산 상세 내역
-  totalEntryFees        Decimal?  @map("total_entry_fees") @db.Decimal(18, 0)         // 참여비 총액
-  totalEntryDeductions  Decimal?  @map("total_entry_deductions") @db.Decimal(18, 0)   // 참여 수수료 총액
-  seedPoints            Decimal?  @map("seed_points") @db.Decimal(18, 0)              // Seed (개설자 상금)
-  netPoolFromEntries    Decimal?  @map("net_pool_from_entries") @db.Decimal(18, 0)    // 참여자 기여 (90%)
-  grossPool             Decimal?  @map("gross_pool") @db.Decimal(18, 0)               // 총 상금풀 (Seed + 참여자기여)
-  settlementFee         Decimal?  @map("settlement_fee") @db.Decimal(18, 0)           // 정산 수수료 (2%)
-  winnerPayout          Decimal?  @map("winner_payout") @db.Decimal(18, 0)            // 1등 지급 총액
-  totalPlatformRevenue  Decimal?  @map("total_platform_revenue") @db.Decimal(18, 0)   // 플랫폼 총 수익
-  totalCreatorReward    Decimal?  @map("total_creator_reward") @db.Decimal(18, 0)     // 개설자 총 리워드
-
-  createdAt       DateTime        @default(now()) @map("created_at")
-
-  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@map("fan_vote_settlements")
-}
-
-model FanVoteWinner {
-  id              String          @id @default(uuid())
-  eventId         String          @map("event_id")
-  userId          String          @map("user_id")
-  payoutPoints    Decimal         @map("payout_points") @db.Decimal(18, 0)
-  createdAt       DateTime        @default(now()) @map("created_at")
-
-  event           FanVoteEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id])
-
-  @@unique([eventId, userId], name: "unique_fan_vote_winner")
-  @@map("fan_vote_winners")
 }
 
 // ============================================
@@ -2312,4 +2198,74 @@ model PointWithdrawal {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@map("point_withdrawals")
+}
+
+// ============================================
+// Vote V2 - 리워드풀 기반 무료 투표 시스템
+// ============================================
+
+enum VoteV2Status {
+  OPEN        // 투표 진행중
+  CLOSED      // 마감됨 (정산 대기)
+  SETTLED     // 정산 완료
+  CANCELED    // 취소됨
+}
+
+enum VoteFundingSource {
+  REWARD_POOL   // 리워드풀에서 예산 할당 (관리자 생성)
+  USER_POINTS   // 사용자 본인 포인트 (사용자 생성)
+}
+
+model RewardPool {
+  id               String   @id @default(uuid())
+  balanceEp        BigInt   @default(0) @map("balance_ep")           // 총 잔액 (EP)
+  reservedEp       BigInt   @default(0) @map("reserved_ep")          // 진행중 투표 예약액
+  availableTodayEp BigInt   @default(0) @map("available_today_ep")   // 오늘 사용 가능 한도
+  multiplierM      Decimal  @default(1.00) @db.Decimal(4, 2) @map("multiplier_m")  // 배수 (0.20~1.00)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("reward_pools")
+}
+
+model VoteV2 {
+  id              String            @id @default(uuid())
+  templateCode    String            @map("template_code")  // T1-YesNo, T2-MC, T3-TopN, T4-Exact
+  title           String
+  description     String?
+  options         Json              @default("[]")         // [{id: string, label: string}]
+  status          VoteV2Status      @default(OPEN)
+  fundingSource   VoteFundingSource @default(REWARD_POOL) @map("funding_source")  // 예산 원천
+  rewardBudgetEp  BigInt            @default(0) @map("reward_budget_ep")   // 템플릿 기반 예산
+  escrowEp        BigInt            @default(0) @map("escrow_ep")          // 현재 에스크로 잔액
+  maxPerWinnerEp  BigInt            @default(50000) @map("max_per_winner_ep")  // 1인당 상한
+  target          Json              @default("{}")         // {tournamentId?, matchId?, playerId?}
+  outcomeSource   String            @default("official_api") @map("outcome_source")
+  correctAnswer   Json?             @map("correct_answer") // 정답 (정산 시 설정)
+  closeAt         DateTime          @map("close_at")       // 마감 시간
+  settleAt        DateTime?         @map("settle_at")      // 정산 시간
+  createdBy       String?           @map("created_by")     // 생성자 ID
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  participations  VoteParticipationV2[]
+
+  @@index([status, closeAt])
+  @@index([createdBy])
+  @@map("votes_v2")
+}
+
+model VoteParticipationV2 {
+  voteId            String   @map("vote_id")
+  userId            String   @map("user_id")
+  answer            Json     @default("{}")           // 사용자 답변
+  isCorrect         Boolean? @map("is_correct")       // 정답 여부 (정산 후 설정)
+  microRewardPaidEp BigInt   @default(0) @map("micro_reward_paid_ep")  // 참여 시 소액 보상
+  finalRewardPaidEp BigInt   @default(0) @map("final_reward_paid_ep")  // 정산 시 최종 보상
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  vote              VoteV2   @relation(fields: [voteId], references: [id], onDelete: Cascade)
+
+  @@id([voteId, userId])
+  @@index([userId, createdAt])
+  @@map("vote_participations_v2")
 }

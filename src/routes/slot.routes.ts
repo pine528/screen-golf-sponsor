@@ -122,7 +122,7 @@ router.patch(
       const { id } = req.params;
       const userId = req.user!.id;
       const userRole = req.user!.role;
-      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt } = req.body;
+      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt, isPublic } = req.body;
 
       let athleteId: string;
 
@@ -142,6 +142,7 @@ router.patch(
         directBuyPrice: directBuyPrice ? Number(directBuyPrice) : null,
         auctionMinBid: auctionMinBid ? Number(auctionMinBid) : null,
         auctionEndAt: auctionEndAt ? new Date(auctionEndAt) : null,
+        isPublic,
       });
 
       res.json({

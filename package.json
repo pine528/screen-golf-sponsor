@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed:slots": "ts-node prisma/seed-slot-templates.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "npx prisma db seed",
     "db:reset": "npx prisma migrate reset --force",

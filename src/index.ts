@@ -21,7 +21,6 @@ import { escrowService } from './services/escrow.service';
 import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
-import { fanVoteService } from './services/fanVote.service';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
@@ -245,17 +244,6 @@ cron.schedule('20 9 * * *', async () => {
   }
 }, cronOptions);
 
-// ★ Fan Vote: Auto-close expired votes every 5 minutes
-cron.schedule('*/5 * * * *', async () => {
-  try {
-    const result = await fanVoteService.autoCloseExpiredEvents();
-    if (result.closedCount > 0) {
-      console.log(`[Cron] Fan Votes: ${result.closedCount} expired votes closed`);
-    }
-  } catch (error) {
-    console.error('[Cron] Fan Vote auto-close error:', error);
-  }
-}, cronOptions);
 
 // Startup migration: Remove wallet FK constraints if they exist
 async function runStartupMigrations() {

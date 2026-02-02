@@ -13,12 +13,10 @@ import adminEntitiesRoutes from './admin.entities.routes';
 import adminOpsRoutes from './admin.ops.routes';
 import uploadRoutes from './upload.routes';
 import campaignRoutes from './campaign.routes';
-import voteRoutes from './vote.routes';
 import paymentRoutes from './payment.routes';
 import notificationRoutes from './notification.routes';
 import fanRoutes from './fan.routes';
 import pointRoutes from './point.routes';
-import fanVoteRoutes from './fanVote.routes';
 import shopRoutes from './shop.routes';
 import withdrawalRoutes from './withdrawal.routes';
 import { brandTopupRoutes, webhookRoutes, adminTopupRoutes } from './topup.routes';
@@ -35,6 +33,9 @@ import pointTopupRoutes from './pointTopup.routes';
 import agencyRoutes from './agency.routes';
 import donationRoutes from './donation.routes';
 import { pointWithdrawalRoutes, adminPointWithdrawalRoutes } from './pointWithdrawal.routes';
+import tournamentRulesRoutes from './tournamentRules.routes';
+import { brandCreativeApprovalRoutes, adminCreativeApprovalRoutes } from './creativeApproval.routes';
+import voteV2Routes from './voteV2.routes';
 
 const router = Router();
 
@@ -58,13 +59,10 @@ router.use('/admin/entities', adminEntitiesRoutes);
 router.use('/admin/ops', adminOpsRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/campaigns', campaignRoutes);
-router.use('/votes', voteRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/fan', fanRoutes);
 router.use('/points', pointRoutes);
-router.use('/fan-votes', fanVoteRoutes);
-router.use('/fan-votes/fee', feeInfoRouter);
 router.use('/shop', shopRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/brand/topups', brandTopupRoutes);
@@ -84,6 +82,10 @@ router.use('/agencies', agencyRoutes);
 router.use('/donations', donationRoutes);
 router.use('/point-withdrawals', pointWithdrawalRoutes);
 router.use('/admin/point-withdrawals', adminPointWithdrawalRoutes);
+router.use('/', tournamentRulesRoutes);
+router.use('/brand/creative-approvals', brandCreativeApprovalRoutes);
+router.use('/admin/creative-approvals', adminCreativeApprovalRoutes);
+router.use('/votes', voteV2Routes);  // Vote V2 → /votes (메인 투표 시스템)
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

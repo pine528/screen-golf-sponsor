@@ -1,8 +1,18 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import { cloudinaryService } from '../services/cloudinary.service';
+import { localStorageService } from '../services/localStorage.service';
 import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
+
+// Helper to get the appropriate storage service
+const getStorageService = () => {
+  if (cloudinaryService.isConfigured()) {
+    return cloudinaryService;
+  }
+  console.log('[Upload] Using local storage (Cloudinary not configured)');
+  return localStorageService;
+};
 
 export class UploadController {
   // Upload single asset file
@@ -12,7 +22,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const result = await cloudinaryService.uploadFile(req.file, 'assets');
+      const storage = getStorageService();
+      const result = await storage.uploadFile(req.file, 'assets');
 
       sendSuccess(res, {
         fileUrl: result.url,
@@ -33,7 +44,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const results = await cloudinaryService.uploadFiles(files, 'assets');
+      const storage = getStorageService();
+      const results = await storage.uploadFiles(files, 'assets');
 
       sendSuccess(res, {
         files: results.map((result, index) => ({
@@ -55,7 +67,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const result = await cloudinaryService.uploadFile(req.file, 'kyc');
+      const storage = getStorageService();
+      const result = await storage.uploadFile(req.file, 'kyc');
 
       sendSuccess(res, {
         fileUrl: result.url,
@@ -77,7 +90,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const results = await cloudinaryService.uploadFiles(files, 'kyc');
+      const storage = getStorageService();
+      const results = await storage.uploadFiles(files, 'kyc');
 
       sendSuccess(res, {
         files: results.map((result, index) => ({
@@ -100,7 +114,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const results = await cloudinaryService.uploadFiles(files, 'verification');
+      const storage = getStorageService();
+      const results = await storage.uploadFiles(files, 'verification');
 
       sendSuccess(res, {
         files: results.map((result, index) => ({
@@ -122,7 +137,8 @@ export class UploadController {
         throw new BadRequestError('파일이 필요합니다.');
       }
 
-      const result = await cloudinaryService.uploadFile(req.file, 'profile');
+      const storage = getStorageService();
+      const result = await storage.uploadFile(req.file, 'profile');
 
       sendSuccess(res, {
         fileUrl: result.url,
