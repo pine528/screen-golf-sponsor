@@ -57,6 +57,13 @@ model User {
   pointWithdrawals   PointWithdrawal[] @relation("PointWithdrawals")
   processedWithdrawals PointWithdrawal[] @relation("ProcessedPointWithdrawals")
 
+  // 본인인증 정보
+  realName               String?    @map("real_name")
+  phone                  String?    @unique
+  birthDate              DateTime?  @map("birth_date")
+  certificationUniqueKey String?    @unique @map("cert_unique_key")
+  certifiedAt            DateTime?  @map("certified_at")
+
   @@map("users")
 }
 

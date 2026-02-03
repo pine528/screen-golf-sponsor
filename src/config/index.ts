@@ -94,6 +94,15 @@ export const config = {
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10),
     uploadDir: process.env.UPLOAD_DIR || './uploads',
   },
+
+  // SMS 인증 (알리고)
+  sms: {
+    aligoApiKey: process.env.ALIGO_API_KEY || '',
+    aligoUserId: process.env.ALIGO_USER_ID || '',
+    aligoSender: process.env.ALIGO_SENDER || '',
+    certificationRequiredRoles: (process.env.CERTIFICATION_REQUIRED_ROLES || 'BRAND,ATHLETE,AGENCY').split(','),
+    certificationTokenExpiryMinutes: parseInt(process.env.CERTIFICATION_TOKEN_EXPIRY_MINUTES || '10', 10),
+  },
 };
 
 export default config;
