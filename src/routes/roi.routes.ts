@@ -459,6 +459,31 @@ router.post(
 // ============================================
 
 /**
+ * @route GET /roi/admin/exposures
+ * @desc Get all exposures for QA (with filters)
+ */
+router.get(
+  '/admin/exposures',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId, reviewStatus, page, limit } = req.query;
+
+      const data = await roiExposureService.listExposures({
+        campaignId: campaignId as string,
+        reviewStatus: reviewStatus as ReviewStatus | undefined,
+        page: page ? parseInt(page as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+      });
+
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route GET /roi/admin/exposures/pending
  * @desc Get pending review exposures
  */
