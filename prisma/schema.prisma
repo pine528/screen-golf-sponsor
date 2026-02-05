@@ -108,6 +108,11 @@ model Brand {
   billingProfile  BillingProfile?
   creativeApprovals BrandEventCreativeApproval[]
 
+  // ROI Report Dashboard relations
+  logoTemplates   LogoTemplate[]
+  logoDetections  LogoDetection[]
+  roiExposures    RoiExposure[]
+
   @@map("brands")
 }
 
@@ -340,6 +345,7 @@ model Event {
   slotInstances     SlotInstance[]
   participations    EventParticipation[]
   creativeApprovals BrandEventCreativeApproval[]
+  vodAssets         VodAsset[]
 
   @@map("events")
 }
@@ -764,6 +770,12 @@ model Campaign {
 
   brand             Brand           @relation(fields: [brandId], references: [id])
   contracts         CampaignContract[]
+
+  // ROI Report Dashboard relations
+  vodAssets         VodAsset[]
+  roiExposures      RoiExposure[]
+  mediaMentions     MediaMention[]
+  roiReports        RoiReport[]
 
   @@map("campaigns")
 }
@@ -2282,4 +2294,241 @@ model VoteParticipationV2 {
   @@id([voteId, userId])
   @@index([userId, createdAt])
   @@map("vote_participations_v2")
+}
+
+// ============================================
+// ROI Report Dashboard - VOD & Logo Detection
+// ============================================
+
+enum VodStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MODIFIED
+}
+
+enum EvidenceType {
+  SCREENSHOT
+  CLIP
+  HIGHLIGHT
+}
+
+enum MediaType {
+  NEWS
+  YOUTUBE
+  INSTAGRAM
+  OTHER
+}
+
+enum RoiReportType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CAMPAIGN_FINAL
+}
+
+enum RoiReportStatus {
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// VOD 자산 관리
+model VodAsset {
+  id           String    @id @default(uuid())
+  campaignId   String    @map("campaign_id")
+  eventId      String?   @map("event_id")
+  source       String    // YOUTUBE, UPLOAD, PARTNER
+  sourceUrl    String?   @map("source_url")
+  storageKey   String    @map("storage_key")
+  fileName     String?   @map("file_name")
+  duration     Int       // 초 단위
+  fps          Float     @default(30)
+  resolution   String?   // 1920x1080
+  fileSizeBytes BigInt?  @map("file_size_bytes")
+  status       VodStatus @default(PENDING)
+  errorMessage String?   @map("error_message")
+  processedAt  DateTime? @map("processed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  event        Event?    @relation(fields: [eventId], references: [id])
+  frames       VodFrame[]
+  roiExposures RoiExposure[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@map("vod_assets")
+}
+
+// 프레임 추출 결과
+model VodFrame {
+  id           String   @id @default(uuid())
+  vodAssetId   String   @map("vod_asset_id")
+  frameNumber  Int      @map("frame_number")
+  timestamp    Float    // 초 단위
+  thumbnailKey String   @map("thumbnail_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  vodAsset     VodAsset        @relation(fields: [vodAssetId], references: [id], onDelete: Cascade)
+  detections   LogoDetection[]
+
+  @@index([vodAssetId, timestamp])
+  @@map("vod_frames")
+}
+
+// 로고 템플릿 (브랜드별)
+model LogoTemplate {
+  id          String   @id @default(uuid())
+  brandId     String   @map("brand_id")
+  name        String   // Primary, Secondary, Mono 등
+  fileKey     String   @map("file_key")
+  fileUrl     String?  @map("file_url")
+  checksum    String?
+  variant     String?  // COLOR, MONO, INVERSE 등
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  brand       Brand    @relation(fields: [brandId], references: [id])
+
+  @@index([brandId])
+  @@map("logo_templates")
+}
+
+// AI 로고 검출 결과
+model LogoDetection {
+  id             String   @id @default(uuid())
+  frameId        String   @map("frame_id")
+  brandId        String   @map("brand_id")
+  logoTemplateId String?  @map("logo_template_id")
+  confidence     Float    // 0~1 신뢰도
+  bboxX          Int      @map("bbox_x")
+  bboxY          Int      @map("bbox_y")
+  bboxW          Int      @map("bbox_w")
+  bboxH          Int      @map("bbox_h")
+  bboxArea       Int      @map("bbox_area")
+  areaRatio      Float    @map("area_ratio")   // 화면 대비 비율
+  blurScore      Float?   @map("blur_score")   // 선명도 점수
+  occlusionScore Float?   @map("occlusion_score") // 가림 점수
+  slotType       String?  @map("slot_type")    // 슬롯 타입 매핑
+  rawResponse    Json?    @map("raw_response") // AI API 원본 응답
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  frame          VodFrame @relation(fields: [frameId], references: [id], onDelete: Cascade)
+  brand          Brand    @relation(fields: [brandId], references: [id])
+
+  @@index([frameId])
+  @@index([brandId])
+  @@map("logo_detections")
+}
+
+// 노출 구간 (병합된 결과)
+model RoiExposure {
+  id            String       @id @default(uuid())
+  vodAssetId    String       @map("vod_asset_id")
+  campaignId    String       @map("campaign_id")
+  brandId       String       @map("brand_id")
+  slotType      String?      @map("slot_type")
+  startTs       Float        @map("start_ts")    // 시작 타임스탬프 (초)
+  endTs         Float        @map("end_ts")      // 종료 타임스탬프 (초)
+  duration      Float        // 노출 시간 (초)
+  frameCount    Int          @default(0) @map("frame_count")
+  avgConfidence Float        @map("avg_confidence")
+  avgAreaRatio  Float        @map("avg_area_ratio")
+  maxAreaRatio  Float?       @map("max_area_ratio")
+  isValid       Boolean      @default(false) @map("is_valid")
+  invalidReason String?      @map("invalid_reason")
+  reviewStatus  ReviewStatus @default(PENDING) @map("review_status")
+  reviewedBy    String?      @map("reviewed_by")
+  reviewedAt    DateTime?    @map("reviewed_at")
+  reviewNotes   String?      @map("review_notes")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  vodAsset      VodAsset        @relation(fields: [vodAssetId], references: [id], onDelete: Cascade)
+  campaign      Campaign        @relation(fields: [campaignId], references: [id])
+  brand         Brand           @relation(fields: [brandId], references: [id])
+  evidenceItems RoiEvidenceItem[]
+
+  @@index([campaignId, brandId])
+  @@index([reviewStatus])
+  @@map("roi_exposures")
+}
+
+// 증빙 자료 (캡처/클립)
+model RoiEvidenceItem {
+  id           String       @id @default(uuid())
+  exposureId   String       @map("exposure_id")
+  type         EvidenceType
+  fileKey      String       @map("file_key")
+  fileUrl      String?      @map("file_url")
+  thumbnailKey String?      @map("thumbnail_key")
+  startTs      Float?       @map("start_ts")
+  endTs        Float?       @map("end_ts")
+  fileSizeBytes BigInt?     @map("file_size_bytes")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  exposure     RoiExposure  @relation(fields: [exposureId], references: [id], onDelete: Cascade)
+
+  @@index([exposureId])
+  @@map("roi_evidence_items")
+}
+
+// 2차 미디어 멘션
+model MediaMention {
+  id           String    @id @default(uuid())
+  campaignId   String    @map("campaign_id")
+  type         MediaType
+  url          String
+  title        String?
+  description  String?
+  thumbnailUrl String?   @map("thumbnail_url")
+  publishedAt  DateTime? @map("published_at")
+  viewCount    Int?      @map("view_count")
+  likeCount    Int?      @map("like_count")
+  commentCount Int?      @map("comment_count")
+  shareCount   Int?      @map("share_count")
+  hasLogo      Boolean   @default(false) @map("has_logo")
+  metricsJson  Json?     @map("metrics_json")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId])
+  @@index([type])
+  @@map("media_mentions")
+}
+
+// ROI 리포트
+model RoiReport {
+  id           String          @id @default(uuid())
+  campaignId   String          @map("campaign_id")
+  periodStart  DateTime        @map("period_start")
+  periodEnd    DateTime        @map("period_end")
+  type         RoiReportType
+  title        String?
+  fileKey      String?         @map("file_key")
+  fileUrl      String?         @map("file_url")
+  status       RoiReportStatus @default(GENERATING)
+  metricsJson  Json?           @map("metrics_json")  // KPI 스냅샷
+  errorMessage String?         @map("error_message")
+  generatedAt  DateTime?       @map("generated_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  campaign     Campaign        @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId])
+  @@index([status])
+  @@map("roi_reports")
 }

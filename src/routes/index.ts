@@ -36,6 +36,7 @@ import { pointWithdrawalRoutes, adminPointWithdrawalRoutes } from './pointWithdr
 import tournamentRulesRoutes from './tournamentRules.routes';
 import { brandCreativeApprovalRoutes, adminCreativeApprovalRoutes } from './creativeApproval.routes';
 import voteV2Routes from './voteV2.routes';
+import roiRoutes from './roi.routes';
 
 const router = Router();
 
@@ -86,6 +87,7 @@ router.use('/', tournamentRulesRoutes);
 router.use('/brand/creative-approvals', brandCreativeApprovalRoutes);
 router.use('/admin/creative-approvals', adminCreativeApprovalRoutes);
 router.use('/votes', voteV2Routes);  // Vote V2 → /votes (메인 투표 시스템)
+router.use('/roi', roiRoutes);  // ROI 리포트 대시보드
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);
