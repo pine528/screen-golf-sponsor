@@ -205,6 +205,110 @@ router.get(
   }
 );
 
+/**
+ * @route GET /roi/campaigns/:campaignId/slots
+ * @desc Get slot analytics for a campaign
+ */
+router.get(
+  '/campaigns/:campaignId/slots',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId } = req.params;
+      const data = await roiReportService.getSlotAnalytics(campaignId);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route GET /roi/campaigns/:campaignId/events
+ * @desc Get event(round)-level metrics for a campaign
+ */
+router.get(
+  '/campaigns/:campaignId/events',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId } = req.params;
+      const data = await roiReportService.getEventMetrics(campaignId);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route DELETE /roi/reports/:reportId
+ * @desc Delete a report
+ */
+router.delete(
+  '/reports/:reportId',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { reportId } = req.params;
+      await roiReportService.deleteReport(reportId);
+      res.json({ success: true, message: '리포트가 삭제되었습니다.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route GET /roi/admin/evidence
+ * @desc List all evidence items (Admin)
+ */
+router.get(
+  '/admin/evidence',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId, exposureId, type, page, limit } = req.query;
+
+      const data = await roiEvidenceService.listEvidence({
+        campaignId: campaignId as string,
+        exposureId: exposureId as string,
+        type: type as any,
+        page: page ? parseInt(page as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+      });
+
+      // BigInt 직렬화
+      const serializedItems = data.items.map((item: any) => ({
+        ...item,
+        fileSizeBytes: item.fileSizeBytes ? Number(item.fileSizeBytes) : null,
+      }));
+
+      res.json({ success: true, data: { ...data, items: serializedItems } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route DELETE /roi/admin/evidence/:evidenceId
+ * @desc Delete an evidence item
+ */
+router.delete(
+  '/admin/evidence/:evidenceId',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { evidenceId } = req.params;
+      await roiEvidenceService.deleteEvidence(evidenceId);
+      res.json({ success: true, message: '증빙 자료가 삭제되었습니다.' });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============================================
 // Admin: VOD Management
 // ============================================

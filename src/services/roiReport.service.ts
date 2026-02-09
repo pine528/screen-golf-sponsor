@@ -489,6 +489,150 @@ class RoiReportService {
   }
 
   /**
+   * 이벤트(라운드)별 메트릭 집계
+   */
+  async getEventMetrics(campaignId: string): Promise<Array<{
+    eventId: string;
+    eventName: string;
+    tour: string;
+    dateStart: Date;
+    dateEnd: Date;
+    totalExposures: number;
+    validExposures: number;
+    totalDuration: number;
+    avgConfidence: number;
+    slotBreakdown: Record<string, { count: number; duration: number }>;
+  }>> {
+    // 캠페인에 연결된 VOD의 이벤트별 노출 집계
+    const exposures = await prisma.roiExposure.findMany({
+      where: { campaignId },
+      include: {
+        vodAsset: {
+          select: { eventId: true },
+        },
+      },
+    });
+
+    // 이벤트별 그룹핑
+    const eventMap = new Map<string, typeof exposures>();
+    for (const e of exposures) {
+      const eventId = e.vodAsset.eventId || 'NO_EVENT';
+      if (!eventMap.has(eventId)) {
+        eventMap.set(eventId, []);
+      }
+      eventMap.get(eventId)!.push(e);
+    }
+
+    // 이벤트 정보 조회
+    const eventIds = Array.from(eventMap.keys()).filter(id => id !== 'NO_EVENT');
+    const events = eventIds.length > 0
+      ? await prisma.event.findMany({ where: { id: { in: eventIds } } })
+      : [];
+    const eventInfo = new Map(events.map(e => [e.id, e]));
+
+    const results = [];
+    for (const [eventId, exps] of eventMap.entries()) {
+      const event = eventInfo.get(eventId);
+      const valid = exps.filter(e => e.isValid);
+
+      // 슬롯별 소계
+      const slotBreakdown: Record<string, { count: number; duration: number }> = {};
+      for (const e of valid) {
+        const slot = e.slotType || 'UNKNOWN';
+        if (!slotBreakdown[slot]) slotBreakdown[slot] = { count: 0, duration: 0 };
+        slotBreakdown[slot].count++;
+        slotBreakdown[slot].duration += e.duration;
+      }
+
+      results.push({
+        eventId,
+        eventName: event?.name || '이벤트 미지정',
+        tour: event?.tour || '',
+        dateStart: event?.dateStart || new Date(),
+        dateEnd: event?.dateEnd || new Date(),
+        totalExposures: exps.length,
+        validExposures: valid.length,
+        totalDuration: valid.reduce((s, e) => s + e.duration, 0),
+        avgConfidence: valid.length > 0
+          ? valid.reduce((s, e) => s + e.avgConfidence, 0) / valid.length
+          : 0,
+        slotBreakdown,
+      });
+    }
+
+    // 날짜 순 정렬
+    results.sort((a, b) => a.dateStart.getTime() - b.dateStart.getTime());
+    return results;
+  }
+
+  /**
+   * 슬롯 성과 분석 (Slot Analytics 전용)
+   */
+  async getSlotAnalytics(campaignId: string): Promise<{
+    slots: Array<{
+      slotType: string;
+      exposureCount: number;
+      validCount: number;
+      totalDuration: number;
+      avgConfidence: number;
+      validityRate: number;
+      avgAreaRatio: number;
+    }>;
+    totalExposures: number;
+    totalDuration: number;
+  }> {
+    const exposures = await prisma.roiExposure.findMany({
+      where: { campaignId },
+    });
+
+    const slotMap = new Map<string, {
+      total: number;
+      valid: number;
+      duration: number;
+      confidences: number[];
+      areaRatios: number[];
+    }>();
+
+    for (const e of exposures) {
+      const slot = e.slotType || 'UNKNOWN';
+      if (!slotMap.has(slot)) {
+        slotMap.set(slot, { total: 0, valid: 0, duration: 0, confidences: [], areaRatios: [] });
+      }
+      const data = slotMap.get(slot)!;
+      data.total++;
+      if (e.isValid) {
+        data.valid++;
+        data.duration += e.duration;
+      }
+      data.confidences.push(e.avgConfidence);
+      data.areaRatios.push(e.avgAreaRatio);
+    }
+
+    const slots = Array.from(slotMap.entries()).map(([slotType, data]) => ({
+      slotType,
+      exposureCount: data.total,
+      validCount: data.valid,
+      totalDuration: data.duration,
+      avgConfidence: data.confidences.length > 0
+        ? data.confidences.reduce((s, c) => s + c, 0) / data.confidences.length
+        : 0,
+      validityRate: data.total > 0 ? data.valid / data.total : 0,
+      avgAreaRatio: data.areaRatios.length > 0
+        ? data.areaRatios.reduce((s, a) => s + a, 0) / data.areaRatios.length
+        : 0,
+    }));
+
+    // 노출 시간 순 정렬
+    slots.sort((a, b) => b.totalDuration - a.totalDuration);
+
+    return {
+      slots,
+      totalExposures: exposures.length,
+      totalDuration: slots.reduce((s, sl) => s + sl.totalDuration, 0),
+    };
+  }
+
+  /**
    * 유틸리티: 날짜 포맷
    */
   private formatDate(date: Date): string {
