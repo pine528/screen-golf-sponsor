@@ -511,28 +511,34 @@ class LogoDetectService {
       throw new NotFoundError('브랜드를 찾을 수 없습니다.');
     }
 
-    // CLIP 임베딩 계산 (백그라운드에서 비동기로 처리)
-    let embedding: number[] | null = null;
-    try {
-      const { embeddingService } = await import('./embedding.service');
-      const imagePath = data.fileUrl || `/uploads/${data.fileKey}`;
-      embedding = await embeddingService.getImageEmbedding(imagePath);
-      console.log(`[LogoDetect] Embedding computed for logo template: ${data.name} (${embedding.length} dimensions)`);
-    } catch (error) {
-      console.error('[LogoDetect] Failed to compute embedding:', error);
-      // 임베딩 실패해도 템플릿은 생성 (나중에 재계산 가능)
-    }
-
-    return prisma.logoTemplate.create({
+    // 먼저 템플릿 생성 (임베딩 없이)
+    const template = await prisma.logoTemplate.create({
       data: {
         brandId,
         name: data.name,
         fileKey: data.fileKey,
         fileUrl: data.fileUrl,
         variant: data.variant,
-        embedding: embedding ? embedding : undefined,
       },
     });
+
+    // CLIP 임베딩 계산 (진짜 백그라운드 — await하지 않음)
+    setImmediate(async () => {
+      try {
+        const { embeddingService } = await import('./embedding.service');
+        const imagePath = data.fileUrl || `/uploads/${data.fileKey}`;
+        const embedding = await embeddingService.getImageEmbedding(imagePath);
+        await prisma.logoTemplate.update({
+          where: { id: template.id },
+          data: { embedding },
+        });
+        console.log(`[LogoDetect] Embedding computed for logo template: ${data.name} (${embedding.length} dimensions)`);
+      } catch (error) {
+        console.error('[LogoDetect] Failed to compute embedding (will retry later):', error);
+      }
+    });
+
+    return template;
   }
 
   /**
