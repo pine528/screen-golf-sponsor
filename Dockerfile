@@ -27,8 +27,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install OpenSSL for Prisma runtime
-RUN apt-get update && apt-get install -y openssl ca-certificates wget && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma runtime + FFmpeg for VOD processing + yt-dlp for YouTube ingest
+RUN apt-get update && apt-get install -y openssl ca-certificates wget ffmpeg python3 && \
+    wget -q https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN groupadd --system --gid 1001 nodejs && \
