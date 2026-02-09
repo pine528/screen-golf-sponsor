@@ -29,9 +29,9 @@ router.get('/stats', authorize('BRAND'), campaignController.getStats);
 
 /**
  * @route POST /campaigns
- * @desc Create new campaign (Brand only)
+ * @desc Create new campaign (Brand or Admin)
  */
-router.post('/', authorize('BRAND'), campaignController.create);
+router.post('/', authorize('BRAND', 'ADMIN'), campaignController.create);
 
 /**
  * GET /campaigns/recommended-athletes

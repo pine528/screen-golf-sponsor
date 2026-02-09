@@ -417,6 +417,32 @@ export class BrandService {
       recentTransactions,
     };
   }
+
+  async updateRoiSettings(brandId: string, data: {
+    keywords?: string[];
+    competitors?: string[];
+    blockedCategories?: string[];
+  }) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+    if (!brand) {
+      throw new NotFoundError('Brand not found');
+    }
+
+    return prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        keywords: data.keywords ?? [],
+        competitors: data.competitors ?? [],
+        blockedCategories: data.blockedCategories ?? [],
+      },
+      select: {
+        id: true,
+        keywords: true,
+        competitors: true,
+        blockedCategories: true,
+      },
+    });
+  }
 }
 
 export const brandService = new BrandService();

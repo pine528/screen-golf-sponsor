@@ -108,6 +108,11 @@ model Brand {
   billingProfile  BillingProfile?
   creativeApprovals BrandEventCreativeApproval[]
 
+  // ROI Settings
+  keywords          String[]    @default([])
+  competitors       String[]    @default([])
+  blockedCategories String[]    @default([]) @map("blocked_categories")
+
   // ROI Report Dashboard relations
   logoTemplates   LogoTemplate[]
   logoDetections  LogoDetection[]

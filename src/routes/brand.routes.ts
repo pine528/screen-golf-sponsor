@@ -67,6 +67,12 @@ router.get('/me/wins', authenticate, authorize('BRAND'), brandController.getMyWi
 router.get('/me/wallet', authenticate, authorize('BRAND'), brandController.getMyWallet);
 
 /**
+ * @route PUT /brands/me/roi-settings
+ * @desc Update brand ROI settings (keywords, competitors, blockedCategories)
+ */
+router.put('/me/roi-settings', authenticate, authorize('BRAND'), brandController.updateRoiSettings);
+
+/**
  * @route GET /brands/:id
  * @desc Get brand by ID
  */

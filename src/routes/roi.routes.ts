@@ -242,6 +242,32 @@ router.get(
 );
 
 /**
+ * @route GET /roi/admin/reports
+ * @desc List all reports (Admin) - no campaignId required
+ */
+router.get(
+  '/admin/reports',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId, status, type, page, limit } = req.query;
+
+      const data = await roiReportService.listReports({
+        campaignId: campaignId as string | undefined,
+        status: status as any,
+        type: type as RoiReportType | undefined,
+        page: page ? parseInt(page as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+      });
+
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route DELETE /roi/reports/:reportId
  * @desc Delete a report
  */
