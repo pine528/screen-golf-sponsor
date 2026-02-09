@@ -57,8 +57,14 @@ socketService.initialize(httpServer);
 
 // Security middleware
 app.use(helmet());
+// CORS: 쉼표 구분 다중 origin 지원
+const corsOriginEnv = process.env.CORS_ORIGIN;
+const corsOrigin = corsOriginEnv
+  ? (corsOriginEnv.includes(',') ? corsOriginEnv.split(',').map(o => o.trim()) : corsOriginEnv)
+  : '*';
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: corsOrigin,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-idempotency-key'],
 }));
