@@ -1,14 +1,42 @@
 import { PrismaClient, VodStatus } from '@prisma/client';
 import { cloudinaryService } from './cloudinary.service';
+import { localStorageService } from './localStorage.service';
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { v4 as uuidv4 } from 'uuid';
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
+
+// 스토리지 서비스 선택 헬퍼
+const getStorageService = () => {
+  if (cloudinaryService.isConfigured()) {
+    return cloudinaryService;
+  }
+  console.log('[VOD] Cloudinary not configured, using local storage');
+  return localStorageService;
+};
+
+// VOD 로컬 저장 경로
+const VOD_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'vod');
+
+// 디렉토리 생성
+if (!fs.existsSync(VOD_UPLOAD_DIR)) {
+  fs.mkdirSync(VOD_UPLOAD_DIR, { recursive: true });
+}
+
+// Cloudinary 설정 여부 확인
+const isCloudinaryConfigured = () => {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+};
 
 interface VodUploadResult {
   id: string;
@@ -43,8 +71,9 @@ class VodService {
       throw new NotFoundError('캠페인을 찾을 수 없습니다.');
     }
 
-    // Cloudinary에 업로드 (video 타입)
-    const uploadResult = await cloudinaryService.uploadBuffer(file.buffer, 'assets' as any, {
+    // 스토리지에 업로드 (Cloudinary 또는 Local)
+    const storage = getStorageService();
+    const uploadResult = await storage.uploadBuffer(file.buffer, 'vod' as any, {
       resource_type: 'auto',
       filename: `vod_${Date.now()}`,
     });
@@ -115,11 +144,16 @@ class VodService {
     // 백그라운드에서 다운로드 시작 (비동기)
     this.processYoutubeDownload(vodAsset.id, youtubeUrl).catch(async (error) => {
       console.error(`YouTube 다운로드 실패 (${vodAsset.id}):`, error);
+      // 에러 메시지 상세 저장
+      let errorMsg = error.message || 'Unknown error';
+      if (error.stderr) {
+        errorMsg += ` | stderr: ${error.stderr.slice(0, 500)}`;
+      }
       await prisma.vodAsset.update({
         where: { id: vodAsset.id },
         data: {
           status: VodStatus.FAILED,
-          errorMessage: error.message,
+          errorMessage: errorMsg.slice(0, 1000), // 1000자 제한
         },
       });
     });
@@ -141,32 +175,72 @@ class VodService {
     });
 
     const tempDir = os.tmpdir();
-    const outputPath = path.join(tempDir, `vod_${vodId}.mp4`);
+    const tempOutputPath = path.join(tempDir, `vod_${vodId}.mp4`);
 
     try {
-      // yt-dlp로 다운로드
-      // 참고: yt-dlp가 시스템에 설치되어 있어야 함
-      const command = `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" -o "${outputPath}" "${youtubeUrl}"`;
-      await execAsync(command, { timeout: 600000 }); // 10분 타임아웃
+      console.log(`[VOD] YouTube 다운로드 시작: ${youtubeUrl}`);
+      console.log(`[VOD] 임시 경로: ${tempOutputPath}`);
 
-      // 파일 읽기
-      const videoBuffer = fs.readFileSync(outputPath);
-      const fileStats = fs.statSync(outputPath);
+      // Windows 경로 처리
+      const escapedPath = tempOutputPath.replace(/\\/g, '/');
 
-      // Cloudinary에 업로드
-      const uploadResult = await cloudinaryService.uploadBuffer(videoBuffer, 'assets' as any, {
-        resource_type: 'auto',
-        filename: `vod_yt_${vodId}`,
+      // yt-dlp로 다운로드 (Windows 호환)
+      const command = `yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "${escapedPath}" "${youtubeUrl}"`;
+      console.log(`[VOD] 실행 명령어: ${command}`);
+
+      const { stdout, stderr } = await execAsync(command, {
+        timeout: 1800000,  // 30분 타임아웃
+        maxBuffer: 1024 * 1024 * 50, // 50MB 버퍼
       });
 
+      if (stderr) {
+        console.log(`[VOD] yt-dlp stderr: ${stderr}`);
+      }
+      if (stdout) {
+        console.log(`[VOD] yt-dlp stdout: ${stdout.slice(-500)}`);
+      }
+
+      console.log(`[VOD] 다운로드 완료: ${tempOutputPath}`);
+
+      const fileStats = fs.statSync(tempOutputPath);
+      let storageKey: string;
+      let fileUrl: string;
+
+      // Cloudinary 또는 로컬 스토리지 사용
+      if (isCloudinaryConfigured()) {
+        console.log('[VOD] Cloudinary에 업로드 중...');
+        const videoBuffer = fs.readFileSync(tempOutputPath);
+        const uploadResult = await cloudinaryService.uploadBuffer(videoBuffer, 'assets' as any, {
+          resource_type: 'auto',
+          filename: `vod_yt_${vodId}`,
+        });
+        storageKey = uploadResult.public_id;
+        fileUrl = uploadResult.secure_url;
+        // 임시 파일 삭제
+        fs.unlinkSync(tempOutputPath);
+      } else {
+        console.log('[VOD] 로컬 스토리지에 저장 중...');
+        // 로컬 스토리지에 저장 (다른 드라이브 간 이동을 위해 copy + unlink 사용)
+        const fileName = `${uuidv4()}.mp4`;
+        const localPath = path.join(VOD_UPLOAD_DIR, fileName);
+        fs.copyFileSync(tempOutputPath, localPath);
+        fs.unlinkSync(tempOutputPath);
+        storageKey = `vod/${fileName}`;
+        fileUrl = `/uploads/vod/${fileName}`;
+        console.log(`[VOD] 파일 저장 완료: ${localPath}`);
+      }
+
       // 메타데이터 추출
-      const metadata = await this.extractVideoMetadata(videoBuffer);
+      const metadata = await this.extractVideoMetadataFromFile(
+        isCloudinaryConfigured() ? tempOutputPath : path.join(VOD_UPLOAD_DIR, storageKey.replace('vod/', ''))
+      );
 
       // DB 업데이트
       await prisma.vodAsset.update({
         where: { id: vodId },
         data: {
-          storageKey: uploadResult.public_id,
+          storageKey,
+          fileName: path.basename(storageKey),
           duration: metadata.duration,
           fps: metadata.fps || 30,
           resolution: metadata.resolution,
@@ -176,12 +250,20 @@ class VodService {
         },
       });
 
-      // 임시 파일 삭제
-      fs.unlinkSync(outputPath);
-    } catch (error) {
+      console.log(`[VOD] 처리 완료: ${vodId}`);
+    } catch (error: any) {
+      console.error(`[VOD] 처리 실패: ${vodId}`);
+      console.error(`[VOD] 에러 메시지: ${error.message}`);
+      console.error(`[VOD] 에러 코드: ${error.code}`);
+      if (error.stderr) {
+        console.error(`[VOD] stderr: ${error.stderr}`);
+      }
+      if (error.stdout) {
+        console.error(`[VOD] stdout: ${error.stdout}`);
+      }
       // 임시 파일 정리
-      if (fs.existsSync(outputPath)) {
-        fs.unlinkSync(outputPath);
+      if (fs.existsSync(tempOutputPath)) {
+        fs.unlinkSync(tempOutputPath);
       }
       throw error;
     }
@@ -292,9 +374,10 @@ class VodService {
       throw new NotFoundError('VOD를 찾을 수 없습니다.');
     }
 
-    // Cloudinary에서 파일 삭제
+    // 스토리지에서 파일 삭제 (Cloudinary 또는 Local)
     if (vod.storageKey) {
-      await cloudinaryService.deleteFile(vod.storageKey);
+      const storage = getStorageService();
+      await storage.deleteFile(vod.storageKey);
     }
 
     // DB에서 삭제 (cascade로 frames, exposures도 삭제됨)
@@ -326,34 +409,62 @@ class VodService {
   }
 
   /**
-   * 비디오 메타데이터 추출 (FFprobe 사용)
+   * 비디오 메타데이터 추출 (Buffer)
    */
   private async extractVideoMetadata(buffer: Buffer): Promise<{
     duration: number;
     fps: number | null;
     resolution: string | null;
   }> {
-    // 기본값 반환 (FFprobe 없이 실행 시)
-    // TODO: FFprobe 연동 시 실제 메타데이터 추출
-    return {
-      duration: 0,
-      fps: 30,
-      resolution: null,
-    };
+    const tempPath = path.join(os.tmpdir(), `meta_${Date.now()}.mp4`);
+    fs.writeFileSync(tempPath, buffer);
+    const result = await this.extractVideoMetadataFromFile(tempPath);
+    fs.unlinkSync(tempPath);
+    return result;
+  }
 
-    // FFprobe 연동 예시:
-    // const tempPath = path.join(os.tmpdir(), `meta_${Date.now()}.mp4`);
-    // fs.writeFileSync(tempPath, buffer);
-    // const { stdout } = await execAsync(
-    //   `ffprobe -v quiet -print_format json -show_format -show_streams "${tempPath}"`
-    // );
-    // fs.unlinkSync(tempPath);
-    // const data = JSON.parse(stdout);
-    // return {
-    //   duration: Math.round(parseFloat(data.format.duration)),
-    //   fps: eval(data.streams[0].r_frame_rate) || 30,
-    //   resolution: `${data.streams[0].width}x${data.streams[0].height}`,
-    // };
+  /**
+   * 비디오 메타데이터 추출 (파일 경로)
+   */
+  private async extractVideoMetadataFromFile(filePath: string): Promise<{
+    duration: number;
+    fps: number | null;
+    resolution: string | null;
+  }> {
+    try {
+      // FFprobe로 메타데이터 추출 시도
+      const { stdout } = await execAsync(
+        `ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`,
+        { timeout: 30000 }
+      );
+      const data = JSON.parse(stdout);
+
+      // 비디오 스트림 찾기
+      const videoStream = data.streams?.find((s: any) => s.codec_type === 'video');
+
+      // FPS 계산 (r_frame_rate: "30/1" 형태)
+      let fps = 30;
+      if (videoStream?.r_frame_rate) {
+        const parts = videoStream.r_frame_rate.split('/');
+        if (parts.length === 2) {
+          fps = Math.round(parseInt(parts[0]) / parseInt(parts[1]));
+        }
+      }
+
+      return {
+        duration: Math.round(parseFloat(data.format?.duration || '0')),
+        fps,
+        resolution: videoStream ? `${videoStream.width}x${videoStream.height}` : null,
+      };
+    } catch (error) {
+      console.warn('[VOD] FFprobe 메타데이터 추출 실패, 기본값 사용:', error);
+      // FFprobe 없으면 기본값 반환
+      return {
+        duration: 0,
+        fps: 30,
+        resolution: null,
+      };
+    }
   }
 }
 

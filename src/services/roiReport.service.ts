@@ -1,5 +1,6 @@
 import { PrismaClient, RoiReportType, RoiReportStatus } from '@prisma/client';
 import { cloudinaryService } from './cloudinary.service';
+import { localStorageService } from './localStorage.service';
 import { NotFoundError, BadRequestError } from '../utils/errors';
 import PDFDocument from 'pdfkit';
 import path from 'path';
@@ -7,6 +8,15 @@ import fs from 'fs';
 import os from 'os';
 
 const prisma = new PrismaClient();
+
+// 스토리지 서비스 선택 헬퍼
+const getStorageService = () => {
+  if (cloudinaryService.isConfigured()) {
+    return cloudinaryService;
+  }
+  console.log('[ROI Report] Cloudinary not configured, using local storage');
+  return localStorageService;
+};
 
 // KPI 메트릭 타입
 interface RoiMetrics {
@@ -197,10 +207,11 @@ class RoiReportService {
         title: title || `${campaign.name} ROI 리포트`,
       });
 
-      // Cloudinary 업로드
+      // 스토리지 업로드 (Cloudinary 또는 Local)
       const buffer = fs.readFileSync(tempPath);
-      const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
-        filename: `roi_report_${report.id}`,
+      const storage = getStorageService();
+      const uploadResult = await storage.uploadBuffer(buffer, 'assets' as any, {
+        filename: `roi_report_${report.id}.pdf`,
         resource_type: 'raw',
       });
 
@@ -255,8 +266,12 @@ class RoiReportService {
 
       doc.pipe(writeStream);
 
-      // 폰트 설정 (한글 지원을 위해 시스템 폰트 사용 필요)
-      // doc.font('path/to/korean-font.ttf');
+      // 한글 폰트 설정 (Windows: 맑은 고딕)
+      const fontPath = 'C:/Windows/Fonts/malgun.ttf';
+      if (fs.existsSync(fontPath)) {
+        doc.registerFont('Korean', fontPath);
+        doc.font('Korean');
+      }
 
       // 제목
       doc.fontSize(24).text(data.title, { align: 'center' });
@@ -270,50 +285,50 @@ class RoiReportService {
       doc.moveDown(2);
 
       // 캠페인 정보
-      doc.fontSize(16).text('Campaign Information', { underline: true });
+      doc.fontSize(16).text('캠페인 정보', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(12)
-        .text(`Campaign: ${data.campaign.name}`)
-        .text(`Brand: ${data.campaign.brand.name}`)
-        .text(`Budget: ${this.formatCurrency(data.campaign.budget)}`);
+        .text(`캠페인명: ${data.campaign.name}`)
+        .text(`브랜드: ${data.campaign.brand.name}`)
+        .text(`예산: ${this.formatCurrency(data.campaign.budget)}`);
       doc.moveDown(2);
 
       // KPI 요약
-      doc.fontSize(16).text('KPI Summary', { underline: true });
+      doc.fontSize(16).text('KPI 요약', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(12)
-        .text(`Total Exposures: ${data.metrics.totalExposures}`)
-        .text(`Valid Exposures: ${data.metrics.validExposures}`)
-        .text(`Validity Rate: ${(data.metrics.validityRate * 100).toFixed(1)}%`)
-        .text(`Total Exposure Time: ${this.formatDuration(data.metrics.totalDuration)}`)
-        .text(`Average Confidence: ${(data.metrics.avgConfidence * 100).toFixed(1)}%`);
+        .text(`총 노출 횟수: ${data.metrics.totalExposures}회`)
+        .text(`유효 노출 횟수: ${data.metrics.validExposures}회`)
+        .text(`유효율: ${(data.metrics.validityRate * 100).toFixed(1)}%`)
+        .text(`총 노출 시간: ${this.formatDurationKo(data.metrics.totalDuration)}`)
+        .text(`평균 신뢰도: ${(data.metrics.avgConfidence * 100).toFixed(1)}%`);
       doc.moveDown(2);
 
       // 슬롯별 성과
       if (data.metrics.slotMetrics.length > 0) {
-        doc.fontSize(16).text('Slot Performance', { underline: true });
+        doc.fontSize(16).text('슬롯별 성과', { underline: true });
         doc.moveDown(0.5);
 
         for (const slot of data.metrics.slotMetrics) {
           doc.fontSize(12)
-            .text(`${slot.slotType}: ${slot.exposureCount} exposures, ${this.formatDuration(slot.totalDuration)}`);
+            .text(`${slot.slotType}: ${slot.exposureCount}회 노출, ${this.formatDurationKo(slot.totalDuration)}`);
         }
         doc.moveDown(2);
       }
 
       // 검수 현황
-      doc.fontSize(16).text('Review Status', { underline: true });
+      doc.fontSize(16).text('검수 현황', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(12)
-        .text(`Pending: ${data.metrics.reviewStats.pending}`)
-        .text(`Approved: ${data.metrics.reviewStats.approved}`)
-        .text(`Rejected: ${data.metrics.reviewStats.rejected}`);
+        .text(`대기 중: ${data.metrics.reviewStats.pending}건`)
+        .text(`승인됨: ${data.metrics.reviewStats.approved}건`)
+        .text(`거부됨: ${data.metrics.reviewStats.rejected}건`);
       doc.moveDown(2);
 
       // 푸터
       doc.fontSize(10)
         .text(
-          `Generated on ${new Date().toISOString()} by SPONPIK ROI Report System`,
+          `생성일시: ${new Date().toLocaleString('ko-KR')} | SPONPIK ROI 리포트 시스템`,
           { align: 'center' }
         );
 
@@ -322,6 +337,23 @@ class RoiReportService {
       writeStream.on('finish', resolve);
       writeStream.on('error', reject);
     });
+  }
+
+  /**
+   * 유틸리티: 시간 포맷 (한글)
+   */
+  private formatDurationKo(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분 ${secs}초`;
+    }
+    if (minutes > 0) {
+      return `${minutes}분 ${secs}초`;
+    }
+    return `${secs}초`;
   }
 
   /**
@@ -400,9 +432,10 @@ class RoiReportService {
       throw new NotFoundError('리포트를 찾을 수 없습니다.');
     }
 
-    // Cloudinary에서 삭제
+    // 스토리지에서 삭제 (Cloudinary 또는 Local)
     if (report.fileKey) {
-      await cloudinaryService.deleteFile(report.fileKey);
+      const storage = getStorageService();
+      await storage.deleteFile(report.fileKey);
     }
 
     // DB에서 삭제
@@ -431,10 +464,27 @@ class RoiReportService {
       _count: true,
     });
 
+    // 슬롯별 통계를 객체 형태로 변환 (프론트엔드 호환)
+    const slotStats: Record<string, { count: number; duration: number }> = {};
+    for (const slot of metrics.slotMetrics) {
+      slotStats[slot.slotType] = {
+        count: slot.exposureCount,
+        duration: slot.totalDuration,
+      };
+    }
+
     return {
+      // 기존 구조
       metrics,
       recentReports,
       vodStats: Object.fromEntries(vodStats.map(v => [v.status, v._count])),
+      // 프론트엔드 호환 필드 (플랫 구조)
+      totalExposures: metrics.totalExposures,
+      validExposures: metrics.validExposures,
+      totalDuration: metrics.totalDuration,
+      avgConfidence: metrics.avgConfidence,
+      slotStats,
+      reviewStatus: metrics.reviewStats,
     };
   }
 

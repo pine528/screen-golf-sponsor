@@ -4,6 +4,9 @@ import axios from 'axios';
 
 const prisma = new PrismaClient();
 
+// GPU 서버 사용 여부 (환경변수로 제어)
+const USE_GPU_SERVER = process.env.USE_GPU_SERVER === 'true';
+
 // Google Vision API 응답 타입
 interface VisionLogoAnnotation {
   mid?: string;
@@ -55,12 +58,20 @@ class LogoDetectService {
   }
 
   /**
-   * 단일 프레임에서 로고 검출
+   * 단일 프레임에서 로고 검출 (CLIP 임베딩 기반)
    */
   async detectLogosInFrame(
     frameId: string,
-    brandIds?: string[]
+    brandIds?: string[],
+    options: {
+      useEmbedding?: boolean;  // true: CLIP 임베딩, false: Google Vision
+      threshold?: number;      // 유사도 임계값 (기본 0.5)
+    } = {}
   ): Promise<LogoDetectionResult[]> {
+    // 환경변수로 threshold 기본값 설정 가능
+    const defaultThreshold = parseFloat(process.env.LOGO_DETECT_THRESHOLD || '0.5');
+    const { useEmbedding = true, threshold = defaultThreshold } = options;
+
     const frame = await prisma.vodFrame.findUnique({
       where: { id: frameId },
       include: {
@@ -81,7 +92,7 @@ class LogoDetectService {
     // 검출할 브랜드 목록 (지정되지 않으면 캠페인 브랜드)
     const targetBrandIds = brandIds || [frame.vodAsset.campaign.brandId];
 
-    // 브랜드 로고 템플릿 조회
+    // 브랜드 로고 템플릿 조회 (임베딩 포함)
     const logoTemplates = await prisma.logoTemplate.findMany({
       where: {
         brandId: { in: targetBrandIds },
@@ -99,17 +110,85 @@ class LogoDetectService {
       return [];
     }
 
-    // 프레임 이미지 URL 가져오기
-    const imageUrl = this.getCloudinaryUrl(frame.thumbnailKey);
+    let detections: LogoDetectionResult[] = [];
 
-    // Google Vision API 호출
-    const visionResults = await this.callVisionApi(imageUrl);
+    // CLIP 임베딩 기반 검출
+    if (useEmbedding) {
+      // 임베딩이 있는 템플릿만 필터링
+      const templatesWithEmbedding = logoTemplates.filter(t => t.embedding);
 
-    // 검출 결과를 브랜드와 매칭
-    const detections = this.matchDetectionsWithBrands(
-      visionResults,
-      logoTemplates.map(t => ({ id: t.brand.id, name: t.brand.name }))
-    );
+      if (templatesWithEmbedding.length === 0) {
+        console.warn('임베딩이 있는 로고 템플릿이 없습니다. Vision API로 폴백합니다.');
+      } else {
+        try {
+          // 프레임 이미지 경로
+          const framePath = frame.thumbnailKey.startsWith('/')
+            ? frame.thumbnailKey
+            : `/uploads/${frame.thumbnailKey}`;
+
+          // 로고 임베딩 준비
+          const logoEmbeddings = templatesWithEmbedding.map(t => ({
+            brandId: t.brand.id,
+            name: t.brand.name,
+            embedding: t.embedding as number[],
+          }));
+
+          let clipDetections: any[] = [];
+
+          // GPU 서버 우선 사용
+          if (USE_GPU_SERVER) {
+            try {
+              const { embeddingGpuService } = await import('./embeddingGpu.service');
+
+              // GPU 서버 상태 확인
+              const isAvailable = await embeddingGpuService.checkHealth();
+
+              if (isAvailable) {
+                console.log('[LogoDetect] Using GPU server for detection');
+                clipDetections = await embeddingGpuService.detectLogosInFrame(
+                  framePath,
+                  logoEmbeddings,
+                  { threshold }
+                );
+              } else {
+                throw new Error('GPU server not available');
+              }
+            } catch (gpuError) {
+              console.error('[LogoDetect] GPU server failed:', gpuError);
+              // GPU 실패 시 빈 결과 반환 (CPU 폴백 비활성화)
+              clipDetections = [];
+            }
+          } else {
+            // CPU 모드 (기존 방식)
+            const { embeddingService } = await import('./embedding.service');
+            clipDetections = await embeddingService.detectLogosInFrame(
+              framePath,
+              logoEmbeddings,
+              { threshold }
+            );
+          }
+
+          // 결과 변환
+          detections = clipDetections.map(d => ({
+            brandId: d.brandId,
+            brandName: d.brandName,
+            confidence: d.confidence,
+            bbox: d.bbox,
+            bboxArea: d.bbox.width * d.bbox.height,
+            areaRatio: this.calculateAreaRatio(d.bbox),
+          }));
+
+          console.log(`[LogoDetect] CLIP detected ${detections.length} logos in frame ${frameId}`);
+        } catch (error) {
+          console.error('[LogoDetect] CLIP detection failed, falling back to Vision API:', error);
+          // 실패 시 Vision API로 폴백
+          detections = await this.detectWithVisionApi(frame, logoTemplates);
+        }
+      }
+    } else {
+      // Google Vision API 기반 검출
+      detections = await this.detectWithVisionApi(frame, logoTemplates);
+    }
 
     // 검출 결과 DB 저장
     if (detections.length > 0) {
@@ -117,6 +196,26 @@ class LogoDetectService {
     }
 
     return detections;
+  }
+
+  /**
+   * Google Vision API 기반 검출 (레거시/폴백)
+   */
+  private async detectWithVisionApi(
+    frame: any,
+    logoTemplates: any[]
+  ): Promise<LogoDetectionResult[]> {
+    // 프레임 이미지 URL 가져오기
+    const imageUrl = this.getCloudinaryUrl(frame.thumbnailKey);
+
+    // Google Vision API 호출
+    const visionResults = await this.callVisionApi(imageUrl);
+
+    // 검출 결과를 브랜드와 매칭
+    return this.matchDetectionsWithBrands(
+      visionResults,
+      logoTemplates.map(t => ({ id: t.brand.id, name: t.brand.name }))
+    );
   }
 
   /**
@@ -128,13 +227,14 @@ class LogoDetectService {
       brandIds?: string[];
       batchSize?: number;
       skipExisting?: boolean;
+      threshold?: number;  // 유사도 임계값 (기본 0.5)
     } = {}
   ): Promise<{
     processedFrames: number;
     totalDetections: number;
     errors: number;
   }> {
-    const { brandIds, batchSize = 10, skipExisting = true } = options;
+    const { brandIds, batchSize = 10, skipExisting = true, threshold } = options;
 
     const vod = await prisma.vodAsset.findUnique({
       where: { id: vodId },
@@ -183,7 +283,8 @@ class LogoDetectService {
           try {
             const detections = await this.detectLogosInFrame(
               frame.id,
-              brandIds || [vod.campaign.brandId]
+              brandIds || [vod.campaign.brandId],
+              { threshold }
             );
             processedFrames++;
             totalDetections += detections.length;
@@ -390,7 +491,7 @@ class LogoDetectService {
   }
 
   /**
-   * 로고 템플릿 등록
+   * 로고 템플릿 등록 (CLIP 임베딩 자동 생성)
    */
   async createLogoTemplate(
     brandId: string,
@@ -410,6 +511,18 @@ class LogoDetectService {
       throw new NotFoundError('브랜드를 찾을 수 없습니다.');
     }
 
+    // CLIP 임베딩 계산 (백그라운드에서 비동기로 처리)
+    let embedding: number[] | null = null;
+    try {
+      const { embeddingService } = await import('./embedding.service');
+      const imagePath = data.fileUrl || `/uploads/${data.fileKey}`;
+      embedding = await embeddingService.getImageEmbedding(imagePath);
+      console.log(`[LogoDetect] Embedding computed for logo template: ${data.name} (${embedding.length} dimensions)`);
+    } catch (error) {
+      console.error('[LogoDetect] Failed to compute embedding:', error);
+      // 임베딩 실패해도 템플릿은 생성 (나중에 재계산 가능)
+    }
+
     return prisma.logoTemplate.create({
       data: {
         brandId,
@@ -417,8 +530,38 @@ class LogoDetectService {
         fileKey: data.fileKey,
         fileUrl: data.fileUrl,
         variant: data.variant,
+        embedding: embedding ? embedding : undefined,
       },
     });
+  }
+
+  /**
+   * 기존 로고 템플릿의 임베딩 재계산
+   */
+  async recomputeEmbedding(templateId: string): Promise<void> {
+    const template = await prisma.logoTemplate.findUnique({
+      where: { id: templateId },
+    });
+
+    if (!template) {
+      throw new NotFoundError('로고 템플릿을 찾을 수 없습니다.');
+    }
+
+    try {
+      const { embeddingService } = await import('./embedding.service');
+      const imagePath = template.fileUrl || `/uploads/${template.fileKey}`;
+      const embedding = await embeddingService.getImageEmbedding(imagePath);
+
+      await prisma.logoTemplate.update({
+        where: { id: templateId },
+        data: { embedding },
+      });
+
+      console.log(`[LogoDetect] Embedding recomputed for: ${template.name}`);
+    } catch (error) {
+      console.error('[LogoDetect] Failed to recompute embedding:', error);
+      throw error;
+    }
   }
 
   /**

@@ -8,7 +8,9 @@ import { roiEvidenceService } from '../services/roiEvidence.service';
 import { roiReportService } from '../services/roiReport.service';
 import { AuthRequest } from '../types';
 import { uploadAsset } from '../services/upload.service';
-import { VodStatus, ReviewStatus, RoiReportType } from '@prisma/client';
+import { PrismaClient, VodStatus, ReviewStatus, RoiReportType } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
@@ -226,7 +228,16 @@ router.get(
         limit: limit ? parseInt(limit as string) : undefined,
       });
 
-      res.json({ success: true, data });
+      // BigInt를 Number로 변환 (JSON 직렬화용)
+      const serializedData = {
+        ...data,
+        items: data.items.map((item: any) => ({
+          ...item,
+          fileSizeBytes: item.fileSizeBytes ? Number(item.fileSizeBytes) : null,
+        })),
+      };
+
+      res.json({ success: true, data: serializedData });
     } catch (error) {
       next(error);
     }
@@ -297,7 +308,12 @@ router.get(
     try {
       const { vodId } = req.params;
       const vod = await vodService.getVodById(vodId);
-      res.json({ success: true, data: vod });
+      // BigInt를 Number로 변환
+      const serializedVod = {
+        ...vod,
+        fileSizeBytes: vod.fileSizeBytes ? Number(vod.fileSizeBytes) : null,
+      };
+      res.json({ success: true, data: serializedVod });
     } catch (error) {
       next(error);
     }
@@ -356,11 +372,13 @@ router.post(
       const { vodId } = req.params;
       const { fps, quality, maxWidth } = req.body;
 
-      const result = await frameExtractService.extractFrames(vodId, {
-        fps,
-        quality,
-        maxWidth,
-      });
+      // undefined 값은 제외하여 DEFAULT_CONFIG이 적용되도록 함
+      const config: Record<string, number> = {};
+      if (fps !== undefined) config.fps = fps;
+      if (quality !== undefined) config.quality = quality;
+      if (maxWidth !== undefined) config.maxWidth = maxWidth;
+
+      const result = await frameExtractService.extractFrames(vodId, config);
 
       res.json({ success: true, data: result });
     } catch (error) {
@@ -396,7 +414,7 @@ router.get(
 
 /**
  * @route POST /roi/admin/vod/:vodId/detect-logos
- * @desc Run logo detection on VOD frames
+ * @desc Run logo detection on VOD frames (비동기 처리)
  */
 router.post(
   '/admin/vod/:vodId/detect-logos',
@@ -404,15 +422,42 @@ router.post(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { vodId } = req.params;
-      const { brandIds, batchSize, skipExisting } = req.body;
+      const { brandIds, batchSize, skipExisting, threshold } = req.body;
 
-      const result = await logoDetectService.detectLogosInVod(vodId, {
-        brandIds,
-        batchSize,
-        skipExisting,
+      // threshold 값 유효성 검사 (0.1 ~ 1.0)
+      const parsedThreshold = threshold ? parseFloat(threshold) : undefined;
+      if (parsedThreshold !== undefined && (parsedThreshold < 0.1 || parsedThreshold > 1.0)) {
+        return res.status(400).json({
+          success: false,
+          message: 'threshold는 0.1 ~ 1.0 사이 값이어야 합니다.',
+        });
+      }
+
+      // 즉시 응답 후 백그라운드에서 처리
+      res.json({
+        success: true,
+        data: {
+          message: '로고 검출이 시작되었습니다. 처리 완료까지 시간이 걸릴 수 있습니다.',
+          vodId,
+          threshold: parsedThreshold || 0.5,
+        },
       });
 
-      res.json({ success: true, data: result });
+      // 백그라운드 처리 (응답 후 실행)
+      setImmediate(async () => {
+        try {
+          console.log(`[ROI] 로고 검출 시작: ${vodId} (threshold: ${parsedThreshold || 0.5})`);
+          const result = await logoDetectService.detectLogosInVod(vodId, {
+            brandIds,
+            batchSize,
+            skipExisting,
+            threshold: parsedThreshold,
+          });
+          console.log(`[ROI] 로고 검출 완료: ${vodId}`, result);
+        } catch (error) {
+          console.error(`[ROI] 로고 검출 실패: ${vodId}`, error);
+        }
+      });
     } catch (error) {
       next(error);
     }
@@ -556,6 +601,52 @@ router.put(
   }
 );
 
+/**
+ * @route POST /roi/admin/exposures/bulk-approve
+ * @desc Bulk approve exposures by filter criteria
+ */
+router.post(
+  '/admin/exposures/bulk-approve',
+  authorize('ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { minConfidence, campaignId, exposureIds } = req.body;
+      const reviewerId = req.user!.id;
+
+      let where: any = { reviewStatus: 'PENDING' };
+
+      if (exposureIds && exposureIds.length > 0) {
+        // 특정 ID들만 승인
+        where.id = { in: exposureIds };
+      } else {
+        // 필터 기준으로 승인
+        if (campaignId) where.campaignId = campaignId;
+        if (minConfidence) where.avgConfidence = { gte: minConfidence };
+      }
+
+      const updated = await prisma.roiExposure.updateMany({
+        where,
+        data: {
+          reviewStatus: 'APPROVED',
+          isValid: true,
+          reviewedBy: reviewerId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          approvedCount: updated.count,
+          message: `${updated.count}개의 노출이 승인되었습니다.`,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============================================
 // Admin: Evidence Generation
 // ============================================
@@ -669,9 +760,19 @@ router.post(
         });
       }
 
-      // Cloudinary에 업로드
+      // 스토리지 서비스 선택 (Cloudinary 또는 로컬)
       const { cloudinaryService } = await import('../services/cloudinary.service');
-      const uploadResult = await cloudinaryService.uploadFile(req.file, 'assets');
+      const { localStorageService } = await import('../services/localStorage.service');
+
+      const storage = cloudinaryService.isConfigured()
+        ? cloudinaryService
+        : localStorageService;
+
+      if (!cloudinaryService.isConfigured()) {
+        console.log('[ROI] Using local storage for logo template (Cloudinary not configured)');
+      }
+
+      const uploadResult = await storage.uploadFile(req.file, 'assets');
 
       const template = await logoDetectService.createLogoTemplate(brandId, {
         name,

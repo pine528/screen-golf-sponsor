@@ -740,6 +740,50 @@ async function main() {
   console.log('Sample event created:', event.name);
 
   // ============================================
+  // 테스트용 캠페인 생성
+  // ============================================
+
+  // 브랜드 정보 가져오기
+  const brand = await prisma.brand.findFirst({
+    where: { user: { email: 'brand@example.com' } },
+  });
+
+  if (brand) {
+    const campaign = await prisma.campaign.upsert({
+      where: { id: 'sample-campaign-1' },
+      update: {},
+      create: {
+        id: 'sample-campaign-1',
+        brandId: brand.id,
+        name: '2026 시즌 스폰서십 캠페인',
+        description: 'GTOUR 선수 스폰서십 캠페인',
+        budget: 50000000,
+        status: 'ACTIVE',
+        dateStart: new Date('2026-01-01'),
+        dateEnd: new Date('2026-12-31'),
+      },
+    });
+    console.log('Sample campaign created:', campaign.name);
+
+    // 두 번째 캠페인
+    const campaign2 = await prisma.campaign.upsert({
+      where: { id: 'sample-campaign-2' },
+      update: {},
+      create: {
+        id: 'sample-campaign-2',
+        brandId: brand.id,
+        name: 'Q1 프로모션 캠페인',
+        description: '1분기 집중 노출 캠페인',
+        budget: 20000000,
+        status: 'DRAFT',
+        dateStart: new Date('2026-01-01'),
+        dateEnd: new Date('2026-03-31'),
+      },
+    });
+    console.log('Sample campaign 2 created:', campaign2.name);
+  }
+
+  // ============================================
   // 데모용 LIVE 경매 생성
   // ============================================
 

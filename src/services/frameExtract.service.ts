@@ -6,9 +6,28 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { v4 as uuidv4 } from 'uuid';
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
+
+// 로컬 저장 경로
+const VOD_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'vod');
+const FRAME_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'frames');
+
+// 디렉토리 생성
+if (!fs.existsSync(FRAME_UPLOAD_DIR)) {
+  fs.mkdirSync(FRAME_UPLOAD_DIR, { recursive: true });
+}
+
+// Cloudinary 설정 여부 확인
+const isCloudinaryConfigured = () => {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+};
 
 interface FrameExtractionConfig {
   fps: number;       // 프레임 추출 속도 (예: 2fps)
@@ -78,8 +97,15 @@ class FrameExtractService {
         .filter(f => f.startsWith('frame_') && f.endsWith('.jpg'))
         .sort();
 
-      // 각 프레임을 Cloudinary에 업로드하고 DB에 저장
+      // 각 프레임을 저장하고 DB에 저장
       const framesToCreate = [];
+      const vodFrameDir = path.join(FRAME_UPLOAD_DIR, vodId);
+
+      // VOD별 프레임 디렉토리 생성 (로컬 스토리지인 경우)
+      if (!isCloudinaryConfigured() && !fs.existsSync(vodFrameDir)) {
+        fs.mkdirSync(vodFrameDir, { recursive: true });
+      }
+
       for (let i = 0; i < frameFiles.length; i++) {
         const filePath = path.join(tempDir, frameFiles[i]);
         const buffer = fs.readFileSync(filePath);
@@ -88,20 +114,31 @@ class FrameExtractService {
         const frameNumber = i + 1;
         const timestamp = frameNumber / mergedConfig.fps;
 
-        // Cloudinary 업로드
-        const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
-          filename: `frame_${vodId}_${frameNumber.toString().padStart(5, '0')}`,
-          resource_type: 'image',
-        });
+        let thumbnailKey: string;
+
+        if (isCloudinaryConfigured()) {
+          // Cloudinary 업로드
+          const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
+            filename: `frame_${vodId}_${frameNumber.toString().padStart(5, '0')}`,
+            resource_type: 'image',
+          });
+          thumbnailKey = uploadResult.public_id;
+        } else {
+          // 로컬 스토리지에 저장
+          const fileName = `frame_${frameNumber.toString().padStart(5, '0')}.jpg`;
+          const localPath = path.join(vodFrameDir, fileName);
+          fs.writeFileSync(localPath, buffer);
+          thumbnailKey = `frames/${vodId}/${fileName}`;
+        }
 
         framesToCreate.push({
           vodAssetId: vodId,
           frameNumber,
           timestamp,
-          thumbnailKey: uploadResult.public_id,
+          thumbnailKey,
         });
 
-        // 메모리 관리를 위해 파일 삭제
+        // 메모리 관리를 위해 임시 파일 삭제
         fs.unlinkSync(filePath);
       }
 
@@ -166,12 +203,30 @@ class FrameExtractService {
       const ffmpegCmd = `ffmpeg -ss ${timestamp} -i "${videoUrl}" -vframes 1 -q:v 2 "${tempPath}" -y`;
       await execAsync(ffmpegCmd, { timeout: 60000 });
 
-      // Cloudinary 업로드
       const buffer = fs.readFileSync(tempPath);
-      const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
-        filename: `single_frame_${vodId}_${Math.round(timestamp * 1000)}`,
-        resource_type: 'image',
-      });
+      let thumbnailKey: string;
+      let thumbnailUrl: string;
+
+      if (isCloudinaryConfigured()) {
+        // Cloudinary 업로드
+        const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
+          filename: `single_frame_${vodId}_${Math.round(timestamp * 1000)}`,
+          resource_type: 'image',
+        });
+        thumbnailKey = uploadResult.public_id;
+        thumbnailUrl = uploadResult.secure_url;
+      } else {
+        // 로컬 스토리지에 저장
+        const vodFrameDir = path.join(FRAME_UPLOAD_DIR, vodId);
+        if (!fs.existsSync(vodFrameDir)) {
+          fs.mkdirSync(vodFrameDir, { recursive: true });
+        }
+        const fileName = `single_${Math.round(timestamp * 1000)}.jpg`;
+        const localPath = path.join(vodFrameDir, fileName);
+        fs.writeFileSync(localPath, buffer);
+        thumbnailKey = `frames/${vodId}/${fileName}`;
+        thumbnailUrl = `/uploads/frames/${vodId}/${fileName}`;
+      }
 
       // DB 저장
       const frame = await prisma.vodFrame.create({
@@ -179,7 +234,7 @@ class FrameExtractService {
           vodAssetId: vodId,
           frameNumber: -1, // 단일 추출은 -1로 표시
           timestamp,
-          thumbnailKey: uploadResult.public_id,
+          thumbnailKey,
         },
       });
 
@@ -188,7 +243,7 @@ class FrameExtractService {
 
       return {
         frameId: frame.id,
-        thumbnailUrl: uploadResult.secure_url,
+        thumbnailUrl,
       };
     } catch (error) {
       if (fs.existsSync(tempPath)) {
@@ -219,8 +274,14 @@ class FrameExtractService {
       prisma.vodFrame.count({ where: { vodAssetId: vodId } }),
     ]);
 
+    // 썸네일 URL 추가
+    const itemsWithUrl = items.map((item) => ({
+      ...item,
+      thumbnailUrl: this.getThumbnailUrl(item.thumbnailKey),
+    }));
+
     return {
-      items,
+      items: itemsWithUrl,
       pagination: {
         page,
         limit,
@@ -228,6 +289,19 @@ class FrameExtractService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * 썸네일 URL 생성
+   */
+  getThumbnailUrl(thumbnailKey: string): string {
+    if (thumbnailKey.startsWith('frames/')) {
+      // 로컬 파일
+      return `/uploads/${thumbnailKey}`;
+    }
+    // Cloudinary URL
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    return `https://res.cloudinary.com/${cloudName}/image/upload/${thumbnailKey}`;
   }
 
   /**
@@ -269,9 +343,18 @@ class FrameExtractService {
       throw new NotFoundError('프레임을 찾을 수 없습니다.');
     }
 
-    // Cloudinary에서 삭제
+    // 파일 삭제
     if (frame.thumbnailKey) {
-      await cloudinaryService.deleteFile(frame.thumbnailKey);
+      if (frame.thumbnailKey.startsWith('frames/')) {
+        // 로컬 파일 삭제
+        const localPath = path.join(process.cwd(), 'uploads', frame.thumbnailKey);
+        if (fs.existsSync(localPath)) {
+          fs.unlinkSync(localPath);
+        }
+      } else if (isCloudinaryConfigured()) {
+        // Cloudinary에서 삭제
+        await cloudinaryService.deleteFile(frame.thumbnailKey);
+      }
     }
 
     // DB에서 삭제
@@ -299,13 +382,25 @@ class FrameExtractService {
   }
 
   /**
-   * 비디오 URL 가져오기
+   * 비디오 URL/경로 가져오기
    */
   private async getVideoUrl(storageKey: string): Promise<string> {
+    // 로컬 파일인 경우 (vod/ 로 시작)
+    if (storageKey.startsWith('vod/')) {
+      const localPath = path.join(process.cwd(), 'uploads', storageKey);
+      if (fs.existsSync(localPath)) {
+        return localPath;
+      }
+      throw new NotFoundError(`비디오 파일을 찾을 수 없습니다: ${localPath}`);
+    }
+
     // Cloudinary URL 생성
-    // 참고: cloudinary.url() 또는 직접 URL 구성
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    return `https://res.cloudinary.com/${cloudName}/video/upload/${storageKey}`;
+    if (isCloudinaryConfigured()) {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      return `https://res.cloudinary.com/${cloudName}/video/upload/${storageKey}`;
+    }
+
+    throw new BadRequestError('비디오 저장소가 설정되지 않았습니다.');
   }
 
   /**

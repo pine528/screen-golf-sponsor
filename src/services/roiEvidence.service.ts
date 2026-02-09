@@ -1,5 +1,6 @@
 import { PrismaClient, EvidenceType } from '@prisma/client';
 import { cloudinaryService } from './cloudinary.service';
+import { localStorageService } from './localStorage.service';
 import { NotFoundError, BadRequestError } from '../utils/errors';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -7,9 +8,19 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import archiver from 'archiver';
+import { v4 as uuidv4 } from 'uuid';
 
 const execAsync = promisify(exec);
 const prisma = new PrismaClient();
+
+// 스토리지 서비스 선택 헬퍼
+const getStorageService = () => {
+  if (cloudinaryService.isConfigured()) {
+    return cloudinaryService;
+  }
+  console.log('[ROI Evidence] Cloudinary not configured, using local storage');
+  return localStorageService;
+};
 
 class RoiEvidenceService {
   /**
@@ -43,9 +54,10 @@ class RoiEvidenceService {
       const ffmpegCmd = `ffmpeg -ss ${midTimestamp} -i "${videoUrl}" -vframes 1 -q:v 2 "${tempPath}" -y`;
       await execAsync(ffmpegCmd, { timeout: 60000 });
 
-      // Cloudinary 업로드
+      // 스토리지 업로드 (Cloudinary 또는 Local)
       const buffer = fs.readFileSync(tempPath);
-      const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
+      const storage = getStorageService();
+      const uploadResult = await storage.uploadBuffer(buffer, 'evidence' as any, {
         filename: `evidence_screenshot_${exposureId}`,
         resource_type: 'image',
       });
@@ -124,9 +136,10 @@ class RoiEvidenceService {
       const ffmpegCmd = `ffmpeg -ss ${clipStart} -i "${videoUrl}" -t ${clipDuration} -c:v libx264 -c:a aac -y "${tempPath}"`;
       await execAsync(ffmpegCmd, { timeout: 300000 }); // 5분 타임아웃
 
-      // Cloudinary 업로드
+      // 스토리지 업로드 (Cloudinary 또는 Local)
       const buffer = fs.readFileSync(tempPath);
-      const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
+      const storage = getStorageService();
+      const uploadResult = await storage.uploadBuffer(buffer, 'evidence' as any, {
         filename: `evidence_clip_${exposureId}`,
         resource_type: 'auto',
       });
@@ -273,10 +286,11 @@ class RoiEvidenceService {
     return new Promise(async (resolve, reject) => {
       output.on('close', async () => {
         try {
-          // ZIP 파일 업로드
+          // ZIP 파일 업로드 (Cloudinary 또는 Local)
           const buffer = fs.readFileSync(tempZipPath);
-          const uploadResult = await cloudinaryService.uploadBuffer(buffer, 'assets' as any, {
-            filename: `proof_pack_${campaignId}_${Date.now()}`,
+          const storage = getStorageService();
+          const uploadResult = await storage.uploadBuffer(buffer, 'evidence' as any, {
+            filename: `proof_pack_${campaignId}_${Date.now()}.zip`,
             resource_type: 'raw',
           });
 
@@ -351,6 +365,9 @@ class RoiEvidenceService {
               startTs: true,
               endTs: true,
               brandId: true,
+              vodAsset: {
+                select: { id: true, fileName: true },
+              },
             },
           },
         },
@@ -411,9 +428,10 @@ class RoiEvidenceService {
       throw new NotFoundError('증빙 자료를 찾을 수 없습니다.');
     }
 
-    // Cloudinary에서 삭제
+    // 스토리지에서 삭제 (Cloudinary 또는 Local)
     if (evidence.fileKey) {
-      await cloudinaryService.deleteFile(evidence.fileKey);
+      const storage = getStorageService();
+      await storage.deleteFile(evidence.fileKey);
     }
 
     // DB에서 삭제

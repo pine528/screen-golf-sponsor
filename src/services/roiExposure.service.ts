@@ -41,7 +41,11 @@ class RoiExposureService {
     vodId: string,
     config: Partial<MergeConfig> = {}
   ): Promise<{ exposureCount: number; totalDuration: number }> {
-    const mergedConfig = { ...DEFAULT_MERGE_CONFIG, ...config };
+    // undefined 값 제거 후 병합
+    const cleanConfig = Object.fromEntries(
+      Object.entries(config).filter(([_, v]) => v !== undefined)
+    );
+    const mergedConfig = { ...DEFAULT_MERGE_CONFIG, ...cleanConfig };
 
     const vod = await prisma.vodAsset.findUnique({
       where: { id: vodId },
@@ -55,11 +59,13 @@ class RoiExposureService {
     }
 
     // 기존 노출 구간 삭제
-    await prisma.roiExposure.deleteMany({
+    const deleted = await prisma.roiExposure.deleteMany({
       where: { vodAssetId: vodId },
     });
+    console.log(`[RoiExposure] 삭제된 기존 노출: ${deleted.count}`);
 
     // 검출 결과 조회 (타임스탬프 순)
+    console.log(`[RoiExposure] 검출 조회 중... (minConfidence: ${mergedConfig.minConfidence}, minAreaRatio: ${mergedConfig.minAreaRatio})`);
     const detections = await prisma.logoDetection.findMany({
       where: {
         frame: { vodAssetId: vodId },
@@ -73,8 +79,10 @@ class RoiExposureService {
         frame: { timestamp: 'asc' },
       },
     });
+    console.log(`[RoiExposure] 검출 결과: ${detections.length}개`);
 
     if (detections.length === 0) {
+      console.log(`[RoiExposure] 검출 결과 없음 - 노출 0개 반환`);
       return { exposureCount: 0, totalDuration: 0 };
     }
 
@@ -106,9 +114,11 @@ class RoiExposureService {
     }
 
     // 일괄 저장
-    await prisma.roiExposure.createMany({
+    console.log(`[RoiExposure] 노출 저장 중... ${exposuresToCreate.length}개`);
+    const created = await prisma.roiExposure.createMany({
       data: exposuresToCreate,
     });
+    console.log(`[RoiExposure] 저장 완료: ${created.count}개`);
 
     const totalDuration = exposuresToCreate.reduce((sum, e) => sum + e.duration, 0);
 
