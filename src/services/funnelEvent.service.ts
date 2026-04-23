@@ -16,6 +16,7 @@
 import prisma from '../models/prisma';
 import { Prisma, FunnelEventType, AttributionStatus } from '@prisma/client';
 import { promoCodeService } from './promoCode.service';
+import { funnelAttributionService } from './funnelAttribution.service';
 
 export interface BaseEventPayload {
   campaignId?: string;
@@ -80,6 +81,25 @@ export class FunnelEventService {
         occurredAt: payload.occurredAt || new Date(),
       },
     });
+
+    // Phase 3: AttributionTouch 자동 기록 (terminal/non-impression 이벤트)
+    if (payload.sessionId && ['LINK_CLICK', 'LANDING_VIEW', 'CTA_CLICK', 'ADD_TO_CART', 'BEGIN_CHECKOUT'].includes(eventName)) {
+      try {
+        await funnelAttributionService.recordTouch({
+          sessionId: payload.sessionId,
+          campaignId,
+          athleteId,
+          brandId,
+          contentId: payload.contentId,
+          touchType: eventName.toLowerCase(),
+          touchAt: payload.occurredAt || new Date(),
+          anonymousId: payload.anonymousId,
+          userId: payload.userId,
+        }, client as Prisma.TransactionClient);
+      } catch (e) {
+        console.error('[FunnelEvent] AttributionTouch record failed:', e);
+      }
+    }
 
     // session rollup 업데이트 (랜딩 진입 시에도)
     if (payload.sessionId && (eventName === 'LANDING_VIEW' || eventName === 'PROMO_APPLY')) {

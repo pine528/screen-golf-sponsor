@@ -17,6 +17,7 @@ import { funnelReportService } from '../services/funnelReport.service';
 import { funnelPredictService } from '../services/funnelPredict.service';
 import { funnelSegmentService } from '../services/funnelSegment.service';
 import { funnelAttributionService, AttributionModel } from '../services/funnelAttribution.service';
+import { funnelOrderService } from '../services/funnelOrder.service';
 import { AuthRequest } from '../types';
 import prisma from '../models/prisma';
 import { ForbiddenError } from '../utils/errors';
@@ -105,6 +106,98 @@ router.get(
       const dateRange = parseDateRange(req);
       const data = await funnelReportService.getAthleteReport(id, dateRange);
       ok(res, data);
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
+// GET /api/reports/brand/:id/orders (BRD-03)
+// ============================================
+router.get(
+  '/brand/:id/orders',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      // RBAC: BRAND는 자기만
+      if (req.user!.role === 'BRAND') {
+        const brand = await prisma.brand.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!brand || brand.id !== id) throw new ForbiddenError();
+      }
+
+      const dateRange = parseDateRange(req);
+      const limit = req.query.limit ? Number(req.query.limit) : 100;
+      const offset = req.query.offset ? Number(req.query.offset) : 0;
+      const status = req.query.status as any;
+
+      const orders = await funnelOrderService.listByBrand(id, { ...dateRange, limit, offset, status });
+      // 개인정보 보호: customerHash, items 일부만 노출
+      const safeOrders = orders.map((o) => ({
+        id: o.id,
+        externalOrderId: o.externalOrderId,
+        campaignId: o.campaignId,
+        athleteId: o.athleteId,
+        athlete: o.athlete,
+        campaign: o.campaign,
+        promoCode: o.promoCode,
+        grossAmount: o.grossAmount,
+        discountAmount: o.discountAmount,
+        netAmount: o.netAmount,
+        refundedAmount: o.refundedAmount,
+        isNewCustomer: o.isNewCustomer,
+        attributionStatus: o.attributionStatus,
+        attributionReason: o.attributionReason,
+        status: o.status,
+        items: o.items,
+        paidAt: o.paidAt,
+        refundedAt: o.refundedAt,
+        // customerHash는 노출 (식별 불가)
+        customerHash: o.customerHash ? `${o.customerHash.slice(0, 8)}...` : null,
+      }));
+      ok(res, safeOrders);
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
+// GET /api/reports/brand/:id/orders.csv (CSV 다운로드)
+// ============================================
+router.get(
+  '/brand/:id/orders.csv',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (req.user!.role === 'BRAND') {
+        const brand = await prisma.brand.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!brand || brand.id !== id) throw new ForbiddenError();
+      }
+
+      const dateRange = parseDateRange(req);
+      const orders = await funnelOrderService.listByBrand(id, { ...dateRange, limit: 10000 });
+
+      const headers = ['주문일시', '주문번호', '외부주문번호', '캠페인', '선수', '코드', '총결제액', '할인', '순매출', '환불액', '귀속근거', '상태'];
+      const rows = orders.map((o) => [
+        new Date(o.paidAt).toLocaleString(),
+        o.id,
+        o.externalOrderId || '',
+        (o as any).campaign?.name || o.campaignId,
+        (o as any).athlete?.name || o.athleteId,
+        o.promoCode || '',
+        o.grossAmount.toString(),
+        o.discountAmount.toString(),
+        o.netAmount.toString(),
+        o.refundedAmount.toString(),
+        o.attributionReason || '',
+        o.status,
+      ]);
+
+      const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+      // BOM 추가 (Excel 한글 깨짐 방지)
+      const bom = '\uFEFF';
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="orders-${id}-${Date.now()}.csv"`);
+      res.send(bom + csv);
     } catch (e) { next(e); }
   }
 );

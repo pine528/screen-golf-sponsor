@@ -18,6 +18,7 @@ import { Prisma, FunnelOrderStatus, AttributionStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import crypto from 'crypto';
 import { funnelEventService } from './funnelEvent.service';
+import { funnelAttributionService } from './funnelAttribution.service';
 import { promoCodeService } from './promoCode.service';
 import { miniStoreService } from './miniStore.service';
 import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors';
@@ -166,6 +167,15 @@ export class FunnelOrderService {
         const product = await tx.storeProduct.findUnique({ where: { id: item.product_id } });
         if (product) {
           await miniStoreService.decrementStock(item.product_id, item.qty, tx);
+        }
+      }
+
+      // 6) Phase 3: AttributionTouch에 conversion 연결
+      if (payload.sessionId) {
+        try {
+          await funnelAttributionService.linkConversion(payload.sessionId, order.id, tx);
+        } catch (e) {
+          console.error('[FunnelOrder] Attribution conversion link failed:', e);
         }
       }
 

@@ -267,4 +267,53 @@ router.get('/funnel/campaigns/:id', authorize('ADMIN', 'BRAND'), async (req: Aut
   } catch (e) { next(e); }
 });
 
+// ============================================
+// Phase 3: Performance Settlement 결과 조회
+// ============================================
+
+// GET /api/admin/funnel/settlements
+router.get('/funnel/settlements', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { campaignId, brandId, from, to } = req.query;
+    const where: any = {};
+    if (campaignId) where.campaignId = campaignId;
+    if (brandId) where.brandId = brandId;
+    if (from || to) {
+      where.periodStart = {};
+      if (from) where.periodStart.gte = new Date(from as string);
+      if (to) where.periodStart.lte = new Date(to as string);
+    }
+    const settlements = await prisma.performanceSettlement.findMany({
+      where,
+      orderBy: { periodStart: 'desc' },
+      take: 100,
+    });
+    // 캠페인/브랜드 정보 조인
+    const campaignIds = [...new Set(settlements.map((s) => s.campaignId))];
+    const brandIds = [...new Set(settlements.map((s) => s.brandId))];
+    const [campaigns, brands] = await Promise.all([
+      prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, name: true } }),
+      prisma.brand.findMany({ where: { id: { in: brandIds } }, select: { id: true, name: true } }),
+    ]);
+    const cMap = new Map(campaigns.map((c) => [c.id, c]));
+    const bMap = new Map(brands.map((b) => [b.id, b]));
+    const enriched = settlements.map((s) => ({
+      ...s,
+      campaign: cMap.get(s.campaignId),
+      brand: bMap.get(s.brandId),
+    }));
+    ok(res, enriched);
+  } catch (e) { next(e); }
+});
+
+// POST /api/admin/funnel/settlements/run (수동 트리거)
+router.post('/funnel/settlements/run', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { funnelSettlementCron } = await import('../cron/funnelSettlement.cron');
+    const targetDate = req.body.date ? new Date(req.body.date) : undefined;
+    const results = await funnelSettlementCron.runDaily(targetDate);
+    ok(res, results);
+  } catch (e) { next(e); }
+});
+
 export default router;
