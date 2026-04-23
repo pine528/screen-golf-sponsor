@@ -10,6 +10,30 @@
 
 ---
 
+## [2026-04-23] Full Funnel: 마지막 11개 디테일 완전 보완
+
+### 백엔드
+- API spec 준수: `/api/campaigns/:id/tracking-assets/*` alias 추가 (기존 /admin/ 경로와 병존)
+- **단축링크 302 + Set-Cookie**: spk_session_id (24h), spk_anonymous_id (1y), spk_click_id (1h) → 외부 도메인 → 미니스토어 이동 시 세션 유지
+- 쿠키에서 기존 sessionId/anonymousId 읽어 재사용 (reattribution 안전)
+
+### 프론트엔드
+- **ADM-01**: 검색창(캠페인명/브랜드/선수) + 상태 칩(5) + 신규 캠페인 버튼
+- **ADM-02**: 테스트 발급 로그 패널 + 자산 이력 + 관리자 메모 영역
+- **ADM-03**: 좌측 필터 패널(상태/콘텐츠) + 우측 빠른 분석 패널(전체/TOP)
+- **BRD-01**: hideCampaign/hideAthlete 제거, 콘텐츠/유입 채널별 성과 위젯 추가
+- **BRD-02**: 비교 테이블에 CVR/CAC/ROAS 컬럼 (추정값, 실측 주문 기반)
+- **BRD-03**: 주문 상태 칩(5) + 신규/재구매 필터 + XLSX 다운로드 추가
+- **REP-01**: 범례 박스 + 퍼널 차트 측 실측 배지
+- **STO-02**: FAQ 섹션 추가 (배송/교환/코드)
+- **사이드바 grouping**: 기본 메뉴 vs "🔥 풀 퍼널" 섹션 분리 + 토글 (현재 경로가 funnel이면 자동 열림)
+
+### 검증
+- `curl -I /s/Q8fVzE` → 302 Found + Set-Cookie 3개 확인
+- TypeScript 빌드 0 에러 (backend + frontend)
+
+---
+
 ## [2026-04-23] Full Funnel: 와이어프레임 디테일 + TossPayments + E2E 검증
 
 ### 추가
