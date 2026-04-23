@@ -10,6 +10,36 @@
 
 ---
 
+## [2026-04-23] Full Funnel: API spec/handoff 마지막 11개 누락 항목 완전 보완
+
+### Prisma 스키마
+- `FunnelEventType`에 `IMPRESSION_LOGGED` enum 추가 (handoff TABLE 5)
+- `FunnelEvent`에 UTM 필드 5개 추가: utm_source/medium/campaign/content/term + 인덱스 (handoff TABLE 6)
+- `FunnelOrderAuditLog` 모델 신규 (orderId, adminUserId, action, before/after JSON, reason)
+
+### 백엔드
+- **UTM 자동 파싱**: funnel.routes에서 body/referer URL의 utm_* 자동 추출 → FunnelEvent 저장
+- **운영자 주문 보정**: PATCH /api/admin/funnel/orders/:id (gross/discount/net/status 수정 + audit log)
+- **운영자 귀속 수정**: POST /api/admin/funnel/orders/:id/reattribute (수동 attribution 변경 + audit log)
+- **감사 로그 조회**: GET /api/admin/funnel/orders/:id/audit-logs
+- **IMPRESSION_LOGGED**: POST /api/admin/funnel/impressions (ROI 시스템 연동용)
+- **rankings 필드**: getBrandReport 응답에 `rankings.athletes/codes` 추가 (TOP 10 + rank)
+- **응답 표준 보강**: 모든 정상/에러 응답에 `request_id` 포함 (api_spec TABLE 3)
+- **409 CONFLICT**: P2002 → 409 + DUPLICATE_ENTRY 코드 (이미 처리됨, 검증 완료)
+- **라우트 마운트 순서 수정**: alias 라우트가 다른 공개 라우트를 가로채던 버그 수정
+
+### 프론트엔드
+- ADM-01: 브랜드/선수 드롭다운 필터 추가 (검색창과 별도)
+- ADM-03: 우측 패널에 일자별 클릭/유입 추이 LineChart (최근 14일)
+- BRD-01: 체크아웃 완료율 KPI 카드 추가 (총 7개로 확장)
+
+### 검증
+- `curl /api/store/brand/9c5ua8` → 정상 200 + 표준 응답
+- 에러 응답: `{"success":false,"data":null,"error":{...},"request_id":"..."}` 확인
+- TypeScript 빌드 0 에러 (백엔드 + 프론트)
+
+---
+
 ## [2026-04-23] Full Funnel: 마지막 11개 디테일 완전 보완
 
 ### 백엔드
