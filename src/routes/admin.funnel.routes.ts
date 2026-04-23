@@ -336,6 +336,114 @@ router.get('/funnel/settlements', authorize('ADMIN'), async (req: AuthRequest, r
   } catch (e) { next(e); }
 });
 
+// ============================================
+// 주문 보정 + 귀속 수정 (handoff 8조)
+// ============================================
+
+// PATCH /api/admin/funnel/orders/:id (운영자 주문 보정)
+router.patch('/funnel/orders/:id', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await prisma.funnelOrder.findUnique({ where: { id: req.params.id } });
+    if (!order) throw new NotFoundError('Order not found');
+
+    const before = { ...order };
+    const updates: any = {};
+    const allowedFields = ['grossAmount', 'discountAmount', 'netAmount', 'isNewCustomer', 'status'];
+    for (const f of allowedFields) {
+      if (req.body[f] !== undefined) updates[f] = req.body[f];
+    }
+
+    const updated = await prisma.funnelOrder.update({
+      where: { id: req.params.id },
+      data: updates,
+    });
+
+    await prisma.funnelOrderAuditLog.create({
+      data: {
+        orderId: order.id,
+        adminUserId: req.user!.id,
+        action: 'ADJUST_AMOUNT',
+        beforeJson: JSON.parse(JSON.stringify(before)),
+        afterJson: JSON.parse(JSON.stringify(updated)),
+        reason: req.body.reason || null,
+      },
+    });
+    ok(res, updated);
+  } catch (e) { next(e); }
+});
+
+// POST /api/admin/funnel/orders/:id/reattribute (귀속 수정)
+router.post('/funnel/orders/:id/reattribute', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await prisma.funnelOrder.findUnique({ where: { id: req.params.id } });
+    if (!order) throw new NotFoundError('Order not found');
+
+    const before = { campaignId: order.campaignId, athleteId: order.athleteId, brandId: order.brandId, attributionReason: order.attributionReason };
+
+    const { campaignId, athleteId, brandId, reason } = req.body;
+    if (!campaignId || !athleteId || !brandId) {
+      throw new BadRequestError('campaignId, athleteId, brandId required');
+    }
+
+    const updated = await prisma.funnelOrder.update({
+      where: { id: req.params.id },
+      data: {
+        campaignId, athleteId, brandId,
+        attributionReason: 'manual',
+        attributionStatus: 'ATTRIBUTED',
+      },
+    });
+
+    await prisma.funnelOrderAuditLog.create({
+      data: {
+        orderId: order.id,
+        adminUserId: req.user!.id,
+        action: 'REATTRIBUTE',
+        beforeJson: before,
+        afterJson: { campaignId, athleteId, brandId, attributionReason: 'manual' },
+        reason: reason || null,
+      },
+    });
+    ok(res, updated);
+  } catch (e) { next(e); }
+});
+
+// GET /api/admin/funnel/orders/:id/audit-logs
+router.get('/funnel/orders/:id/audit-logs', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const logs = await prisma.funnelOrderAuditLog.findMany({
+      where: { orderId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    ok(res, logs);
+  } catch (e) { next(e); }
+});
+
+// ============================================
+// IMPRESSION_LOGGED 수동 기록 (handoff TABLE 5)
+// 기존 ROI 시스템에서 노출 발생 시 호출
+// ============================================
+router.post('/funnel/impressions', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { campaign_id, brand_id, athlete_id, content_id, impressions, source_url, occurred_at } = req.body;
+    if (!campaign_id || !brand_id || !athlete_id) throw new BadRequestError('campaign_id, brand_id, athlete_id required');
+
+    // 노출 수 만큼 단일 이벤트 1개 생성 (payload에 횟수 기록)
+    const event = await prisma.funnelEvent.create({
+      data: {
+        eventName: 'IMPRESSION_LOGGED',
+        campaignId: campaign_id,
+        brandId: brand_id,
+        athleteId: athlete_id,
+        contentId: content_id || null,
+        payload: { impressions: Number(impressions || 1), source_url },
+        occurredAt: occurred_at ? new Date(occurred_at) : new Date(),
+      },
+    });
+    ok(res, { event_id: event.id, impressions: Number(impressions || 1) });
+  } catch (e) { next(e); }
+});
+
 // POST /api/admin/funnel/settlements/run (수동 트리거)
 router.post('/funnel/settlements/run', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

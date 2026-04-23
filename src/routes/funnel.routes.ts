@@ -41,12 +41,38 @@ function fail(res: Response, status: number, code: string, message: string, deta
   });
 }
 
+function parseUtm(req: Request): Record<string, string | undefined> {
+  // body 우선, 없으면 referer 또는 url에서 파싱
+  const body = req.body || {};
+  const out: any = {
+    utmSource: body.utm_source,
+    utmMedium: body.utm_medium,
+    utmCampaign: body.utm_campaign,
+    utmContent: body.utm_content,
+    utmTerm: body.utm_term,
+  };
+  // 페이지 URL이 함께 전달된 경우 파싱
+  const url = body.page_url || body.url || req.get('referer') || '';
+  if (url) {
+    try {
+      const u = new URL(url);
+      out.utmSource ??= u.searchParams.get('utm_source') || undefined;
+      out.utmMedium ??= u.searchParams.get('utm_medium') || undefined;
+      out.utmCampaign ??= u.searchParams.get('utm_campaign') || undefined;
+      out.utmContent ??= u.searchParams.get('utm_content') || undefined;
+      out.utmTerm ??= u.searchParams.get('utm_term') || undefined;
+    } catch {}
+  }
+  return out;
+}
+
 function getMeta(req: Request) {
   return {
     ipAddress: req.ip,
     userAgent: req.get('user-agent') || undefined,
     referrer: req.get('referer') || req.body.referrer,
     deviceType: req.body.device_type || (req.get('user-agent')?.includes('Mobile') ? 'mobile' : 'desktop'),
+    ...parseUtm(req),
   };
 }
 

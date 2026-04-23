@@ -32,6 +32,12 @@ export interface BaseEventPayload {
   userAgent?: string;
   referrer?: string;
   deviceType?: string;
+  // UTM 파라미터 (handoff TABLE 6)
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
   payload?: Record<string, any>;
 }
 
@@ -78,6 +84,11 @@ export class FunnelEventService {
         userAgent: payload.userAgent,
         referrer: payload.referrer,
         deviceType: payload.deviceType,
+        utmSource: payload.utmSource,
+        utmMedium: payload.utmMedium,
+        utmCampaign: payload.utmCampaign,
+        utmContent: payload.utmContent,
+        utmTerm: payload.utmTerm,
         occurredAt: payload.occurredAt || new Date(),
       },
     });

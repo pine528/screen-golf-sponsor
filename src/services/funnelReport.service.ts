@@ -304,11 +304,18 @@ export class FunnelReportService {
       select: { id: true, name: true, status: true, budget: true, spentAmount: true, dateStart: true, dateEnd: true },
     });
 
+    // rankings (api_spec TABLE 48): 선수/콘텐츠/코드 성과 순위
+    const rankings = {
+      athletes: (byAthlete as any[]).slice(0, 10).map((a, i) => ({ rank: i + 1, ...a })),
+      codes: (byCode as any[]).slice(0, 10).map((c, i) => ({ rank: i + 1, ...c })),
+    };
+
     return {
       brand,
       summary,
       timeseries,
       campaigns,
+      rankings,
       breakdown: {
         athletes: byAthlete,
         codes: byCode,

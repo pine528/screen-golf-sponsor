@@ -2590,6 +2590,7 @@ enum MiniStoreStatus {
 }
 
 enum FunnelEventType {
+  IMPRESSION_LOGGED // 미디어 노출 증빙 (ROI 시스템 연동)
   LINK_CLICK // 단축링크 클릭
   LANDING_VIEW // 랜딩 페이지 진입
   PRODUCT_VIEW // 상품 조회
@@ -2762,6 +2763,12 @@ model FunnelEvent {
   userAgent   String?         @map("user_agent")
   referrer    String?
   deviceType  String?         @map("device_type") // mobile | desktop
+  // UTM 파라미터 (handoff TABLE 6 - 향후 외부 유입 구분)
+  utmSource   String?         @map("utm_source")
+  utmMedium   String?         @map("utm_medium")
+  utmCampaign String?         @map("utm_campaign")
+  utmContent  String?         @map("utm_content")
+  utmTerm     String?         @map("utm_term")
   occurredAt  DateTime        @default(now()) @map("occurred_at")
   createdAt   DateTime        @default(now()) @map("created_at")
 
@@ -2774,7 +2781,28 @@ model FunnelEvent {
   @@index([brandId, eventName, occurredAt])
   @@index([sessionId])
   @@index([anonymousId])
+  @@index([utmSource, utmCampaign])
   @@map("funnel_events")
+}
+
+// ============================================
+// FunnelOrderAuditLog (운영자 주문 보정·귀속 수정 감사 로그)
+// handoff "8조 권한, 보안" + "로그성 데이터 = 화면성 데이터 일치 (감사 대응)"
+// ============================================
+
+model FunnelOrderAuditLog {
+  id           String   @id @default(uuid())
+  orderId      String   @map("order_id")
+  adminUserId  String   @map("admin_user_id")
+  action       String // ADJUST_AMOUNT | REATTRIBUTE | STATUS_CHANGE | NOTE
+  beforeJson   Json     @map("before_json")
+  afterJson    Json     @map("after_json")
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@index([adminUserId, createdAt])
+  @@map("funnel_order_audit_logs")
 }
 
 // ============================================

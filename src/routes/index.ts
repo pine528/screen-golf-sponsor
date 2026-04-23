@@ -96,6 +96,10 @@ router.use('/votes', voteV2Routes);  // Vote V2 → /votes (메인 투표 시스
 router.use('/roi', roiRoutes);  // ROI 리포트 대시보드
 
 // ===== Full Funnel Data Reporting =====
+// 공개 미니스토어 (먼저 마운트): /api/store/brand/:slug
+router.use('/store', storeRoutes);
+// 외부 픽셀 / Postback (Phase 2): /api/external/*
+router.use('/external', externalRoutes);
 // 공개 트래킹 + 이벤트 (인증 불필요): /api/tracking/click, /api/events/*
 router.use('/', funnelRoutes);
 // 리포트 (인증 필요): /api/reports/{campaign,brand,athlete}/:id
@@ -103,11 +107,8 @@ router.use('/reports', funnelReportRoutes);
 // Admin 자산 관리: /api/admin/...
 router.use('/admin', adminFunnelRoutes);
 // API spec 호환 alias: /api/campaigns/:id/tracking-assets/* (admin 없이도 접근)
+// 마지막에 마운트 — 다른 라우트 매칭 후
 router.use('/', adminFunnelRoutes);
-// 공개 미니스토어: /api/store/brand/:slug
-router.use('/store', storeRoutes);
-// 외부 픽셀 / Postback (Phase 2): /api/external/*
-router.use('/external', externalRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);
