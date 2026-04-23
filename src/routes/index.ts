@@ -37,6 +37,12 @@ import tournamentRulesRoutes from './tournamentRules.routes';
 import { brandCreativeApprovalRoutes, adminCreativeApprovalRoutes } from './creativeApproval.routes';
 import voteV2Routes from './voteV2.routes';
 import roiRoutes from './roi.routes';
+// Full Funnel Data Reporting (스폰픽 풀 퍼널)
+import funnelRoutes from './funnel.routes';
+import funnelReportRoutes from './funnelReport.routes';
+import adminFunnelRoutes from './admin.funnel.routes';
+import storeRoutes from './store.routes';
+import externalRoutes from './external.routes';
 
 const router = Router();
 
@@ -88,6 +94,18 @@ router.use('/brand/creative-approvals', brandCreativeApprovalRoutes);
 router.use('/admin/creative-approvals', adminCreativeApprovalRoutes);
 router.use('/votes', voteV2Routes);  // Vote V2 → /votes (메인 투표 시스템)
 router.use('/roi', roiRoutes);  // ROI 리포트 대시보드
+
+// ===== Full Funnel Data Reporting =====
+// 공개 트래킹 + 이벤트 (인증 불필요): /api/tracking/click, /api/events/*
+router.use('/', funnelRoutes);
+// 리포트 (인증 필요): /api/reports/{campaign,brand,athlete}/:id
+router.use('/reports', funnelReportRoutes);
+// Admin 자산 관리: /api/admin/...
+router.use('/admin', adminFunnelRoutes);
+// 공개 미니스토어: /api/store/brand/:slug
+router.use('/store', storeRoutes);
+// 외부 픽셀 / Postback (Phase 2): /api/external/*
+router.use('/external', externalRoutes);
 
 // Alias routes for OpenAPI compatibility
 router.use('/slot-instances', slotRoutes);

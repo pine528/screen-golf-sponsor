@@ -21,6 +21,7 @@ import { escrowService } from './services/escrow.service';
 import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
+import { funnelSettlementCron } from './cron/funnelSettlement.cron';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
@@ -145,6 +146,19 @@ cron.schedule('0 9 * * *', async () => {
     console.log(`[Cron] Settlements: ${processed} created`);
   } catch (error) {
     console.error('[Cron] Settlement processing error:', error);
+  }
+}, cronOptions);
+
+// Phase 3: Funnel Performance Settlement (CPA/CPS) daily at 1 AM KST
+cron.schedule('0 1 * * *', async () => {
+  try {
+    const results = await funnelSettlementCron.runDaily();
+    const settled = results.filter((r: any) => r.status === 'settled').length;
+    if (settled > 0) {
+      console.log(`[Cron] Funnel Settlement: ${settled} campaigns settled`);
+    }
+  } catch (error) {
+    console.error('[Cron] Funnel settlement error:', error);
   }
 }, cronOptions);
 
