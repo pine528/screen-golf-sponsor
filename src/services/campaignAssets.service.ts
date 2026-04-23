@@ -104,12 +104,13 @@ export class CampaignAssetsService {
       prisma.miniStore.findUnique({ where: { campaignId }, include: { products: true } }),
     ]);
 
+    // api_spec TABLE 13 호환: status를 lowercase로 변환
     return {
       campaignId,
       promo_codes: promoCodes.map((c) => ({
         id: c.id,
         code: c.code,
-        status: c.status,
+        status: c.status.toLowerCase(),
         usage_count: c.usageCount,
       })),
       tracking_links: trackingLinks.map((l) => ({
@@ -118,12 +119,13 @@ export class CampaignAssetsService {
         content_id: l.contentId,
         click_count: l.clickCount,
         qr_url: l.qrUrl,
+        status: l.status.toLowerCase(),
       })),
       mini_store: miniStore ? {
         id: miniStore.id,
         slug: miniStore.slug,
         url: `${PUBLIC_BASE}/store/${miniStore.slug}`,
-        status: miniStore.status,
+        status: miniStore.status.toLowerCase(),
         product_count: miniStore.products.length,
       } : null,
     };

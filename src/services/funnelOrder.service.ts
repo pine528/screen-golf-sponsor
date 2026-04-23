@@ -223,6 +223,7 @@ export class FunnelOrderService {
           status: isFullRefund ? 'REFUNDED' : 'PARTIAL_REFUND',
           refundedAmount: totalRefunded,
           refundedAt: new Date(),
+          refundReason: payload.reason || order.refundReason,
         },
       });
 

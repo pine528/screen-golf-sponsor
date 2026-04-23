@@ -275,9 +275,9 @@ router.get(
       const dateRange = parseDateRange(req);
       const from = dateRange.from || new Date(Date.now() - 30 * 86400000);
       const to = dateRange.to || new Date();
-      const msSpan = to.getTime() - from.getTime();
-      const prevFrom = new Date(from.getTime() - msSpan);
-      const prevTo = new Date(to.getTime() - msSpan);
+      // 사용자가 명시적으로 prev_from/prev_to를 보낸 경우 우선
+      const prevFrom = req.query.prev_from ? new Date(req.query.prev_from as string) : new Date(from.getTime() - (to.getTime() - from.getTime()));
+      const prevTo = req.query.prev_to ? new Date(req.query.prev_to as string) : new Date(to.getTime() - (to.getTime() - from.getTime()));
       const [current, previous] = await Promise.all([
         funnelReportService.getSummary({ brandId: id, from, to }),
         funnelReportService.getSummary({ brandId: id, from: prevFrom, to: prevTo }),

@@ -2829,6 +2829,7 @@ model FunnelOrder {
   customerHash      String?           @map("customer_hash") // 개인정보 보호 해시
   paidAt            DateTime          @default(now()) @map("paid_at")
   refundedAt        DateTime?         @map("refunded_at")
+  refundReason      String?           @map("refund_reason") // 환불 사유 (BRD-03 표시)
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
 
