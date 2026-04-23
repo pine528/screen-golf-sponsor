@@ -99,6 +99,27 @@ app.use('/uploads', express.static(path.resolve(uploadDir)));
 app.use('/api', routes);
 app.use('/api/metrics', metricsRoutes);
 
+// ============================================
+// Public 단축링크 3xx redirect: /s/:shortCode
+// SNS 크롤러 / OG 태그 / 사용자 직접 접속 모두 대응
+// ============================================
+app.get('/s/:shortCode', async (req, res, next) => {
+  try {
+    const { trackingLinkService } = await import('./services/trackingLink.service');
+    const result = await trackingLinkService.trackClick({
+      shortCode: req.params.shortCode,
+      referrer: req.get('referer') || undefined,
+      userAgent: req.get('user-agent') || undefined,
+      ipAddress: req.ip,
+      deviceType: req.get('user-agent')?.includes('Mobile') ? 'mobile' : 'desktop',
+    });
+    res.redirect(302, result.redirectUrl);
+  } catch (e: any) {
+    console.error('[Short link]', e);
+    res.status(404).send('Short link not found');
+  }
+});
+
 // Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);

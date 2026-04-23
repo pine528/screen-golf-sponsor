@@ -108,6 +108,36 @@ router.get('/promo-codes', authorize('ADMIN', 'BRAND'), async (req: AuthRequest,
   } catch (e) { next(e); }
 });
 
+// GET /api/admin/promo-codes.csv?campaignId=
+router.get('/promo-codes.csv', authorize('ADMIN', 'BRAND'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { campaignId } = req.query;
+    if (!campaignId) throw new BadRequestError('campaignId is required');
+    const codes = await promoCodeService.listByCampaign(campaignId as string);
+    const headers = ['코드', '할인타입', '할인값', '사용횟수', '상태', '발급일'];
+    const rows = codes.map((c) => [c.code, c.discountType, c.discountValue.toString(), c.usageCount.toString(), c.status, new Date(c.createdAt).toISOString().slice(0, 10)]);
+    const csv = [headers, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="promo-codes-${campaignId}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (e) { next(e); }
+});
+
+// GET /api/admin/tracking-links.csv?campaignId=
+router.get('/tracking-links.csv', authorize('ADMIN', 'BRAND'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { campaignId } = req.query;
+    if (!campaignId) throw new BadRequestError('campaignId is required');
+    const links = await trackingLinkService.listByCampaign(campaignId as string);
+    const headers = ['단축코드', '콘텐츠ID', '클릭수', '상태', '발급일'];
+    const rows = links.map((l) => [l.shortCode, l.contentId || '', l.clickCount.toString(), l.status, new Date(l.createdAt).toISOString().slice(0, 10)]);
+    const csv = [headers, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="tracking-links-${campaignId}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (e) { next(e); }
+});
+
 // POST /api/admin/promo-codes (수동 추가 발급)
 router.post('/promo-codes', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

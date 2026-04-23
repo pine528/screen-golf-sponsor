@@ -203,6 +203,123 @@ router.get(
 );
 
 // ============================================
+// GET /api/reports/brand/:id/compare.csv (BRD-02)
+// ============================================
+router.get(
+  '/brand/:id/compare.csv',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (req.user!.role === 'BRAND') {
+        const brand = await prisma.brand.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!brand || brand.id !== id) throw new ForbiddenError();
+      }
+      const dateRange = parseDateRange(req);
+      const by = (req.query.by as 'athlete' | 'code' | 'content') || 'athlete';
+      const report = await funnelReportService.getBrandReport(id, { ...dateRange, includeBreakdown: true });
+      const rows = by === 'athlete'
+        ? report.breakdown.athletes.map((a: any) => [a.name, a.tour || '', a.purchases, Math.round(a.netRevenue), a.purchases > 0 ? Math.round(a.netRevenue / a.purchases) : 0])
+        : report.breakdown.codes.map((c: any) => [c.code, '', c.purchases, Math.round(c.netRevenue), c.purchases > 0 ? Math.round(c.netRevenue / c.purchases) : 0]);
+      const headers = by === 'athlete' ? ['선수', '투어', '주문수', '순매출', '객단가'] : ['코드', '', '사용', '순매출', '객단가'];
+      const csv = [headers, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="compare-${by}-${id}.csv"`);
+      res.send('\uFEFF' + csv);
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
+// GET /api/reports/athlete/:id/campaigns (ATH-01 - 본인 참여 캠페인)
+// ============================================
+router.get(
+  '/athlete/:id/campaigns',
+  authorize('ATHLETE', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (req.user!.role === 'ATHLETE') {
+        const athlete = await prisma.athlete.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!athlete || athlete.id !== id) throw new ForbiddenError();
+      }
+      // funnel_events/orders에서 이 선수가 연관된 캠페인 추출
+      const [events, orders] = await Promise.all([
+        prisma.funnelEvent.findMany({ where: { athleteId: id }, select: { campaignId: true }, distinct: ['campaignId'] }),
+        prisma.funnelOrder.findMany({ where: { athleteId: id }, select: { campaignId: true }, distinct: ['campaignId'] }),
+      ]);
+      const campaignIds = [...new Set([...events, ...orders].map((e) => e.campaignId))];
+      const campaigns = await prisma.campaign.findMany({
+        where: { id: { in: campaignIds } },
+        select: { id: true, name: true, brand: { select: { id: true, name: true } }, status: true, dateStart: true, dateEnd: true },
+      });
+      ok(res, campaigns);
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
+// GET /api/reports/brand/:id/period-compare
+// (REP-01: 기간 비교 - 이번 기간 vs 지난 동일 기간)
+// ============================================
+router.get(
+  '/brand/:id/period-compare',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (req.user!.role === 'BRAND') {
+        const brand = await prisma.brand.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!brand || brand.id !== id) throw new ForbiddenError();
+      }
+      const dateRange = parseDateRange(req);
+      const from = dateRange.from || new Date(Date.now() - 30 * 86400000);
+      const to = dateRange.to || new Date();
+      const msSpan = to.getTime() - from.getTime();
+      const prevFrom = new Date(from.getTime() - msSpan);
+      const prevTo = new Date(to.getTime() - msSpan);
+      const [current, previous] = await Promise.all([
+        funnelReportService.getSummary({ brandId: id, from, to }),
+        funnelReportService.getSummary({ brandId: id, from: prevFrom, to: prevTo }),
+      ]);
+      const delta = (a: number, b: number) => b === 0 ? null : ((a - b) / b) * 100;
+      ok(res, {
+        current,
+        previous,
+        delta: {
+          landingViews: delta(current.landingViews, previous.landingViews),
+          purchases: delta(current.purchases, previous.purchases),
+          netRevenue: delta(current.netRevenue, previous.netRevenue),
+          cvr: delta(current.cvr, previous.cvr),
+        },
+      });
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
+// GET /api/reports/share-link/:id
+// (REP-01: 영업용 공유 링크 발급 - 간단 해시 기반)
+// ============================================
+router.post(
+  '/share-link',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { campaignId, from, to } = req.body;
+      if (!campaignId) throw new Error('campaignId required');
+      // 간단한 토큰: base64(campaignId|from|to|timestamp)
+      const payload = JSON.stringify({ campaignId, from, to, exp: Date.now() + 7 * 86400000 });
+      const token = Buffer.from(payload).toString('base64url');
+      ok(res, {
+        shareUrl: `${process.env.PUBLIC_BASE_URL || 'http://localhost:5173'}/report/share/${token}`,
+        expiresIn: '7일',
+      });
+    } catch (e) { next(e); }
+  }
+);
+
+// ============================================
 // GET /api/reports/campaign/:id/predict (Phase 3)
 // ============================================
 router.get(
