@@ -10,6 +10,26 @@
 
 ---
 
+## [2026-04-23] Full Funnel: 최종 6개 마이크로 디테일 보완
+
+### 프론트
+1. **Cart attribution snapshot**: 상품 담기 시 cart에 `attribution: {campaignId, brandId, athleteId, addedAt}` 저장 → 결제 실패 재시도 시에도 동일 귀속 보장
+2. **BRD-03 환불 사유**: 주문 상세 우측 패널에 `refundedAt` + `refundReason` 표시 (rose 뱃지)
+3. **REP-01 인쇄 CSS**: `@media print` 규칙 추가 (사이드바/헤더/알림/버튼 숨김, 풀 너비, 차트 SVG 크기 보정)
+4. **REP-01 기간 비교 선택 옵션**: 직전 동일 기간 / 전년 동기 / 비교 안 함 3-way 토글
+5. **ADM-04 품절 배지**: 이미지 오버레이 + 우측 "품절" rose 배지, 저재고(5개↓)는 amber 배지
+
+### 백엔드
+6. **FunnelOrder.refundReason 필드**: Prisma 모델 + funnelOrder.service refundOrder()에 reason 저장
+7. **campaignAssets status lowercase** (api_spec TABLE 13 호환): ACTIVE → active, PUBLISHED → published
+8. **period-compare prev_from/prev_to 지원**: 사용자 지정 비교 기간 전달 시 우선 사용 (전년 동기 등)
+
+### 검증
+- TypeScript 빌드 0 에러 (backend + frontend)
+- Prisma db push 성공 + client 재생성
+
+---
+
 ## [2026-04-23] Full Funnel: API spec/handoff 마지막 11개 누락 항목 완전 보완
 
 ### Prisma 스키마
