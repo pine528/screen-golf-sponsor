@@ -1,6 +1,46 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-02-02 (Vote V2 리워드풀 시스템)
+> 최종 업데이트: 2026-04-23 (Full Funnel Data Reporting Phase 1+2+3 전체 구축)
+
+---
+
+## 0. 풀 퍼널 데이터 리포팅 (Full Funnel) - NEW
+
+선수 연계형 프로모션 코드·트래킹 링크·브랜드 미니스토어 기반 매출 증명 시스템
+
+### 0.1 모델 (8개 신규)
+- `PromoCode`: 캠페인-선수 단위 코드 (KLPGA_KIM20 등)
+- `TrackingLink`: 단축 URL + QR (nanoid 6자)
+- `MiniStore` + `StoreProduct`: 브랜드 전용 미니스토어
+- `FunnelEvent`: LANDING_VIEW ~ PURCHASE 모든 이벤트
+- `FunnelOrder`: 구매 주문 (트랜잭션 + 멱등성)
+- `SessionRollup`: 어트리뷰션용 세션 롤업
+- `PixelInstall`: 외부몰 JS 픽셀 (HMAC 서명)
+- `AttributionTouch`, `PerformanceSettlement`: Phase 3
+
+### 0.2 핵심 API (15+)
+- `POST /api/admin/campaigns/:id/tracking-assets/generate` (자산 일괄 생성)
+- `POST /api/tracking/click` (단축링크 클릭)
+- `POST /api/events/{landing-view,product-view,cta-click,add-to-cart,begin-checkout,promo-apply,purchase,refund,cancel}`
+- `GET /api/reports/{campaign,brand,athlete}/:id`
+- `POST /api/external/track` (Pixel JS, Phase 2)
+- `POST /api/external/postback/{purchase,refund}` (S2S, HMAC)
+- `GET /api/store/brand/:slug` (공개 미니스토어)
+
+### 0.3 어트리뷰션 우선순위
+1순위: promo_code → 2순위: 최근 클릭 트래킹 링크 → 3순위: 최근 세션
+
+### 0.4 화면 (12+)
+- ADM-01~04: 캠페인 목록/상세/코드·링크/미니스토어 설정
+- BRD-01~03: 성과 대시보드/비교 분석/주문 상세 + Pixel/Attribution
+- ATH-01: 선수 본인 성과 대시보드
+- REP-01: 통합 ROI 리포트 (PDF 다운로드)
+- STO-01~03: 미니스토어 랜딩/상품/체크아웃
+
+### 0.5 Phase 3 자동화
+- Cron `0 1 * * *` KST: CPA/CPS 캠페인 일일 정산
+- Multi-touch attribution (5가지 모델)
+- 이동평균 + 지수평활 예측
 
 ---
 
@@ -741,6 +781,11 @@ Notification (NotificationType enum)
 | /brand/sponsored-votes | BrandSponsoredVotes | 브랜드 후원 투표 관리 |
 | /brand/campaigns/:id | CampaignDetail | 캠페인 상세 (KPI 진행률) |
 | /brand/reports/roi | BrandROIDashboard | 브랜드 ROI 대시보드 |
+| /brand/slot-analytics | BrandSlotAnalytics | 슬롯별 노출 성과 비교 |
+| /brand/roi-settings | BrandROISettings | 키워드/경쟁사/차단카테고리 설정 |
+| /admin/roi/campaign-builder | AdminCampaignBuilder | ROI 캠페인 설정 위자드 |
+| /admin/roi/evidence | AdminEvidenceManager | 증빙 자료 관리 |
+| /admin/roi/reports | AdminReportTemplates | 리포트 생성/관리 |
 | /admin/exposure | AdminExposure | 노출 기록 관리 |
 | /seasons/:id/leaderboard | SeasonLeaderboard | 시즌 리더보드 |
 | /fan/badges | MyBadges | 내 뱃지 컬렉션 |

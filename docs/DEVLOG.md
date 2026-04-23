@@ -10,6 +10,38 @@
 
 ---
 
+## [2026-04-23] Full Funnel Data Reporting 전체 구축 (Phase 1+2+3)
+
+### 변경 사항
+- **Prisma 스키마 +8 모델 / +6 enum**: PromoCode, TrackingLink, MiniStore, StoreProduct, FunnelEvent, FunnelOrder, SessionRollup, PixelInstall, AttributionTouch, PerformanceSettlement
+- **백엔드 서비스 9개**: promoCode, trackingLink, miniStore, funnelEvent, funnelOrder, funnelReport, qrCode, campaignAssets, funnelAttribution + Predict + Segment
+- **백엔드 라우트 5개**: funnel(공개), funnelReport, admin.funnel, store, external(Pixel/Postback)
+- **프론트 공통 컴포넌트 7개**: GlobalFilter, SummaryCard, FunnelChart, TimeSeriesChart, StatusBadge, DataSourceBadge, ActionBar, DetailTable
+- **프론트 화면 12+**: ADM-01~04, BRD-01~03, BrandPixelInstall, BrandAttribution, ATH-01, REP-01, STO-01~03 (미니스토어), ShortLinkRedirect
+- **Pixel JS** (`public/pixel/sponpik-pixel.js`): vanilla, sendBeacon 우선
+- **Cron** (Phase 3): 매일 새벽 1시 CPA/CPS 캠페인 자동 정산
+- **CLAUDE.md 불변식 준수**: 구매 트랜잭션 (orders + funnel_events 원자적 처리), 멱등성 (brandId+externalOrderId unique + P2002 graceful)
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` (+250줄)
+- `src/backend/src/services/{promoCode,trackingLink,miniStore,funnelEvent,funnelOrder,funnelReport,qrCode,campaignAssets,funnelAttribution,funnelPredict,funnelSegment}.service.ts`
+- `src/backend/src/routes/{funnel,funnelReport,admin.funnel,store,external}.routes.ts`
+- `src/backend/src/cron/funnelSettlement.cron.ts`
+- `src/backend/src/index.ts` (라우트 + cron 등록)
+- `src/frontend/src/components/funnel/*` (7개 컴포넌트)
+- `src/frontend/src/hooks/useFunnelTracking.ts`
+- `src/frontend/src/pages/{admin,brand,athlete,store}/*` (15개 화면)
+- `src/frontend/src/App.tsx` (15+ 신규 라우트)
+- `src/frontend/src/services/api.ts` (+30개 메서드)
+- `src/frontend/public/pixel/sponpik-pixel.js`
+
+### 참고
+- 문서: `sponpik_full_funnel_{api_spec, handoff, wireframe_spec}.docx`
+- 어트리뷰션 우선순위: promo_code → recent link click → recent session
+- RBAC: BRAND 자사 데이터만, ATHLETE 본인만, ADMIN 전체
+
+---
+
 ## 엔트리 템플릿
 
 ```markdown
@@ -1660,4 +1692,203 @@ model BrandEventCreativeApproval {
 
 ---
 
+## [2026-02-02] Render 배포 오류 수정 및 UI 개선
+
+### 변경 사항
+- **schema.prisma**: PointTxReason enum에 레거시 값 복원
+  - `VOTE_OPEN_FEE`, `VOTE_POT_REMAINDER`, `VOTE_CREATOR_PRIZE` 등 7개 값
+  - Render 배포 시 기존 DB 데이터와 enum 불일치 오류 해결
+- **AdminVoteV2.tsx**: Layout 컴포넌트 래핑 추가
+  - 어드민 투표 관리 페이지에 사이드바가 표시되지 않던 문제 수정
+- **seed.ts**: 레거시 슬롯 템플릿 v2 필드 업데이트 로직 추가
+  - SG-01 ~ SG-06 템플릿에 category, grade, phase 필드 설정
+  - 슬롯 목록에서 배지(상의/모자, S/A/B등급)가 표시되지 않던 문제 수정
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` - enum 레거시 값 추가
+- `src/backend/prisma/seed.ts` - 레거시 템플릿 업데이트 로직
+- `src/frontend/src/pages/admin/AdminVoteV2.tsx` - Layout 래핑
+
+### 참고
+- 배포 오류: `invalid input value for enum "PointTxReason_new": "VOTE_OPEN_FEE"`
+- 레거시 enum 값은 기존 데이터 호환을 위해 삭제하면 안 됨
+- 슬롯 템플릿은 slotInstances와 연결되어 있어 삭제 대신 업데이트 처리
+
+---
+
+## [2026-02-02] PortOne 본인인증 회원가입 연동
+
+### 변경 사항
+- **본인인증 필수 역할**: BRAND, ATHLETE, AGENCY (FAN은 선택)
+- **Backend**
+  - `certification.service.ts` 신규 생성 - PortOne API 연동, 인증 토큰 발급/검증
+  - `auth.routes.ts`에 `/certification/verify`, `/certification/required` 엔드포인트 추가
+  - `auth.service.ts` register()에 인증 토큰 검증 로직 추가
+  - `config/index.ts`에 portone 환경변수 설정 추가
+  - `prisma/schema.prisma` User 모델에 본인인증 필드 추가 (realName, phone, birthDate, certificationUniqueKey, certifiedAt)
+- **Frontend**
+  - `index.html`에 PortOne SDK 스크립트 추가
+  - `useCertification.ts` 훅 신규 생성 - 본인인증 요청/결과 관리
+  - `Register.tsx`에 본인인증 UI 추가 (역할별 조건부 표시)
+  - `api.ts`에 verifyCertification, checkCertificationRequired 메서드 추가
+  - `types/index.ts` RegisterData에 certificationToken 필드 추가
+
+### 영향받는 파일
+- `src/backend/src/services/certification.service.ts` (신규)
+- `src/backend/src/services/auth.service.ts`
+- `src/backend/src/controllers/auth.controller.ts`
+- `src/backend/src/routes/auth.routes.ts`
+- `src/backend/src/config/index.ts`
+- `src/backend/src/types/index.ts`
+- `src/backend/prisma/schema.prisma`
+- `src/backend/.env.example`
+- `src/frontend/index.html`
+- `src/frontend/src/hooks/useCertification.ts` (신규)
+- `src/frontend/src/pages/Register.tsx`
+- `src/frontend/src/services/api.ts`
+- `src/frontend/src/types/index.ts`
+- `src/frontend/.env.example`
+
+### 참고
+- PortOne 테스트 환경에서는 실제 인증 없이 테스트 가능
+- 프로덕션에서는 PG사(다날/KMC 등) 계약 필요
+- CI(unique_key)로 중복 가입 방지
+- 인증 토큰 유효기간: 10분 (환경변수로 조정 가능)
+
+---
+
+## [2026-02-02] PortOne → SMS 인증으로 변경
+
+### 변경 사항
+- **PortOne 본인인증 제거** → 간단한 SMS 인증번호 방식으로 변경
+- **Backend**
+  - `certification.service.ts` 전면 재작성 - SMS 인증번호 발송/검증
+  - `auth.routes.ts` - `/sms/send`, `/sms/verify` 엔드포인트로 변경
+  - `auth.controller.ts` - sendSmsCode, verifySmsCode 메서드 추가
+  - `auth.service.ts` - SMS 인증 토큰 검증으로 단순화
+- **Frontend**
+  - `index.html` - PortOne SDK 제거
+  - `useCertification.ts` - SMS 입력/검증 훅으로 재작성
+  - `Register.tsx` - 전화번호 입력 + 인증번호 입력 UI로 변경
+  - `api.ts` - sendSmsCode, verifySmsCode 메서드로 변경
+
+### SMS 인증 플로우
+```
+1. 사용자가 휴대폰 번호 입력
+2. "인증요청" 클릭 → 6자리 인증번호 발송 (개발환경: 콘솔 출력)
+3. 인증번호 입력 (3분 유효, 5회 시도 제한)
+4. "확인" 클릭 → certificationToken 발급 (10분 유효)
+5. 회원가입 시 토큰 포함 → phone 필드에 저장
+```
+
+### 영향받는 파일
+- `src/backend/src/services/certification.service.ts`
+- `src/backend/src/controllers/auth.controller.ts`
+- `src/backend/src/routes/auth.routes.ts`
+- `src/backend/src/services/auth.service.ts`
+- `src/frontend/index.html`
+- `src/frontend/src/hooks/useCertification.ts`
+- `src/frontend/src/pages/Register.tsx`
+- `src/frontend/src/services/api.ts`
+
+### 참고
+- 개발 환경에서는 인증번호가 서버 콘솔에 출력됨
+- 프로덕션에서는 알리고/NHN Cloud 등 SMS API 연동 필요
+- PortOne 환경변수는 아직 config에 남아있음 (토큰 유효기간 설정용)
+
+---
+
+## [2026-02-05] ROI 파이프라인 로컬 스토리지 지원 + CLIP 로고 검출 완성
+
+### 변경 사항
+- VOD 인제스트: Cloudinary 없이 로컬 스토리지 폴백 추가
+- 프레임 추출: 로컬 저장 지원 (uploads/frames/{vodId}/)
+- 임베딩 서비스: sharp → jimp 변경 (Node v24 호환성)
+- CLIP 임베딩: data URL → 임시 파일 방식으로 변경 (안정성)
+
+### 성능 테스트 결과
+| 단계 | 성능 |
+|------|------|
+| VOD 인제스트 | YouTube 13분 → 로컬 저장 |
+| 프레임 추출 | 724프레임/22초 (1fps) |
+| 로고 검출 | 3.6초/프레임 (CLIP 2단계) |
+
+### 영향받는 파일
+- `src/backend/src/services/vod.service.ts` - 로컬 저장 폴백
+- `src/backend/src/services/frameExtract.service.ts` - 로컬 저장 지원
+- `src/backend/src/services/embedding.service.ts` - sharp→jimp, 임시파일 방식
+
+### 참고
+- Windows에서 cross-drive 파일 이동 시 copyFile+unlink 사용 (EXDEV 에러 방지)
+- Node v24에서 sharp 호환성 문제 있음 → jimp 사용
+- 전체 VOD (724프레임) 로고 검출 예상 시간: 약 43분
+
+---
+
 *이 파일은 기록 전용입니다. 작업 시작 시 자동 로드하지 마세요.*
+
+## [2026-02-09] ROI Phase 1 미구현 기능 완성
+
+### 변경 사항
+- **BE**: `roiReport.service.ts`에 `getSlotAnalytics()`, `getEventMetrics()` 메서드 추가
+- **BE**: `roi.routes.ts`에 슬롯 분석/이벤트 메트릭/리포트 삭제/증빙 관리 API 5개 추가
+- **FE**: `BrandSlotAnalytics.tsx` - 슬롯별 비교 차트 + 이벤트별 메트릭 테이블
+- **FE**: `BrandROISettings.tsx` - 키워드/경쟁사/차단카테고리 관리
+- **FE**: `AdminEvidenceManager.tsx` - 증빙 자료 조회/삭제 관리
+- **FE**: `AdminReportTemplates.tsx` - 리포트 생성/조회/삭제
+- **FE**: `AdminCampaignBuilder.tsx` - 4단계 ROI 캠페인 설정 위자드
+- **FE**: `App.tsx` 라우팅 + `Layout.tsx` 네비게이션 메뉴 추가
+
+### 영향받는 파일
+- `src/backend/src/services/roiReport.service.ts`
+- `src/backend/src/routes/roi.routes.ts`
+- `src/frontend/src/pages/brand/BrandSlotAnalytics.tsx` (NEW)
+- `src/frontend/src/pages/brand/BrandROISettings.tsx` (NEW)
+- `src/frontend/src/pages/admin/AdminEvidenceManager.tsx` (NEW)
+- `src/frontend/src/pages/admin/AdminReportTemplates.tsx` (NEW)
+- `src/frontend/src/pages/admin/AdminCampaignBuilder.tsx` (NEW)
+- `src/frontend/src/App.tsx`
+- `src/frontend/src/components/Layout.tsx`
+
+### 참고
+- Backend commit: `aaa2c72`
+- Frontend commit: `d6e6948`
+- Phase 1 핸드오프 문서 대비 ~100% 구현 완료
+
+## [2026-03-02] 투자·운영 회의자료 PPT 생성
+
+### 변경 사항
+- `docs/투자운영회의자료_slides.html` (신규) — 15슬라이드 HTML 투자 덱
+  - PROJECT_STATE.md 기반 실제 개발 현황 표 (Done/Doing/To-Do)
+  - 투자자 친화적 언어로 전면 재작성 (비즈니스 플랜 docx → 접근하기 쉬운 한국어)
+  - Cover, Executive Summary, Problem, Solution, BizModel, Market, Fan Engine,
+    Dev Status × 2, Tech Stack, Roadmap, Financials, Risk, Investment Ask, Closing
+- `docs/capture_invest_slides.py` (신규) — Playwright 캡처 + python-pptx 조립 스크립트
+- `docs/invest_images/` (신규) — 15슬라이드 PNG 캡처본 (1920×1080)
+- `docs/스폰픽_투자운영회의자료_2026_PPT.pptx` (신규) — 최종 PPT 산출물
+
+### 개발 현황 매핑 (PROJECT_STATE.md → PPT)
+| 모듈 | 상태 |
+|------|------|
+| 회원·권한·인증 | ✅ 완료 |
+| 선수·에이전시 시스템 | ✅ 완료 |
+| 슬롯 인벤토리 (Phase 1/2) | ✅ 완료 |
+| 경매 엔진 (Reserve/Auto-bid/Anti-sniping) | ✅ 완료 |
+| 계약·크리에이티브 관리 | ✅ 완료 |
+| 결제·정산·원장 (Toss+Stripe+에스크로) | ✅ 완료 |
+| 팬 투표·포인트·시즌 | ✅ 완료 |
+| 어드민·CS 콘솔 | ✅ 완료 |
+| ROI 리포트 자동화 | 🔄 진행중 |
+| 증빙팩 CV 자동화 | 🔄 진행중 |
+| 본인인증 (PortOne) | 🔄 진행중 |
+| UI/UX 리디자인 | 📋 예정 |
+| 와디즈 운영지원 | 📋 예정 |
+
+### 영향받는 파일
+- `docs/투자운영회의자료_slides.html` (NEW)
+- `docs/capture_invest_slides.py` (NEW)
+- `docs/스폰픽_투자운영회의자료_2026_PPT.pptx` (NEW)
+
+### 참고
+- 투자자 지향 프레젠테이션 — 기존 사업계획서 docx를 기반으로 실제 개발 데이터 반영
+- 15슬라이드 16:9 (1920×1080), 프리텐다드 폰트, 네이비/블루 컬러 스킴
