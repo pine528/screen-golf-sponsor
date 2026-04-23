@@ -10,6 +10,48 @@
 
 ---
 
+## [2026-04-23] Full Funnel: 와이어프레임 디테일 + TossPayments + E2E 검증
+
+### 추가
+- **백엔드 (8 신규 엔드포인트)**:
+  - `/api/admin/promo-codes.csv`, `/api/admin/tracking-links.csv`
+  - `/api/reports/brand/:id/compare.csv`
+  - `/api/reports/athlete/:id/campaigns` (본인 참여 캠페인)
+  - `/api/reports/brand/:id/period-compare` (이번 vs 지난 기간)
+  - `/api/reports/share-link` (영업용 7일 토큰)
+  - `/api/admin/funnel/settlements`, `/settlements/run` (Phase 3)
+  - **GET /s/:shortCode**: Express 최상위에 302 redirect (SPA가 아닌 서버 redirect → SNS OG 크롤러 정상 처리)
+
+- **프론트엔드 (전체 화면 디테일)**:
+  - ADM-02: 재발급 옵션 폼 (기존 링크 유지 토글, 할인 정책 인라인 편집)
+  - ADM-03: 코드/링크 CSV 다운로드 + 콘텐츠별 추가 링크 인라인 발급
+  - ADM-04: 상품 순서 ↑↓ 버튼 + 모바일/PC 미리보기 토글
+  - BRD-01: 최근 주문 테이블 (하단), 예측/세그먼트 탭
+  - BRD-02: 비교 결과 CSV 다운로드
+  - BRD-03: 선수명/코드/주문번호 검색창
+  - ATH-01: 본인 캠페인 선택 + 브랜드 설득용 자동 요약 (복사 가능)
+  - REP-01: 기간 비교 (4 KPI ↑↓), 영업용 공유 링크 발급
+  - STO-01: FAQ 섹션 (4 Q&A details/summary)
+  - STO-02: 고객 리뷰(mock) + 관련 상품 그리드
+  - STO-03: **TossPayments SDK 연동 + 시뮬레이션 토글 + 결제 실패 화면 (세션 유지)**
+
+### 검증
+- 16개 화면 E2E 스크린샷 확인 완료 (puppeteer):
+  - ADM-01~04, REP-01, ADM-Settlement (Admin)
+  - BRD-01~03, BRD-Pixel, BRD-Attribution (Brand)
+  - ATH-01 (Athlete)
+  - STO-01~03 (Public Store)
+- 단축링크 3xx redirect 동작 확인 (`curl -I /s/Q8fVzE` → 302)
+
+### 영향 받는 파일
+- `src/backend/src/index.ts` (302 redirect)
+- `src/backend/src/routes/admin.funnel.routes.ts` (CSV)
+- `src/backend/src/routes/funnelReport.routes.ts` (compare/share/period-compare/orders)
+- `src/frontend/src/pages/{admin,brand,athlete,store}/*` (디테일 보강)
+- `src/frontend/package.json` (+@tosspayments/payment-sdk)
+
+---
+
 ## [2026-04-23] Full Funnel Data Reporting 전체 구축 (Phase 1+2+3)
 
 ### 변경 사항
