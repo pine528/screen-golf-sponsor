@@ -102,6 +102,8 @@ router.use('/', funnelRoutes);
 router.use('/reports', funnelReportRoutes);
 // Admin 자산 관리: /api/admin/...
 router.use('/admin', adminFunnelRoutes);
+// API spec 호환 alias: /api/campaigns/:id/tracking-assets/* (admin 없이도 접근)
+router.use('/', adminFunnelRoutes);
 // 공개 미니스토어: /api/store/brand/:slug
 router.use('/store', storeRoutes);
 // 외부 픽셀 / Postback (Phase 2): /api/external/*

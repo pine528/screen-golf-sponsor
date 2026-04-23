@@ -103,16 +103,33 @@ app.use('/api/metrics', metricsRoutes);
 // Public 단축링크 3xx redirect: /s/:shortCode
 // SNS 크롤러 / OG 태그 / 사용자 직접 접속 모두 대응
 // ============================================
-app.get('/s/:shortCode', async (req, res, next) => {
+app.get('/s/:shortCode', async (req, res, _next) => {
   try {
     const { trackingLinkService } = await import('./services/trackingLink.service');
+    // 기존 쿠키에서 anonymousId/sessionId 추출 (있으면 재사용)
+    const cookies = (req.headers.cookie || '').split(';').reduce((acc, c) => {
+      const [k, v] = c.trim().split('=');
+      if (k) acc[k] = decodeURIComponent(v || '');
+      return acc;
+    }, {} as Record<string, string>);
+
     const result = await trackingLinkService.trackClick({
       shortCode: req.params.shortCode,
+      sessionId: cookies['spk_session_id'] || undefined,
+      anonymousId: cookies['spk_anonymous_id'] || undefined,
       referrer: req.get('referer') || undefined,
       userAgent: req.get('user-agent') || undefined,
       ipAddress: req.ip,
       deviceType: req.get('user-agent')?.includes('Mobile') ? 'mobile' : 'desktop',
     });
+
+    // 세션 쿠키 설정 (24시간) + 익명 쿠키 (1년) → 미니스토어 도메인 진입 시 동일 세션 유지
+    const sameSite = 'Lax';
+    res.setHeader('Set-Cookie', [
+      `spk_session_id=${encodeURIComponent(result.sessionId)}; Max-Age=86400; Path=/; SameSite=${sameSite}`,
+      `spk_anonymous_id=${encodeURIComponent(cookies['spk_anonymous_id'] || result.sessionId)}; Max-Age=31536000; Path=/; SameSite=${sameSite}`,
+      `spk_click_id=${encodeURIComponent(result.clickId)}; Max-Age=3600; Path=/; SameSite=${sameSite}`,
+    ]);
     res.redirect(302, result.redirectUrl);
   } catch (e: any) {
     console.error('[Short link]', e);
