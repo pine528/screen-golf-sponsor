@@ -147,10 +147,33 @@ export class CampaignService {
       throw new ForbiddenError('Not authorized');
     }
 
-    return prisma.campaign.update({
+    const updated = await prisma.campaign.update({
       where: { id },
       data: { status: 'ACTIVE' },
     });
+
+    // handoff 3-1: 캠페인 ACTIVE 전환 시 자산 자동 생성 (idempotent)
+    try {
+      const { campaignAssetsService } = await import('./campaignAssets.service');
+      const cc = await prisma.campaignContract.findFirst({
+        where: { campaignId: id },
+        include: { contract: { select: { athleteId: true } } },
+      });
+      if (cc?.contract.athleteId) {
+        await campaignAssetsService.generate({
+          campaignId: id,
+          brandId: campaign.brandId,
+          athleteId: cc.contract.athleteId,
+        });
+        console.log(`[Campaign] Auto-generated funnel assets for campaign ${id}`);
+      } else {
+        console.warn(`[Campaign] ACTIVE 전환되었으나 매칭된 선수 없음 → 자산 자동 생성 skip: ${id}`);
+      }
+    } catch (e) {
+      console.error(`[Campaign] Auto asset generation failed for ${id}:`, e);
+    }
+
+    return updated;
   }
 
   async pause(id: string, brandId: string) {

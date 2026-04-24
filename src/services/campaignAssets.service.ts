@@ -116,6 +116,7 @@ export class CampaignAssetsService {
       tracking_links: trackingLinks.map((l) => ({
         id: l.id,
         short_url: `${PUBLIC_BASE}/s/${l.shortCode}`,
+        long_url: l.longUrl,  // wireframe TABLE 9: "장/단축 링크"
         content_id: l.contentId,
         click_count: l.clickCount,
         qr_url: l.qrUrl,

@@ -21,7 +21,7 @@ import { funnelOrderService } from '../services/funnelOrder.service';
 import { toSnakeKeys } from '../utils/caseConvert';
 import { AuthRequest } from '../types';
 import prisma from '../models/prisma';
-import { ForbiddenError } from '../utils/errors';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
 
 const router = Router();
 router.use(authenticate);
@@ -160,6 +160,47 @@ router.get(
         customerHash: o.customerHash ? `${o.customerHash.slice(0, 8)}...` : null,
       }));
       ok(res, safeOrders);
+    } catch (e) { next(e); }
+  }
+);
+
+// GET /api/reports/brand/:id/orders/:orderId/events (BRD-03 상세 이벤트 로그)
+router.get(
+  '/brand/:id/orders/:orderId/events',
+  authorize('BRAND', 'ADMIN'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id, orderId } = req.params;
+      if (req.user!.role === 'BRAND') {
+        const brand = await prisma.brand.findUnique({ where: { userId: req.user!.id }, select: { id: true } });
+        if (!brand || brand.id !== id) throw new ForbiddenError();
+      }
+      const order = await prisma.funnelOrder.findUnique({ where: { id: orderId } });
+      if (!order || order.brandId !== id) throw new NotFoundError('Order not found');
+
+      // 같은 sessionId의 events 시간순 (LANDING_VIEW부터 PURCHASE까지)
+      const orderEvents = await prisma.funnelEvent.findMany({
+        where: {
+          campaignId: order.campaignId,
+          OR: [
+            { payload: { path: ['order_id'], equals: order.id } as any },
+            ...(order.externalOrderId ? [{ payload: { path: ['external_order_id'], equals: order.externalOrderId } as any }] : []),
+          ],
+        },
+        orderBy: { occurredAt: 'asc' },
+      });
+
+      // 추가: 같은 PURCHASE 이벤트의 sessionId로 같은 세션 모든 이벤트
+      let sessionEvents: any[] = [];
+      const purchaseEvent = orderEvents.find((e) => e.eventName === 'PURCHASE');
+      if (purchaseEvent?.sessionId) {
+        sessionEvents = await prisma.funnelEvent.findMany({
+          where: { sessionId: purchaseEvent.sessionId },
+          orderBy: { occurredAt: 'asc' },
+        });
+      }
+
+      ok(res, sessionEvents.length > 0 ? sessionEvents : orderEvents);
     } catch (e) { next(e); }
   }
 );

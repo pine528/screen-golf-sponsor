@@ -2700,6 +2700,7 @@ model MiniStore {
   brandId         String          @map("brand_id")
   slug            String          @unique // /store/brand/:slug
   template        String          @default("default-v1")
+  brandLogoUrl    String?         @map("brand_logo_url")
   heroImageUrl    String?         @map("hero_image_url")
   athleteImageUrl String?         @map("athlete_image_url")
   mainCopy        String?         @map("main_copy")
@@ -2733,6 +2734,7 @@ model StoreProduct {
   stock         Int      @default(0)
   soldOut       Boolean  @default(false) @map("sold_out")
   sortOrder     Int      @default(0) @map("sort_order")
+  options       Json? // 색상/사이즈 등 [{name:"색상",values:["블랙","화이트"]}] (wireframe TABLE 36)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

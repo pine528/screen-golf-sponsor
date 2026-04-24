@@ -25,6 +25,7 @@ export interface CreateStoreParams {
   brandId: string;
   slug?: string;
   template?: string;
+  brandLogoUrl?: string;
   heroImageUrl?: string;
   athleteImageUrl?: string;
   mainCopy?: string;
@@ -124,6 +125,7 @@ export class MiniStoreService {
       where: { campaignId },
       data: {
         template: data.template,
+        brandLogoUrl: data.brandLogoUrl,
         heroImageUrl: data.heroImageUrl,
         athleteImageUrl: data.athleteImageUrl,
         mainCopy: data.mainCopy,

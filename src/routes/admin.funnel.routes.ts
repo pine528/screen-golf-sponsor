@@ -281,17 +281,35 @@ router.get('/funnel/campaigns', authorize('ADMIN'), async (req: AuthRequest, res
   } catch (e) { next(e); }
 });
 
-// PATCH /api/admin/funnel/campaigns/:id/status (캠페인 비활성화/활성화)
+// PATCH /api/admin/funnel/campaigns/:id/status (캠페인 비활성화/활성화 + 자동 자산 생성)
 router.patch('/funnel/campaigns/:id/status', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { status } = req.body;
     if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED', 'DRAFT'].includes(status)) {
       throw new BadRequestError('Invalid status');
     }
+    const before = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    if (!before) throw new NotFoundError('Campaign not found');
+
     const updated = await prisma.campaign.update({
       where: { id: req.params.id },
       data: { status },
     });
+
+    // ACTIVE 전환 시 자산 자동 생성 (handoff 3-1)
+    if (status === 'ACTIVE' && before.status !== 'ACTIVE') {
+      const cc = await prisma.campaignContract.findFirst({
+        where: { campaignId: req.params.id },
+        include: { contract: { select: { athleteId: true } } },
+      });
+      if (cc?.contract.athleteId) {
+        await campaignAssetsService.generate({
+          campaignId: req.params.id,
+          brandId: before.brandId,
+          athleteId: cc.contract.athleteId,
+        });
+      }
+    }
     ok(res, updated);
   } catch (e) { next(e); }
 });
