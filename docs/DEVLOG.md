@@ -10,6 +10,23 @@
 
 ---
 
+## [2026-04-24] Full Funnel: BRD-01 퍼널 차트 + brandLogoUrl 전 영역 연결
+
+### 추가
+1. **BRD-01 매출 증명 퍼널 차트** (handoff 7조 본문):
+   - 클릭→유입→상품조회→장바구니→결제시작→구매완료 6단계 FunnelChart
+   - 개요 탭 추이 차트 위 배치
+2. **ADM-04 brandLogoUrl 입력 필드**: 설정 폼에 추가 (wireframe TABLE 15)
+3. **ADM-04 미리보기**: Hero 좌상단에 brandLogo 이미지 (반투명 흰 배경)
+4. **STO-01 Hero brandLogo**: 좌상단 absolute positioning, 반응형 크기, shadow
+
+→ brandLogoUrl이 모델만 있고 사용 안 되던 문제 해결
+
+### 검증
+- TypeScript 빌드 0 에러
+
+---
+
 ## [2026-04-24] Full Funnel: 8개 핵심 누락 항목 보완
 
 ### Prisma 스키마
