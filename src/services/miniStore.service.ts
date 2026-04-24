@@ -123,7 +123,32 @@ export class MiniStoreService {
     if (!store) throw new NotFoundError('Mini store not found or not published');
     // 매칭된 첫 선수 정보 평탄화
     const athlete = store.campaign.contracts[0]?.contract.athlete || null;
-    return { ...store, athlete };
+
+    // wireframe TABLE 31: "Promo Expired" 상태 체크
+    const activePromo = await prisma.promoCode.findFirst({
+      where: {
+        campaignId: store.campaignId,
+        status: 'ACTIVE',
+        OR: [
+          { validTo: null },
+          { validTo: { gt: new Date() } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const promoExpired = !activePromo;
+
+    // Sold Out Mixed: 일부 품절
+    const soldOutCount = store.products.filter((p) => p.soldOut).length;
+    const hasSoldOut = soldOutCount > 0 && soldOutCount < store.products.length;
+
+    return {
+      ...store,
+      athlete,
+      promoExpired,
+      hasSoldOut,
+      activePromoCode: activePromo?.code || null,
+    };
   }
 
   /**

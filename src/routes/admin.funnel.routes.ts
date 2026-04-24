@@ -285,7 +285,7 @@ router.get('/funnel/campaigns', authorize('ADMIN'), async (req: AuthRequest, res
 router.patch('/funnel/campaigns/:id/status', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { status } = req.body;
-    if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED', 'DRAFT'].includes(status)) {
+    if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'EXPIRED', 'GENERATION_FAILED', 'DRAFT'].includes(status)) {
       throw new BadRequestError('Invalid status');
     }
     const before = await prisma.campaign.findUnique({ where: { id: req.params.id } });

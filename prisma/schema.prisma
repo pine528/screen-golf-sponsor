@@ -751,6 +751,8 @@ enum CampaignStatus {
   ACTIVE
   PAUSED
   COMPLETED
+  EXPIRED // 종료일 경과 자동 만료
+  GENERATION_FAILED // 자산 자동 생성 실패 (wireframe TABLE 4)
 }
 
 model Campaign {
@@ -2610,6 +2612,7 @@ enum AttributionStatus {
 }
 
 enum FunnelOrderStatus {
+  PENDING // 결제 진행 중 (wireframe TABLE 22)
   PAID
   REFUNDED
   CANCELLED

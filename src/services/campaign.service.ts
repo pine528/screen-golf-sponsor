@@ -171,6 +171,10 @@ export class CampaignService {
       }
     } catch (e) {
       console.error(`[Campaign] Auto asset generation failed for ${id}:`, e);
+      // wireframe TABLE 4: GENERATION_FAILED 상태로 마킹
+      try {
+        await prisma.campaign.update({ where: { id }, data: { status: 'GENERATION_FAILED' } });
+      } catch {}
     }
 
     return updated;
