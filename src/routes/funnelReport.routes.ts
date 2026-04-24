@@ -18,6 +18,7 @@ import { funnelPredictService } from '../services/funnelPredict.service';
 import { funnelSegmentService } from '../services/funnelSegment.service';
 import { funnelAttributionService, AttributionModel } from '../services/funnelAttribution.service';
 import { funnelOrderService } from '../services/funnelOrder.service';
+import { toSnakeKeys } from '../utils/caseConvert';
 import { AuthRequest } from '../types';
 import prisma from '../models/prisma';
 import { ForbiddenError } from '../utils/errors';
@@ -26,7 +27,11 @@ const router = Router();
 router.use(authenticate);
 
 function ok(res: Response, data: any) {
-  return res.json({ success: true, data, error: null, request_id: (res.req as any).requestId });
+  // ?format=snake → api_spec TABLE 45 호환 snake_case 변환 (외부 자사몰 호출용)
+  // 기본은 camelCase (프론트 일관성)
+  const wantSnake = (res.req.query.format === 'snake') || (res.req.headers['x-response-format'] === 'snake');
+  const payload = wantSnake ? toSnakeKeys(data) : data;
+  return res.json({ success: true, data: payload, error: null, request_id: (res.req as any).requestId });
 }
 
 function parseDateRange(req: AuthRequest) {

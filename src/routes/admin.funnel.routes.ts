@@ -281,6 +281,21 @@ router.get('/funnel/campaigns', authorize('ADMIN'), async (req: AuthRequest, res
   } catch (e) { next(e); }
 });
 
+// PATCH /api/admin/funnel/campaigns/:id/status (캠페인 비활성화/활성화)
+router.patch('/funnel/campaigns/:id/status', authorize('ADMIN'), async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { status } = req.body;
+    if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED', 'DRAFT'].includes(status)) {
+      throw new BadRequestError('Invalid status');
+    }
+    const updated = await prisma.campaign.update({
+      where: { id: req.params.id },
+      data: { status },
+    });
+    ok(res, updated);
+  } catch (e) { next(e); }
+});
+
 // GET /api/admin/funnel/campaigns/:id (상세 - ADM-02용)
 router.get('/funnel/campaigns/:id', authorize('ADMIN', 'BRAND'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
