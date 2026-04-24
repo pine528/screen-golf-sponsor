@@ -200,12 +200,38 @@ export class PromoCodeService {
   }
 
   /**
-   * 캠페인 코드 목록
+   * 캠페인 코드 목록 + 주문수/매출 통계 (wireframe TABLE 11)
    */
   async listByCampaign(campaignId: string) {
-    return prisma.promoCode.findMany({
+    const codes = await prisma.promoCode.findMany({
       where: { campaignId },
       orderBy: { createdAt: 'desc' },
+    });
+    if (codes.length === 0) return codes;
+
+    // 코드별 주문수 + 순매출 집계
+    const codeNames = codes.map((c) => c.code);
+    const stats = await prisma.funnelOrder.groupBy({
+      by: ['promoCode'],
+      where: { promoCode: { in: codeNames } },
+      _count: { _all: true },
+      _sum: { netAmount: true, refundedAmount: true },
+    });
+    const statMap = new Map(stats.map((s) => [s.promoCode, s]));
+
+    return codes.map((c) => {
+      const s = statMap.get(c.code);
+      const orderCount = s?._count._all || 0;
+      const netRev = (s?._sum.netAmount as any)?.toNumber?.() || 0;
+      const refunded = (s?._sum.refundedAmount as any)?.toNumber?.() || 0;
+      // 적용률 = 사용횟수 / 최대 (없으면 사용횟수 자체)
+      const usageRate = c.maxUsage && c.maxUsage > 0 ? (c.usageCount / c.maxUsage) : null;
+      return {
+        ...c,
+        orderCount,
+        revenue: Math.max(0, netRev - refunded),
+        usageRate, // 0~1 또는 null
+      };
     });
   }
 }

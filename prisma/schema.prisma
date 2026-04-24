@@ -2674,7 +2674,8 @@ model TrackingLink {
   campaignId String   @map("campaign_id")
   brandId    String   @map("brand_id")
   athleteId  String   @map("athlete_id")
-  contentId  String?  @map("content_id") // SNS 게시물 등
+  contentId   String?  @map("content_id") // SNS 게시물 등
+  contentType String?  @map("content_type") // INSTAGRAM | YOUTUBE | BLOG | TIKTOK | OTHER (wireframe TABLE 11)
   shortCode  String   @unique @map("short_code") // nanoid 6자
   longUrl    String   @map("long_url") // 실제 랜딩 URL (미니스토어 + UTM)
   qrUrl      String?  @map("qr_url") // QR PNG CDN URL
@@ -2733,6 +2734,7 @@ model StoreProduct {
   name          String
   description   String?
   imageUrl      String?  @map("image_url")
+  images        Json? // 추가 이미지/썸네일 배열 (wireframe TABLE 35)
   price         Decimal  @db.Decimal(18, 0)
   discountPrice Decimal? @map("discount_price") @db.Decimal(18, 0)
   stock         Int      @default(0)
