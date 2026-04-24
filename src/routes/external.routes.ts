@@ -155,8 +155,10 @@ router.post('/postback/purchase', verifyHmacSignature, async (req: Request, res:
       customerEmail: req.body.customer_email,
       isNewCustomer: req.body.is_new_customer,
     });
+    const evtId = result.order?.id ? `evt_${result.order.id.replace(/-/g, '').slice(0, 12)}` : undefined;
     ok(res, {
-      purchase_event_id: result.order?.id,
+      purchase_event_id: evtId,
+      internal_order_id: result.order?.id,
       order_status: result.order?.status?.toLowerCase(),
       attribution_status: result.attribution?.status?.toLowerCase(),
       already_processed: result.alreadyProcessed,

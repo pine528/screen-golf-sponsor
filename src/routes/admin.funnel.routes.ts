@@ -15,6 +15,7 @@ import { campaignAssetsService } from '../services/campaignAssets.service';
 import { promoCodeService } from '../services/promoCode.service';
 import { trackingLinkService } from '../services/trackingLink.service';
 import { miniStoreService } from '../services/miniStore.service';
+import { toSnakeKeys } from '../utils/caseConvert';
 import { AuthRequest } from '../types';
 import prisma from '../models/prisma';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/errors';
@@ -23,7 +24,10 @@ const router = Router();
 router.use(authenticate);
 
 function ok(res: Response, data: any) {
-  return res.json({ success: true, data, error: null, request_id: (res.req as any).requestId });
+  // ?format=snake → api_spec TABLE 13 호환 (외부 호출자용)
+  const wantSnake = (res.req.query.format === 'snake') || (res.req.headers['x-response-format'] === 'snake');
+  const payload = wantSnake ? toSnakeKeys(data) : data;
+  return res.json({ success: true, data: payload, error: null, request_id: (res.req as any).requestId });
 }
 
 // ============================================

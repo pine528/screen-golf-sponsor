@@ -203,8 +203,11 @@ router.post('/events/purchase', async (req: Request, res: Response, next: NextFu
       ...getMeta(req),
     });
 
+    // api_spec TABLE 36: purchase_event_id format 'evt_*'
+    const evtId = result.order?.id ? `evt_${result.order.id.replace(/-/g, '').slice(0, 12)}` : undefined;
     ok(res, {
-      purchase_event_id: result.order?.id,
+      purchase_event_id: evtId,
+      internal_order_id: result.order?.id,  // 내부 ID도 함께 (디버깅용)
       order_status: result.order?.status?.toLowerCase(),
       attribution_status: result.attribution?.status?.toLowerCase(),
       attribution_reason: result.attribution?.reason,
