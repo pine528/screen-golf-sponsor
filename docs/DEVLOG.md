@@ -10,6 +10,28 @@
 
 ---
 
+## [2026-04-24] Full Funnel: api_spec 형식 마지막 정합성 2개
+
+### 변경
+1. **purchase_event_id evt_ prefix** (api_spec TABLE 36):
+   - 명세 예시: `"purchase_event_id": "evt_9801"`
+   - 변경: UUID 첫 12자 + evt_ prefix → `evt_a71db97366ef`
+   - internal_order_id 함께 노출 (디버깅·환불 호출용)
+   - funnel.routes purchase + external.routes postback 모두 적용
+
+2. **Admin 자산 조회 snake_case 변환** (api_spec TABLE 13):
+   - 명세는 root level까지 snake_case
+   - 추가: `?format=snake` 또는 `X-Response-Format: snake` 헤더로 변환
+   - 기본은 camelCase (프론트 일관성)
+
+### 결론
+이번 라운드는 진짜 마이크로 디테일 (형식 차이만). 95+ 항목 누적 후 사실상 docx 모든 명시 항목 100% 반영.
+
+### 검증
+- TypeScript 빌드 0 에러
+
+---
+
 ## [2026-04-24] Full Funnel: BRD-01 자동 해석 + BRD-03 선수/코드 필터
 
 ### BRD-01 (handoff 5조: 요약 코멘트 영역)
