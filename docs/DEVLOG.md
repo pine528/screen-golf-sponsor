@@ -10,6 +10,32 @@
 
 ---
 
+## [2026-04-24] Full Funnel: API 호환성 + KPI delta + 필터 + 비활성화 4개 보완
+
+### 백엔드
+1. **snake_case 변환 유틸** (`utils/caseConvert.ts`):
+   - 리포트 응답에 `?format=snake` 또는 `X-Response-Format: snake` 헤더 시 자동 변환
+   - 기본은 camelCase (프론트 일관성), 외부 호출자만 snake_case (api_spec TABLE 45 호환)
+2. **PATCH /api/admin/funnel/campaigns/:id/status**: 캠페인 활성화/일시중지 (ADM-01 액션)
+
+### 프론트
+3. **BRD-01 전일 대비 증감 KPI** (wireframe TABLE 18):
+   - 어제~오늘 vs 그 이전 기간 자동 비교 (period-compare 활용)
+   - SummaryCard에 ↑↓% 표시 (유입/주문/순매출/CVR)
+4. **BRD-01 선수/채널/코드 필터** (wireframe TABLE 18):
+   - 선수: report.breakdown.athletes 옵션 자동 채움
+   - 채널: instagram/youtube/naver/kakao/direct 칩 토글
+   - 코드: report.breakdown.codes 드롭다운
+5. **ADM-01 캠페인 액션** (wireframe TABLE 6):
+   - 자산 재발급 ✅ (기존)
+   - 일시중지/재개 (Pause/Play 아이콘)
+   - 정보 복사 (Copy 아이콘)
+
+### 검증
+- TypeScript 빌드 0 에러 (backend + frontend)
+
+---
+
 ## [2026-04-23] Full Funnel: 최종 6개 마이크로 디테일 보완
 
 ### 프론트
