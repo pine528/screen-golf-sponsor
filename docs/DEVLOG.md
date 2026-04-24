@@ -10,6 +10,27 @@
 
 ---
 
+## [2026-04-24] Full Funnel: BRD-01 자동 해석 + BRD-03 선수/코드 필터
+
+### BRD-01 (handoff 5조: 요약 코멘트 영역)
+- 자동 해석 코멘트 영역 추가 (slate-900 다크 카드)
+- 룰 기반 메시지 자동 생성:
+  - 매출 전일 대비 ↑↓5% 이상 (positive/negative)
+  - CVR 우수(≥3%) / 부족(<1%)
+  - ROAS 우수(≥3x) / 손실(<1x)
+  - TOP 선수 매출 기여 + TOP 코드 사용 횟수
+- 최대 4개 메시지 표시
+
+### BRD-03 (wireframe TABLE 24)
+- 선수 드롭다운 필터 (orders에서 distinct athlete 옵션 자동)
+- 코드 드롭다운 필터 (promoCode distinct)
+- 필터 초기화 버튼
+
+### 검증
+- TypeScript 빌드 0 에러
+
+---
+
 ## [2026-04-24] Full Funnel: 와이어프레임 ASCII 7개 보완
 
 ### Prisma
