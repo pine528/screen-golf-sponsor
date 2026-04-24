@@ -10,6 +10,29 @@
 
 ---
 
+## [2026-04-24] Full Funnel: 와이어프레임 "주요 상태" enum + 상태 배너 5개
+
+### Prisma enum 보강
+1. **CampaignStatus + EXPIRED, GENERATION_FAILED** (wireframe TABLE 4)
+2. **FunnelOrderStatus + PENDING** (wireframe TABLE 22)
+
+### 백엔드
+- campaign.service.activate(): 자산 자동 생성 실패 시 GENERATION_FAILED 상태로 자동 마킹
+- admin.funnel.routes status validation에 EXPIRED, GENERATION_FAILED 추가
+- miniStore.getPublicBySlug: promoExpired, hasSoldOut, activePromoCode 응답 평탄화
+
+### 프론트
+3. **STO-01 Promo Expired 배너** (wireframe TABLE 31): 활성 코드 0개 시 amber 배너
+4. **STO-01 Sold Out Mixed 배너**: 일부 품절 시 rose 배너
+5. **STO-02 재고 상태 칩** (wireframe TABLE 34): In Stock(emerald) / Low Stock 5↓(amber) / Sold Out(rose)
+6. **BRD-01 No Data 안내 배너** (wireframe TABLE 16): 클릭+구매가 모두 0일 때 sky 배너
+
+### 검증
+- Prisma db push 성공
+- TypeScript 빌드 0 에러 (backend + frontend)
+
+---
+
 ## [2026-04-24] Full Funnel: 테마 컬러 + 선수 추천 문구 (마지막 ASCII 디테일)
 
 ### Prisma
