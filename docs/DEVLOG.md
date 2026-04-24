@@ -10,6 +10,31 @@
 
 ---
 
+## [2026-04-24] Full Funnel: URL 일관성 + CTR 계산식 + 차트 보완 4개
+
+### CRITICAL: CTR 계산식 명세 위반 수정 ⚠️
+- 명세 (handoff TABLE 8): **CTR = 링크 클릭 수 ÷ 콘텐츠 노출 수**
+- 이전: `landingViews / linkClicks` (분자/분모 모두 잘못)
+- 수정: IMPRESSION_LOGGED 이벤트 payload.impressions 합산 → `linkClicks / impressions`
+- FunnelSummary 인터페이스에 `impressions` 필드 추가
+
+### URL 일관성 (api_spec TABLE 13)
+- 명세: `mini_store.url = "https://sponpik.com/store/brand/orex"`
+- 백엔드 trackingLink longUrl: `/store/${slug}` → `/store/brand/${slug}`
+- 백엔드 campaignAssets brandMiniStoreUrl: 동일
+- 프론트 라우트: `/store/brand/:slug` 신규 + `/store/:slug` legacy redirect
+- 미니스토어 내 모든 Link/navigate 일괄 변경
+- ADM-04 미리보기 새 탭 링크도
+
+### 화면 보강
+- **BRD-01 선수별 TOP**: 카드 + 막대차트 (gradient bar with width %) — wireframe TABLE 18 "카드+막대차트"
+- **BRD-02 비교 차트**: 매출순/주문순/CVR순 정렬 토글 — wireframe TABLE 21 "정렬 기준 변경 가능"
+
+### 검증
+- TypeScript 빌드 0 에러 (backend + frontend)
+
+---
+
 ## [2026-04-24] Full Funnel: 와이어프레임 "주요 상태" enum + 상태 배너 5개
 
 ### Prisma enum 보강
