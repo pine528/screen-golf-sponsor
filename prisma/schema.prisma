@@ -2701,6 +2701,7 @@ model MiniStore {
   slug            String          @unique // /store/brand/:slug
   template        String          @default("default-v1")
   brandLogoUrl    String?         @map("brand_logo_url")
+  themeColor      String?         @map("theme_color") // 테마 컬러 hex (#10b981 등) - wireframe TABLE 14
   heroImageUrl    String?         @map("hero_image_url")
   athleteImageUrl String?         @map("athlete_image_url")
   mainCopy        String?         @map("main_copy")

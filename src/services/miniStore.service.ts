@@ -26,6 +26,7 @@ export interface CreateStoreParams {
   slug?: string;
   template?: string;
   brandLogoUrl?: string;
+  themeColor?: string;
   heroImageUrl?: string;
   athleteImageUrl?: string;
   mainCopy?: string;
@@ -108,11 +109,21 @@ export class MiniStoreService {
       include: {
         products: { orderBy: { sortOrder: 'asc' } },
         brand: { select: { id: true, name: true, category: true, website: true } },
-        campaign: { select: { id: true, name: true, dateEnd: true } },
+        campaign: {
+          select: {
+            id: true, name: true, dateEnd: true,
+            contracts: {
+              take: 1,
+              include: { contract: { include: { athlete: { select: { id: true, name: true, profileImageUrl: true, tour: true } } } } },
+            },
+          },
+        },
       },
     });
     if (!store) throw new NotFoundError('Mini store not found or not published');
-    return store;
+    // 매칭된 첫 선수 정보 평탄화
+    const athlete = store.campaign.contracts[0]?.contract.athlete || null;
+    return { ...store, athlete };
   }
 
   /**
@@ -126,6 +137,7 @@ export class MiniStoreService {
       data: {
         template: data.template,
         brandLogoUrl: data.brandLogoUrl,
+        themeColor: data.themeColor,
         heroImageUrl: data.heroImageUrl,
         athleteImageUrl: data.athleteImageUrl,
         mainCopy: data.mainCopy,
