@@ -10,6 +10,33 @@
 
 ---
 
+## [2026-04-24] Full Funnel: 와이어프레임 ASCII 7개 보완
+
+### Prisma
+- StoreProduct.images Json (다중 이미지/썸네일 - wireframe TABLE 35)
+- TrackingLink.contentType (INSTAGRAM/YOUTUBE/BLOG/TIKTOK/OTHER - wireframe TABLE 11)
+
+### 백엔드
+- promoCodeService.listByCampaign: 코드별 주문수+매출+적용률 자동 집계 (wireframe TABLE 11)
+
+### 프론트
+1. **STO-02 상품 썸네일 갤러리** (TABLE 35): 다중 이미지 가로 스크롤 + 활성 이미지 전환
+2. **STO-02 장바구니 Drawer 할인 표시** (TABLE 35): 항목별 + 총 할인 라인
+3. **ADM-02 할인정책 섹션** (TABLE 8 ASCII): 좌측 패널에 코드/타입/값/사용횟수
+4. **ADM-03 좌측 선수 필터** (TABLE 11): 캠페인 매칭 선수 옵션 자동
+5. **ADM-03 발급일 필터** (TABLE 11): 발급일 이후 date input
+6. **ADM-03 코드 컬럼** (TABLE 11): 코드명/적용률/주문수/매출/할인/상태/발급일
+7. **ADM-03 콘텐츠 유형 필터** (TABLE 11): Instagram/YouTube/TikTok/Blog/기타
+
+### Cart 데이터 보강
+- 상품 담기 시 originalPrice 함께 저장 → drawer 할인 계산
+
+### 검증
+- Prisma db push 성공
+- TypeScript 빌드 0 에러
+
+---
+
 ## [2026-04-24] Full Funnel: ASCII 컬럼 5개 누락 보완
 
 ### BRD-01 (TABLE 18: 기본 30일)
