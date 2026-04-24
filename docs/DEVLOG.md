@@ -10,6 +10,29 @@
 
 ---
 
+## [2026-04-24] Full Funnel: 테마 컬러 + 선수 추천 문구 (마지막 ASCII 디테일)
+
+### Prisma
+- MiniStore.themeColor (hex) 필드 추가 (wireframe TABLE 14)
+
+### 백엔드
+- miniStore.service: themeColor params + update 처리
+- getPublicBySlug: campaign.contracts → athlete 정보 평탄화 반환
+
+### 프론트
+1. **ADM-04 컬러 선택 UI**: 6개 프리셋 색상 칩 + 커스텀 컬러 피커, hex 표시
+2. **ADM-04 미리보기**: Hero 그라데이션 + CTA 버튼이 themeColor 반영
+3. **STO-01 Hero**: themeColor 기반 동적 그라데이션 + Sticky CTA 컬러 적용
+4. **STO-03 주문완료 선수 추천 문구** (wireframe TABLE 38):
+   - 선수 프로필 이미지 + 투어 + 이름
+   - "OO 선수가 추천한 상품을 구매해주셔서 감사해요" 문구
+
+### 검증
+- TypeScript 빌드 0 에러 (backend + frontend)
+- Prisma db push 성공
+
+---
+
 ## [2026-04-24] Full Funnel: BRD-01 퍼널 차트 + brandLogoUrl 전 영역 연결
 
 ### 추가
