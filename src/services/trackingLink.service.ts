@@ -70,7 +70,8 @@ export class TrackingLinkService {
     if (existing) return existing;
 
     const shortCode = await this.newShortCode();
-    const longUrl = `${PUBLIC_BASE}/store/${miniStoreSlug || campaignId}?utm_source=sponpik&utm_campaign=${campaignId}&utm_athlete=${athleteId}${contentId ? `&utm_content=${contentId}` : ''}`;
+    // api_spec TABLE 13: mini_store.url = /store/brand/:slug
+    const longUrl = `${PUBLIC_BASE}/store/brand/${miniStoreSlug || campaignId}?utm_source=sponpik&utm_campaign=${campaignId}&utm_athlete=${athleteId}${contentId ? `&utm_content=${contentId}` : ''}`;
 
     // QR 생성 (실패해도 링크는 생성됨)
     let qrUrl: string | null = null;

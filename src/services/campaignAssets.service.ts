@@ -88,7 +88,7 @@ export class CampaignAssetsService {
       campaignId,
       promoCode: result.code.code,
       shortUrl: `${PUBLIC_BASE}/s/${result.link.shortCode}`,
-      brandMiniStoreUrl: `${PUBLIC_BASE}/store/${result.store.slug}?campaign=${campaignId}`,
+      brandMiniStoreUrl: `${PUBLIC_BASE}/store/brand/${result.store.slug}?campaign=${campaignId}`,
       qrUrl: result.link.qrUrl,
       status: allExist ? 'exists' : 'generated',
     };
@@ -125,7 +125,8 @@ export class CampaignAssetsService {
       mini_store: miniStore ? {
         id: miniStore.id,
         slug: miniStore.slug,
-        url: `${PUBLIC_BASE}/store/${miniStore.slug}`,
+        // api_spec TABLE 13: /store/brand/:slug
+        url: `${PUBLIC_BASE}/store/brand/${miniStore.slug}`,
         status: miniStore.status.toLowerCase(),
         product_count: miniStore.products.length,
       } : null,

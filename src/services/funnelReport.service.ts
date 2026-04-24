@@ -26,6 +26,7 @@ export interface ReportParams {
 }
 
 export interface FunnelSummary {
+  impressions: number;
   linkClicks: number;
   landingViews: number;
   productViews: number;
@@ -87,12 +88,14 @@ export class FunnelReportService {
 
   /**
    * 핵심 KPI 집계
+   * CTR (handoff TABLE 8): 링크 클릭 수 ÷ 콘텐츠 노출 수
+   *   → impression_logged 이벤트의 payload.impressions 합산을 분모로 사용
    */
   async getSummary(params: ReportParams, campaignSpent?: number): Promise<FunnelSummary> {
     const eventWhere = this.buildEventWhere(params);
     const orderWhere = this.buildOrderWhere(params);
 
-    const [eventCounts, orderAgg, newCustomerAgg] = await Promise.all([
+    const [eventCounts, orderAgg, newCustomerAgg, impressionEvents] = await Promise.all([
       prisma.funnelEvent.groupBy({
         by: ['eventName'],
         where: eventWhere,
@@ -110,6 +113,11 @@ export class FunnelReportService {
       prisma.funnelOrder.count({
         where: { ...orderWhere, isNewCustomer: true },
       }),
+      // CTR 계산용: IMPRESSION_LOGGED 이벤트들의 payload.impressions 합산
+      prisma.funnelEvent.findMany({
+        where: { ...eventWhere, eventName: 'IMPRESSION_LOGGED' },
+        select: { payload: true },
+      }),
     ]);
 
     const counts: Record<string, number> = {};
@@ -125,6 +133,12 @@ export class FunnelReportService {
     const linkClicks = counts.LINK_CLICK || 0;
     const landingViews = counts.LANDING_VIEW || 0;
 
+    // 총 노출 수 = IMPRESSION_LOGGED 이벤트들의 payload.impressions 합 (handoff TABLE 8)
+    const totalImpressions = impressionEvents.reduce((sum, e) => {
+      const p = (e.payload as any) || {};
+      return sum + Number(p.impressions || 1);
+    }, 0);
+
     return {
       linkClicks,
       landingViews,
@@ -139,7 +153,9 @@ export class FunnelReportService {
       grossRevenue,
       refundedAmount,
       newCustomers: newCustomerAgg,
-      ctr: linkClicks > 0 ? landingViews / linkClicks : 0,
+      impressions: totalImpressions,
+      // handoff TABLE 8 정확한 정의:
+      ctr: totalImpressions > 0 ? linkClicks / totalImpressions : 0,
       cvr: landingViews > 0 ? purchases / landingViews : 0,
       checkoutCompletion: counts.BEGIN_CHECKOUT > 0 ? purchases / counts.BEGIN_CHECKOUT : 0,
       aov: purchases > 0 ? netRevenue / purchases : 0,
