@@ -10,6 +10,36 @@
 
 ---
 
+## [2026-04-24] Full Funnel: 8개 핵심 누락 항목 보완
+
+### Prisma 스키마
+- `MiniStore.brandLogoUrl` 추가 (wireframe TABLE 14, 33)
+- `StoreProduct.options` (Json) 추가 (wireframe TABLE 36 - 색상/사이즈 등)
+
+### 백엔드 자동화
+- **캠페인 ACTIVE 자동 자산 생성** (handoff 3-1):
+  - `campaign.service.activate()`에서 status='ACTIVE' 변경 시 `campaignAssetsService.generate()` 자동 호출
+  - admin/funnel/campaigns/:id/status PATCH도 동일 로직 (ACTIVE 전환 시만)
+  - 매칭 선수 없으면 skip + warn 로그
+- `campaignAssets.list()` 응답에 `long_url` 추가 (wireframe TABLE 9 "장/단축 링크")
+- `GET /api/reports/brand/:id/orders/:orderId/events` (BRD-03 이벤트 로그)
+
+### 프론트엔드
+- **ADM-01 카드 재구성** (wireframe TABLE 6):
+  - 전체/활성/만료 예정(7일↓)/발급 실패/이번 주 신규
+- **ADM-02 장(long) URL 표시**: 단축 + UTM 포함 long URL 분리, 각각 복사 버튼
+- **BRD-03 주문 테이블 "상품" 컬럼 추가**: items[0].product_id + 외 N건
+- **BRD-03 상세 패널 이벤트 로그 타임라인**: 같은 세션의 LANDING_VIEW~PURCHASE 시간순
+- **STO-02 상품 옵션 선택 UI**: 색상/사이즈 등 토글 버튼 → cart에 함께 저장
+- **STO-03 재구매 유도 CTA** (wireframe TABLE 39):
+  - 주문완료 화면에 "함께 보면 좋은 상품" 3개 그리드 + "전체 상품 보러가기" 링크
+
+### 검증
+- Prisma db push 성공
+- TypeScript 빌드 0 에러 (backend + frontend)
+
+---
+
 ## [2026-04-24] Full Funnel: API 호환성 + KPI delta + 필터 + 비활성화 4개 보완
 
 ### 백엔드
