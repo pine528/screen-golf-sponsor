@@ -34,7 +34,7 @@ const ATHLETES: AthleteSeed[] = [
     name: '안예인',
     tour: 'KLPGA',
     bio: '176cm · 1998년생 · 2018년 KLPGA 정회원 · SBSGOLF 골프클리닉 출연. 5.1만 인스타 팔로워',
-    profileImageUrl: '/hero-model.png',
+    profileImageUrl: '/golfers/an-yein.jpeg',
     socialLinks: { instagram: 'yenisfree' },
     primarySponsors: ['SBSGOLF'],
     careerJson: {
@@ -62,7 +62,7 @@ const ATHLETES: AthleteSeed[] = [
     name: '배진리',
     tour: 'KLPGA',
     bio: '170cm · 2001년생 · 2020년 KLPGA 정회원 · WGTOUR 1차 2위. 인스타 @hjissiir',
-    profileImageUrl: '/hero-candidate-1.jpg',
+    profileImageUrl: '/golfers/bae-jinri.jpeg',
     socialLinks: { instagram: 'hjissiir' },
     primarySponsors: [],
     careerJson: {
@@ -88,7 +88,7 @@ const ATHLETES: AthleteSeed[] = [
     name: '송유나',
     tour: 'KLPGA',
     bio: '165cm · 1998년생 · 2021년 KLPGA 정회원 · 르꼬끄 골프 앰버서더. 인스타 @_yuna_ssong',
-    profileImageUrl: '/hero-candidate-2.jpg',
+    profileImageUrl: '/golfers/song-yuna.jpeg',
     socialLinks: { instagram: '_yuna_ssong' },
     primarySponsors: ['르꼬끄 골프'],
     careerJson: {
@@ -113,7 +113,7 @@ const ATHLETES: AthleteSeed[] = [
     name: '오세희',
     tour: 'KLPGA',
     bio: '168cm · 1998년생 · 2020년 KLPGA 정회원 · 마스터바니 앰버서더 · 펀펀매치 우승. 인스타 1.9만',
-    profileImageUrl: '/hero-candidate-3.jpg',
+    profileImageUrl: '/golfers/oh-sehee.jpeg',
     socialLinks: { instagram: 'oosshh_love' },
     primarySponsors: ['마스터바니', '휠라'],
     careerJson: {
@@ -142,7 +142,7 @@ const ATHLETES: AthleteSeed[] = [
     name: '이예빈',
     tour: 'KLPGA',
     bio: '168cm · 2000년생 · 2021년 KLPGA 준회원 · SG 더매치 챔피언십 출전. 인스타 @yaeproda',
-    profileImageUrl: '/hero-candidate-4.jpg',
+    profileImageUrl: '/golfers/lee-yebin.jpeg',
     socialLinks: { instagram: 'yaeproda' },
     primarySponsors: [],
     careerJson: {
