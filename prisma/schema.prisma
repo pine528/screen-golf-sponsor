@@ -163,6 +163,7 @@ model Athlete {
   withdrawalRequests  WithdrawalRequest[]
   donationsReceived   Donation[]
   agencyRequests      AgencyAthleteRequest[]
+  eventResults        AthleteEventResult[]   // GTOUR 등 외부 경기결과 (docx 3-6)
 
   // Full Funnel relations
   promoCodes    PromoCode[]
@@ -2951,4 +2952,36 @@ model PerformanceSettlement {
   @@index([brandId, periodStart])
   @@index([status])
   @@map("performance_settlements")
+}
+
+// ============================================
+// AthleteEventResult (선수 경기결과/분석 정보)
+// docx 3-6: GTOUR 등 외부 대회 결과 노출용
+// 연동 방식: 관리자 수기 등록 / 외부 API / 크롤링 (source 필드로 구분)
+// ============================================
+
+model AthleteEventResult {
+  id              String   @id @default(uuid())
+  athleteId       String   @map("athlete_id")
+  // 대회 정보 (외부 데이터 = 우리 Event 모델과 별개로 free-text)
+  eventName       String   @map("event_name") // 대회명
+  eventDate       DateTime @map("event_date") // 개최일 (정렬·연도 그룹용)
+  category        String? // 경기 구분 (예: 정규투어, 챔피언십)
+  // 결과
+  rank            Int? // 순위 (null = 미공개/예선 탈락)
+  score           String? // 스코어 (예: -7, 64-65-67-66)
+  totalRounds     Int?     @map("total_rounds")
+  // 분석
+  summary         String? // 분석 요약 (자유 텍스트)
+  // 메타
+  source          String   @default("MANUAL") // MANUAL | GTOUR_API | CRAWLER
+  sourceUpdatedAt DateTime @default(now()) @map("source_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, eventDate(sort: Desc)])
+  @@index([athleteId, source])
+  @@map("athlete_event_results")
 }

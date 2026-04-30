@@ -62,8 +62,8 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터)
-    const [slotInstances, exposureCount, athleteEvents] = await Promise.all([
+    // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터) + GTOUR 경기결과
+    const [slotInstances, exposureCount, athleteEvents, eventResults] = await Promise.all([
       prisma.slotInstance.findMany({
         where: { athleteId: req.params.id },
         include: {
@@ -97,14 +97,98 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         orderBy: { dateStart: 'desc' },
         take: 5,
       }).catch((e) => { console.error('[athlete public] events error', e); return []; }),
+      // GTOUR 등 경기결과 (docx 3-6, 최신순)
+      prisma.athleteEventResult.findMany({
+        where: { athleteId: req.params.id },
+        orderBy: { eventDate: 'desc' },
+        take: 30,
+      }).catch((e) => { console.error('[athlete public] eventResults error', e); return []; }),
     ]);
 
     res.json({
       success: true,
-      data: { athlete, slotInstances, exposureCount, recentEvents: athleteEvents },
+      data: { athlete, slotInstances, exposureCount, recentEvents: athleteEvents, eventResults },
       error: null,
       request_id: (req as any).requestId,
     });
+  } catch (e) { next(e); }
+});
+
+// ============================================
+// 관리자: 선수 경기결과 CRUD (docx 3-6)
+// ============================================
+
+/** GET /athletes/:id/event-results — 운영자 또는 본인 */
+router.get('/:id/event-results', authenticate, async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    if (req.user.role !== 'ADMIN') {
+      const a = await prisma.athlete.findUnique({ where: { id }, select: { userId: true } });
+      if (!a || a.userId !== req.user.id) {
+        res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Forbidden' } });
+        return;
+      }
+    }
+    const items = await prisma.athleteEventResult.findMany({
+      where: { athleteId: id },
+      orderBy: { eventDate: 'desc' },
+    });
+    res.json({ success: true, data: items, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /athletes/:id/event-results — 관리자만 (수기 등록) */
+router.post('/:id/event-results', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    const { eventName, eventDate, category, rank, score, totalRounds, summary, source } = req.body;
+    if (!eventName || !eventDate) {
+      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'eventName, eventDate 필수' } });
+      return;
+    }
+    const created = await prisma.athleteEventResult.create({
+      data: {
+        athleteId: id,
+        eventName,
+        eventDate: new Date(eventDate),
+        category: category || null,
+        rank: rank ?? null,
+        score: score || null,
+        totalRounds: totalRounds ?? null,
+        summary: summary || null,
+        source: source || 'MANUAL',
+      },
+    });
+    res.json({ success: true, data: created, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** PATCH /athletes/event-results/:resultId */
+router.patch('/event-results/:resultId', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const updated = await prisma.athleteEventResult.update({
+      where: { id: req.params.resultId },
+      data: {
+        ...(req.body.eventName != null && { eventName: req.body.eventName }),
+        ...(req.body.eventDate && { eventDate: new Date(req.body.eventDate) }),
+        ...(req.body.category !== undefined && { category: req.body.category }),
+        ...(req.body.rank !== undefined && { rank: req.body.rank }),
+        ...(req.body.score !== undefined && { score: req.body.score }),
+        ...(req.body.totalRounds !== undefined && { totalRounds: req.body.totalRounds }),
+        ...(req.body.summary !== undefined && { summary: req.body.summary }),
+        ...(req.body.source && { source: req.body.source }),
+        sourceUpdatedAt: new Date(),
+      },
+    });
+    res.json({ success: true, data: updated, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** DELETE /athletes/event-results/:resultId */
+router.delete('/event-results/:resultId', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    await prisma.athleteEventResult.delete({ where: { id: req.params.resultId } });
+    res.json({ success: true, data: { deleted: true }, error: null, request_id: (req as any).requestId });
   } catch (e) { next(e); }
 });
 
