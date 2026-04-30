@@ -9,13 +9,11 @@ import {
   LogOut,
   Settings,
   LayoutDashboard,
-  Hexagon,
   Wallet,
   ChevronRight,
   Menu,
   X,
   Megaphone,
-  Vote,
   CreditCard,
   BarChart3,
   Bell,
@@ -36,13 +34,20 @@ import {
   PenLine,
   Banknote,
   Award,
-  ListChecks,
   Shield,
   UserCog,
   Receipt,
   FileCheck,
   Coins,
   Briefcase,
+  FileImage,
+  Layers,
+  PlusCircle,
+  ListChecks,
+  Video,
+  ScanLine,
+  Image,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../utils';
@@ -178,9 +183,20 @@ export function Layout({ children }: LayoutProps) {
     { path: '/brand/billing', label: '청구/명세서', icon: Receipt },
     { path: '/campaigns', label: '캠페인', icon: Megaphone },
     { path: '/brand/sponsored-votes', label: '후원 투표', icon: Heart },
-    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
+    { path: '/brand/creative-approvals', label: '크리에이티브 승인', icon: FileImage },
     { path: '/brand/reports/roi', label: 'ROI 리포트', icon: TrendingUp },
-    { path: '/votes', label: '투표 참여', icon: Vote },
+    { path: '/brand/slot-analytics', label: '슬롯 분석', icon: BarChart3 },
+    { path: '/brand/logo-templates', label: '로고 템플릿', icon: Image },
+    { path: '/brand/roi-settings', label: 'ROI 설정', icon: Settings },
+    // === Full Funnel ===
+    { path: '/brand/funnel/dashboard', label: '🔥 풀 퍼널 대시보드', icon: TrendingUp },
+    { path: '/brand/funnel/compare', label: '🔥 성과 비교', icon: BarChart3 },
+    { path: '/brand/funnel/orders', label: '🔥 주문·매출 내역', icon: Receipt },
+    { path: '/brand/funnel/pixel', label: '🔥 픽셀 설치 (Phase 2)', icon: Wrench },
+    { path: '/brand/funnel/attribution', label: '🔥 멀티터치 (Phase 3)', icon: Target },
+    { path: '/votes', label: '무료 투표', icon: Gift },
+    { path: '/votes/create', label: '투표 만들기', icon: PlusCircle },
+    { path: '/votes/my-created', label: '내가 만든 투표', icon: ListChecks },
     { path: '/points', label: '내 포인트', icon: Trophy },
     { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/profile', label: '프로필', icon: User },
@@ -193,9 +209,14 @@ export function Layout({ children }: LayoutProps) {
     { path: '/athlete/pending-signatures', label: '서명 대기', icon: PenLine },
     { path: '/athlete/agency-requests', label: '에이전시 요청', icon: Building2 },
     { path: '/settlements', label: '정산', icon: Wallet },
-    { path: '/athlete/withdrawals', label: '출금 관리', icon: Banknote },
-    { path: '/votes', label: '투표 참여', icon: Vote },
-    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
+    { path: '/athlete/withdrawals', label: '정산금 출금', icon: Banknote },
+    { path: '/athlete/point-withdrawals', label: '포인트 출금', icon: Coins },
+    { path: '/athlete/donations', label: '받은 후원', icon: Heart },
+    // === Full Funnel ===
+    { path: '/athlete/funnel/dashboard', label: '🔥 내 성과 대시보드', icon: TrendingUp },
+    { path: '/votes', label: '무료 투표', icon: Gift },
+    { path: '/votes/create', label: '투표 만들기', icon: PlusCircle },
+    { path: '/votes/my-created', label: '내가 만든 투표', icon: ListChecks },
     { path: '/points', label: '내 포인트', icon: Trophy },
     { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/profile', label: '프로필', icon: User },
@@ -206,15 +227,19 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin/events', label: '이벤트 관리', icon: Calendar },
     { path: '/admin/auctions', label: '경매 모니터링', icon: Gavel },
     { path: '/admin/featured-auctions', label: '추천 경매', icon: Star },
+    { path: '/admin/slot-templates', label: '슬롯 템플릿', icon: Layers },
     { path: '/admin/entities', label: '등록 회원', icon: Users },
     { path: '/admin/kyc', label: 'KYC 심사', icon: User },
     { path: '/admin/brand-registrations', label: '브랜드 신청', icon: Building2 },
     { path: '/admin/reviews', label: '검수 관리', icon: FileText },
-    { path: '/admin/votes', label: '투표 이벤트', icon: Vote },
+    { path: '/admin/votes', label: '투표 관리', icon: Gift },
     { path: '/admin/points', label: '포인트 관리', icon: Coins },
-    { path: '/admin/fan-votes', label: '투표 심사', icon: ListChecks },
+    { path: '/admin/fee-policies', label: '수수료 정책', icon: Receipt },
+    { path: '/admin/point-withdrawals', label: '포인트 출금', icon: Coins },
+    { path: '/admin/creative-approvals', label: '크리에이티브 심사', icon: FileImage },
     { path: '/admin/payments', label: '결제 관리', icon: CreditCard },
     { path: '/admin/finance', label: '재무 콘솔', icon: Wallet },
+    { path: '/admin/finance/point-topups', label: '포인트 충전', icon: Coins },
     { path: '/admin/finance/withdrawals', label: '출금 관리', icon: Banknote },
     { path: '/admin/finance/tax-invoices', label: '세금계산서', icon: FileCheck },
     { path: '/admin/reconciliation', label: '대사 관리', icon: Shield },
@@ -224,6 +249,18 @@ export function Layout({ children }: LayoutProps) {
     { path: '/admin/disputes', label: '분쟁 관리', icon: Flag },
     { path: '/admin/seasons', label: '시즌 관리', icon: Trophy },
     { path: '/admin/exposure', label: '노출 관리', icon: Eye },
+    { path: '/admin/roi/campaign-builder', label: 'ROI 캠페인', icon: Target },
+    { path: '/admin/roi/vod', label: 'VOD 관리', icon: Video },
+    { path: '/admin/roi/qa', label: '검출 검수', icon: ScanLine },
+    { path: '/admin/roi/evidence', label: '증빙 관리', icon: FileImage },
+    { path: '/admin/roi/reports', label: '리포트 관리', icon: FileText },
+    // === Full Funnel ===
+    { path: '/admin/athletes/event-results', label: '🏆 선수 경기결과', icon: Trophy },
+    { path: '/admin/tournament-activation', label: '⚙️ 대회 활성화 / N값', icon: Settings },
+    { path: '/admin/funnel/campaigns', label: '🔥 풀 퍼널 캠페인', icon: Megaphone },
+    { path: '/admin/funnel/codes-links', label: '🔥 코드·링크', icon: Layers },
+    { path: '/admin/funnel/integrated-report', label: '🔥 통합 ROI', icon: TrendingUp },
+    { path: '/admin/funnel/settlements', label: '🔥 성과 정산 (Phase 3)', icon: Coins },
     { path: '/admin/ops', label: '운영 도구', icon: Wrench },
     { path: '/admin/reports', label: '통합 리포트', icon: BarChart3 },
     { path: '/admin/settings', label: '설정', icon: Settings },
@@ -231,15 +268,17 @@ export function Layout({ children }: LayoutProps) {
 
   const fanNavItems = [
     { path: '/fan', label: '홈', icon: Home },
-    { path: '/votes', label: '투표', icon: Vote },
-    { path: '/fan-votes/my', label: '내 투표', icon: ListChecks },
+    { path: '/votes', label: '무료 투표', icon: Gift },
+    { path: '/votes/create', label: '투표 만들기', icon: PlusCircle },
+    { path: '/votes/my-created', label: '내가 만든 투표', icon: ListChecks },
+    { path: '/my-donations', label: '선수 후원', icon: Heart },
     { path: '/fan/badges', label: '내 뱃지', icon: Award },
     { path: '/points', label: '내 포인트', icon: Trophy },
     { path: '/points/topup', label: '포인트 충전', icon: CreditCard },
     { path: '/shop', label: '포인트샵', icon: Gift },
     { path: '/orders', label: '교환내역', icon: ShoppingBag },
     { path: '/ranking', label: '랭킹', icon: Star },
-    { path: '/favorites', label: '즐겨찾기', icon: Heart },
+    { path: '/favorites', label: '즐겨찾기', icon: Star },
     { path: '/brand-register', label: '브랜드 등록', icon: Building2 },
   ];
 
@@ -248,7 +287,6 @@ export function Layout({ children }: LayoutProps) {
     { path: '/agency/athletes', label: '소속 선수', icon: Users },
     { path: '/agency/athletes/search', label: '선수 검색/연결', icon: User },
     { path: '/agency/requests', label: '보낸 요청', icon: FileText },
-    { path: '/agency/athletes/register', label: '새 선수 등록', icon: User },
     { path: '/profile', label: '프로필', icon: Briefcase },
   ];
 
@@ -295,9 +333,7 @@ export function Layout({ children }: LayoutProps) {
       {user && (
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/25">
-            <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </div>
+          <img src="/logo-48.png" alt="SPONPIK" className="w-8 h-8 rounded-lg" />
           <span className="font-bold text-slate-900 tracking-tight">SPONPIK</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -349,11 +385,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Logo */}
           <div className="flex items-center justify-between h-14 lg:h-16 px-4 lg:px-6 border-b border-slate-200">
             <Link to="/" className="flex items-center gap-3" onClick={closeMobileMenu}>
-              <div className="relative">
-                <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                  <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
-                </div>
-              </div>
+              <img src="/logo-48.png" alt="SPONPIK" className="w-9 h-9 rounded-xl shadow-lg" />
               <span className="font-bold text-slate-900 tracking-tight">SPONPIK</span>
             </Link>
             <button
@@ -366,28 +398,11 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={closeMobileMenu}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
-                    isActive
-                      ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/5 text-slate-900 border border-emerald-500/30'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
-                  )}
-                >
-                  <Icon className={cn('w-5 h-5', isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600')} />
-                  {item.label}
-                  {isActive && <ChevronRight className="w-4 h-4 ml-auto text-emerald-600" />}
-                </Link>
-              );
-            })}
+            <NavSections
+              items={navItems}
+              isActive={(p) => location.pathname === p}
+              onClick={closeMobileMenu}
+            />
           </nav>
 
           {/* User Menu */}
@@ -498,9 +513,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               <Link to="/" className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                  <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
-                </div>
+                <img src="/logo-48.png" alt="SPONPIK" className="w-9 h-9 rounded-xl shadow-lg" />
                 <span className="font-bold text-slate-900 tracking-tight text-lg">SPONPIK</span>
               </Link>
               <div className="flex items-center gap-3">
@@ -530,5 +543,63 @@ export function Layout({ children }: LayoutProps) {
         <div className={user ? "p-4 lg:p-8" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>{children}</div>
       </main>
     </div>
+  );
+}
+
+/**
+ * NavSections — 네비게이션을 "기본" vs "🔥 풀 퍼널" 섹션으로 분리
+ * 풀 퍼널 섹션은 기본 접힘 상태로 시작
+ */
+function NavSections({ items, isActive, onClick }: {
+  items: { path: string; label: string; icon: any }[];
+  isActive: (p: string) => boolean;
+  onClick: () => void;
+}) {
+  const [funnelOpen, setFunnelOpen] = useState(() => {
+    // 현재 경로가 funnel 하위면 자동 열림
+    return typeof window !== 'undefined' && /\/funnel\//.test(window.location.pathname);
+  });
+
+  const funnelItems = items.filter((i) => i.label.startsWith('🔥'));
+  const regularItems = items.filter((i) => !i.label.startsWith('🔥'));
+
+  const renderItem = (item: any) => {
+    const active = isActive(item.path);
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        onClick={onClick}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group',
+          active
+            ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/5 text-slate-900 border border-emerald-500/30'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
+        )}
+      >
+        <Icon className={cn('w-5 h-5', active ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600')} />
+        {item.label.replace(/^🔥\s*/, '')}
+        {active && <ChevronRight className="w-4 h-4 ml-auto text-emerald-600" />}
+      </Link>
+    );
+  };
+
+  return (
+    <>
+      {regularItems.map(renderItem)}
+      {funnelItems.length > 0 && (
+        <div className="pt-3 mt-3 border-t border-slate-200">
+          <button
+            onClick={() => setFunnelOpen(!funnelOpen)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-emerald-600 uppercase tracking-wider hover:bg-slate-50 rounded-lg"
+          >
+            <span>🔥 풀 퍼널 ({funnelItems.length})</span>
+            <ChevronRight className={cn('w-4 h-4 transition-transform', funnelOpen && 'rotate-90')} />
+          </button>
+          {funnelOpen && <div className="mt-1 space-y-1">{funnelItems.map(renderItem)}</div>}
+        </div>
+      )}
+    </>
   );
 }
