@@ -3,6 +3,7 @@
  *
  * - 배진리, 송유나, 오세희, 이예빈, 안예인
  * - User(ATHLETE) + Athlete 프로필 함께 생성 (idempotent: email upsert)
+ * - SPONPIK 론칭 4. 권장 데이터 항목: height/region/debutYear/affiliation/sportType 구조화
  *
  * 실행:
  *   로컬: npx ts-node prisma/seed-athletes.ts
@@ -23,6 +24,12 @@ interface AthleteSeed {
   profileImageUrl: string | null;
   socialLinks: Record<string, string>;
   primarySponsors: string[];
+  // 구조화 필드 (SPONPIK 4. 권장 데이터 항목)
+  height: number;        // cm
+  region: string;        // 거주 지역
+  debutYear: number;     // 데뷔 연도 (KLPGA 정/준회원)
+  affiliation: string | null; // 소속팀/소속사
+  sportType: string;     // GOLF / SCREEN_GOLF / ...
   // 추가 메타 (career)
   careerJson: any;
 }
@@ -37,6 +44,11 @@ const ATHLETES: AthleteSeed[] = [
     profileImageUrl: '/golfers/an-yein.jpeg',
     socialLinks: { instagram: 'yenisfree' },
     primarySponsors: ['SBSGOLF'],
+    height: 176,
+    region: '경기도 성남시',
+    debutYear: 2018,
+    affiliation: 'SBSGOLF',
+    sportType: 'GOLF',
     careerJson: {
       height: '176cm',
       birthDate: '1998-05-03',
@@ -65,6 +77,11 @@ const ATHLETES: AthleteSeed[] = [
     profileImageUrl: '/golfers/bae-jinri.jpeg',
     socialLinks: { instagram: 'hjissiir' },
     primarySponsors: [],
+    height: 170,
+    region: '경기도 하남시',
+    debutYear: 2020,
+    affiliation: null,
+    sportType: 'GOLF',
     careerJson: {
       height: '170cm',
       birthDate: '2001-03-21',
@@ -91,6 +108,11 @@ const ATHLETES: AthleteSeed[] = [
     profileImageUrl: '/golfers/song-yuna.jpeg',
     socialLinks: { instagram: '_yuna_ssong' },
     primarySponsors: ['르꼬끄 골프'],
+    height: 165,
+    region: '서울 성동구',
+    debutYear: 2021,
+    affiliation: '르꼬끄 골프',
+    sportType: 'GOLF',
     careerJson: {
       height: '165cm',
       birthDate: '1998-03-13',
@@ -116,6 +138,11 @@ const ATHLETES: AthleteSeed[] = [
     profileImageUrl: '/golfers/oh-sehee.jpeg',
     socialLinks: { instagram: 'oosshh_love' },
     primarySponsors: ['마스터바니', '휠라'],
+    height: 168,
+    region: '경기도 화성시',
+    debutYear: 2020,
+    affiliation: '마스터바니',
+    sportType: 'GOLF',
     careerJson: {
       height: '168cm',
       birthDate: '1998-07-09',
@@ -145,6 +172,11 @@ const ATHLETES: AthleteSeed[] = [
     profileImageUrl: '/golfers/lee-yebin.jpeg',
     socialLinks: { instagram: 'yaeproda' },
     primarySponsors: [],
+    height: 168,
+    region: '서울 구로구',
+    debutYear: 2021,
+    affiliation: null,
+    sportType: 'GOLF',
     careerJson: {
       height: '168cm',
       birthDate: '2000-11-16',
@@ -163,8 +195,43 @@ const ATHLETES: AthleteSeed[] = [
   },
 ];
 
+async function ensureSports() {
+  // SPONPIK 1차: 골프 + 스크린골프 (트리 구조)
+  const sports = [
+    { code: 'GOLF', name: '골프', parentCode: null, displayOrder: 10 },
+    { code: 'SCREEN_GOLF', name: '스크린골프', parentCode: 'GOLF', displayOrder: 11 },
+    // 향후 확장 (비활성화 상태로 시드)
+    { code: 'BASEBALL', name: '야구', parentCode: null, displayOrder: 20, isActive: false },
+    { code: 'SOCCER', name: '축구', parentCode: null, displayOrder: 30, isActive: false },
+    { code: 'VOLLEYBALL', name: '배구', parentCode: null, displayOrder: 40, isActive: false },
+    { code: 'BASKETBALL', name: '농구', parentCode: null, displayOrder: 50, isActive: false },
+  ];
+  for (const s of sports) {
+    await prisma.sport.upsert({
+      where: { code: s.code },
+      update: {
+        name: s.name,
+        parentCode: s.parentCode,
+        displayOrder: s.displayOrder,
+        isActive: (s as any).isActive ?? true,
+      },
+      create: {
+        code: s.code,
+        name: s.name,
+        parentCode: s.parentCode,
+        displayOrder: s.displayOrder,
+        isActive: (s as any).isActive ?? true,
+      },
+    });
+  }
+  console.log(`🏷️  Sport 카테고리 ${sports.length}개 시드/갱신 완료`);
+}
+
 async function main() {
   console.log(`🌱 5명 프로골퍼 시드 시작...\n`);
+
+  await ensureSports();
+  const golfSport = await prisma.sport.findUnique({ where: { code: 'GOLF' } });
 
   for (const a of ATHLETES) {
     const passwordHash = await bcrypt.hash(a.password, 12);
@@ -180,6 +247,12 @@ async function main() {
             profileImageUrl: a.profileImageUrl,
             socialLinks: a.socialLinks,
             primarySponsors: a.primarySponsors as any,
+            height: a.height,
+            region: a.region,
+            debutYear: a.debutYear,
+            affiliation: a.affiliation,
+            sportType: a.sportType,
+            sportId: golfSport?.id ?? null,
           },
         },
       },
@@ -196,13 +269,19 @@ async function main() {
             socialLinks: a.socialLinks,
             primarySponsors: a.primarySponsors as any,
             kycStatus: 'APPROVED',
+            height: a.height,
+            region: a.region,
+            debutYear: a.debutYear,
+            affiliation: a.affiliation,
+            sportType: a.sportType,
+            sportId: golfSport?.id ?? null,
           },
         },
       },
       include: { athlete: true },
     });
 
-    console.log(`✅ ${a.name} (${a.tour}) - id: ${result.athlete?.id}`);
+    console.log(`✅ ${a.name} (${a.tour}) - id: ${result.athlete?.id} | ${a.height}cm · ${a.region} · ${a.debutYear}년 데뷔`);
   }
 
   console.log(`\n✨ 완료. 총 ${ATHLETES.length}명 시드됨.`);

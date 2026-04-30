@@ -144,6 +144,13 @@ model Athlete {
   socialLinks       Json?     @map("social_links")
   primarySponsors   Json?     @map("primary_sponsors")
   blockedCategories String[]  @map("blocked_categories")
+  // SPONPIK 론칭 4. 권장 데이터 항목 — 구조화 필드
+  height            Int?      // 신장 (cm)
+  region            String?   // 출신/거주 지역
+  debutYear         Int?      @map("debut_year")    // 데뷔 연도 (예: 2018)
+  affiliation       String?   // 소속팀/소속사 (tour와 별개의 소속)
+  sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
+  sportId           String?   @map("sport_id")
   kycStatus         KycStatus @default(NOT_SUBMITTED) @map("kyc_status")
   kycDocuments      Json?     @map("kyc_documents")
   bankAccount       Json?     @map("bank_account")
@@ -155,6 +162,7 @@ model Athlete {
 
   user                User                   @relation(fields: [userId], references: [id])
   agency              Agency?                @relation(fields: [agencyId], references: [id])
+  sport               Sport?                 @relation(fields: [sportId], references: [id])
   slotInstances       SlotInstance[]
   contracts           Contract[]
   eventParticipations EventParticipation[]
@@ -330,6 +338,30 @@ model BrandRegistrationRequest {
 }
 
 // ============================================
+// Sport (종목 카테고리 - SPONPIK 1차: 골프/스크린골프, 향후 확장)
+// ============================================
+
+model Sport {
+  id           String   @id @default(uuid())
+  code         String   @unique // GOLF / SCREEN_GOLF / BASEBALL / SOCCER / VOLLEYBALL ...
+  name         String   // "골프", "스크린골프", "야구", "축구", "배구" ...
+  parentCode   String?  @map("parent_code") // 상위 카테고리 (예: SCREEN_GOLF -> GOLF)
+  description  String?
+  iconUrl      String?  @map("icon_url")
+  displayOrder Int      @default(0) @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  athletes Athlete[]
+  events   Event[]
+
+  @@index([parentCode])
+  @@index([isActive, displayOrder])
+  @@map("sports")
+}
+
+// ============================================
 // Event (Tournament/Broadcast)
 // ============================================
 
@@ -344,6 +376,13 @@ model Event {
   multiplier       Float       @default(1.0)
   venue            String?
   status           EventStatus @default(UPCOMING)
+  // SPONPIK 론칭 3-2/3-3 — 대회 카테고리/예선/표시순서/관리자 활성화 토글
+  category         String?     // 정규투어 / 시드전 / 드림투어 / 점프투어 / 챔피언스 / 친선전 등
+  qualifyingDate   DateTime?   @map("qualifying_date") // 예선 일자
+  displayOrder     Int         @default(0) @map("display_order") // 노출 우선순위 (낮을수록 상단)
+  isActive         Boolean     @default(true) @map("is_active") // 관리자 활성화 토글
+  activeDays       Int?        @map("active_days") // 슬롯 활성화 N일 (관리자 우선)
+  sportId          String?     @map("sport_id")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -366,7 +405,10 @@ model Event {
   participations    EventParticipation[]
   creativeApprovals BrandEventCreativeApproval[]
   vodAssets         VodAsset[]
+  sport             Sport?                       @relation(fields: [sportId], references: [id])
 
+  @@index([isActive, displayOrder])
+  @@index([sportId, dateStart])
   @@map("events")
 }
 
@@ -505,6 +547,10 @@ model SlotInstance {
   reservePrice    Int        @map("reserve_price")
   status          SlotStatus @default(OPEN)
   overrideSpecs   Json?      @map("override_specs")
+  // SPONPIK 론칭 — 슬롯 표시 보조 필드 (관리자 우선 정책)
+  slotName        String?    @map("slot_name") // 노출용 슬롯명 (없으면 SlotTemplate.name 사용)
+  slotOrder       Int?       @map("slot_order") // 정렬 순서 (낮을수록 상단)
+  isActive        Boolean    @default(true) @map("is_active") // 운영자 비활성화 토글
   // Sale Mode Fields
   enableAuction   Boolean    @default(true) @map("enable_auction")
   enableDirectBuy Boolean    @default(false) @map("enable_direct_buy")

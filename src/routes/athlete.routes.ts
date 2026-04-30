@@ -31,6 +31,8 @@ router.get('/public', async (req: Request, res: Response, next: NextFunction) =>
         select: {
           id: true, name: true, tour: true, profileImageUrl: true, bio: true,
           socialLinks: true, primarySponsors: true,
+          // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
+          height: true, region: true, debutYear: true, affiliation: true, sportType: true,
         },
         orderBy: { createdAt: 'desc' },
         take, skip,
@@ -55,6 +57,9 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         id: true, name: true, realName: true, tour: true,
         profileImageUrl: true, bio: true, socialLinks: true, primarySponsors: true,
         createdAt: true,
+        // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
+        height: true, region: true, debutYear: true, affiliation: true, sportType: true,
+        sport: { select: { code: true, name: true, parentCode: true } },
       },
     });
     if (!athlete) {
