@@ -36,8 +36,43 @@ const MOCK_BIDS = [
   { delta: 2_000_000, timeAgoMin: 120 },
 ];
 
+async function backfillSlotIntegrity() {
+  // docx 4 권장 데이터: 누락된 slot_name/slot_order 일괄 보강 (5명 시드 외 기존 슬롯도 정리)
+  const orphans = await prisma.slotInstance.findMany({
+    where: { OR: [{ slotName: null }, { slotOrder: null }] },
+    include: { athlete: { select: { name: true } }, slotTemplate: { select: { name: true } } },
+    take: 500,
+  });
+  if (orphans.length === 0) return;
+  console.log(`🧹 slot_name/slot_order 누락 슬롯 ${orphans.length}개 보강 중...`);
+  // athlete별 그룹화 후 순서 부여
+  const grouped: Record<string, typeof orphans> = {};
+  for (const s of orphans) {
+    const k = s.athleteId;
+    if (!grouped[k]) grouped[k] = [];
+    grouped[k].push(s);
+  }
+  for (const [aid, list] of Object.entries(grouped)) {
+    let idx = 0;
+    for (const s of list) {
+      await prisma.slotInstance.update({
+        where: { id: s.id },
+        data: {
+          slotName: s.slotName ?? `${s.athlete?.name ?? '선수'} · ${s.slotTemplate?.name ?? '슬롯'}`,
+          slotOrder: s.slotOrder ?? (idx + 1) * 10,
+        },
+      });
+      idx++;
+    }
+  }
+  console.log(`✅ ${orphans.length}개 슬롯 정합성 보강 완료\n`);
+}
+
 async function main() {
   console.log('🌱 5명 선수 슬롯/경매/입찰 시드 시작...\n');
+
+  // 0) 기존 데이터 정합성 보강 (slot_name/slot_order)
+  await backfillSlotIntegrity();
 
   // 1) SlotTemplate upsert
   for (const t of SLOT_TEMPLATES) {
@@ -59,8 +94,14 @@ async function main() {
   }
   console.log(`✅ ${SLOT_TEMPLATES.length}개 슬롯 템플릿 준비\n`);
 
-  // 2) 기본 Event 확보 (없으면 생성)
+  // 2) 기본 Event 확보 (docx 4 권장 데이터: category/qualifying_date/display_order/sport)
   const now = new Date();
+  // 골프 종목 ID 확보
+  const golfSport = await prisma.sport.findUnique({ where: { code: 'GOLF' } });
+  const eventStart = new Date(now.getTime() + 7 * 86400000);
+  const eventEnd = new Date(now.getTime() + 10 * 86400000);
+  const eventQualifying = new Date(now.getTime() + 5 * 86400000); // 본선 2일 전 예선
+
   let event = await prisma.event.findFirst({
     where: { name: { contains: 'GTOUR' } },
     orderBy: { dateStart: 'desc' },
@@ -70,17 +111,60 @@ async function main() {
       data: {
         tour: 'KLPGA',
         name: '2026 KLPGA 시즌 오픈전',
-        dateStart: new Date(now.getTime() + 7 * 86400000),  // 7일 후 시작
-        dateEnd: new Date(now.getTime() + 10 * 86400000),
+        dateStart: eventStart,
+        dateEnd: eventEnd,
         status: 'UPCOMING',
         venue: '클럽D 사이판CC',
         multiplier: 1.0,
+        // SPONPIK 4. 권장 데이터 항목
+        category: '정규투어',
+        qualifyingDate: eventQualifying,
+        displayOrder: 10,
+        isActive: true,
+        activeDays: 14,
+        sportId: golfSport?.id ?? null,
       },
     });
-    console.log(`✅ 신규 Event 생성: ${event.name}\n`);
+    console.log(`✅ 신규 Event 생성: ${event.name} [${event.category}]\n`);
   } else {
-    console.log(`✅ 기존 Event 활용: ${event.name}\n`);
+    // 기존 Event라도 docx 4 필드 누락 시 갱신
+    if (!event.category || !event.qualifyingDate || !event.sportId) {
+      event = await prisma.event.update({
+        where: { id: event.id },
+        data: {
+          category: event.category ?? '정규투어',
+          qualifyingDate: event.qualifyingDate ?? eventQualifying,
+          displayOrder: event.displayOrder || 10,
+          activeDays: event.activeDays ?? 14,
+          sportId: event.sportId ?? golfSport?.id ?? null,
+        },
+      });
+      console.log(`✅ 기존 Event 보강: ${event.name} [${event.category}]\n`);
+    } else {
+      console.log(`✅ 기존 Event 활용: ${event.name}\n`);
+    }
   }
+
+  // 다른 GTOUR 이벤트들도 docx 4 필드 일괄 보강 (운영 정합성)
+  const otherEvents = await prisma.event.findMany({
+    where: {
+      name: { contains: 'GTOUR' },
+      OR: [{ category: null }, { sportId: null }, { qualifyingDate: null }],
+    },
+  });
+  for (const e of otherEvents) {
+    await prisma.event.update({
+      where: { id: e.id },
+      data: {
+        category: e.category ?? '정규투어',
+        sportId: e.sportId ?? golfSport?.id ?? null,
+        qualifyingDate: e.qualifyingDate ?? new Date(new Date(e.dateStart).getTime() - 2 * 86400000),
+        displayOrder: e.displayOrder || 20,
+        activeDays: e.activeDays ?? 14,
+      },
+    });
+  }
+  if (otherEvents.length > 0) console.log(`🧹 기존 ${otherEvents.length}개 GTOUR Event 정합성 보강\n`);
 
   // 3) 첫 brand (입찰 시뮬레이션용) 확보
   const brands = await prisma.brand.findMany({ take: 3 });
@@ -108,9 +192,25 @@ async function main() {
         where: { athleteId: athlete.id, slotTemplateId: tpl.id, eventId: event.id },
       });
 
+      // SPONPIK 4. 권장 데이터: slot_name (관리자 노출용 별칭) / slot_order (정렬 순서)
+      const desiredSlotName = `${athleteName} · ${tpl.name}`;
+      const desiredSlotOrder = (slotIdx + 1) * 10; // 10/20/30... (사이 추가 가능)
+
       let slot: any;
       if (existing) {
-        slot = existing;
+        // 기존 슬롯에 slot_name/slot_order 누락이면 보강
+        if (existing.slotName == null || existing.slotOrder == null) {
+          slot = await prisma.slotInstance.update({
+            where: { id: existing.id },
+            data: {
+              slotName: existing.slotName ?? desiredSlotName,
+              slotOrder: existing.slotOrder ?? desiredSlotOrder,
+              isActive: existing.isActive ?? true,
+            },
+          });
+        } else {
+          slot = existing;
+        }
       } else {
         slot = await prisma.slotInstance.create({
           data: {
@@ -122,6 +222,10 @@ async function main() {
             enableAuction: true,
             enableDirectBuy: false,
             auctionEndAt: new Date(now.getTime() + 7 * 86400000),
+            // SPONPIK 4. 권장 데이터 항목
+            slotName: desiredSlotName,
+            slotOrder: desiredSlotOrder,
+            isActive: true,
           },
         });
       }
