@@ -151,6 +151,7 @@ model Athlete {
   affiliation       String?   // 소속팀/소속사 (tour와 별개의 소속)
   sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
   sportId           String?   @map("sport_id")
+  isActive          Boolean   @default(true) @map("is_active")  // 운영 활성/비활성 (관리자 토글, docx 4. status)
   kycStatus         KycStatus @default(NOT_SUBMITTED) @map("kyc_status")
   kycDocuments      Json?     @map("kyc_documents")
   bankAccount       Json?     @map("bank_account")

@@ -12,14 +12,19 @@ const router = Router();
  */
 router.get('/public', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { q, tour, page = '1', limit = '24' } = req.query as any;
-    const where: any = {};
+    const { q, tour, sportType, sport, page = '1', limit = '24' } = req.query as any;
+    const where: any = { isActive: true }; // docx 4. status — 운영 비활성 선수 제외
     if (tour) where.tour = tour;
+    // SPONPIK 3-8 — 종목별 소팅
+    const sportFilter = sportType || sport;
+    if (sportFilter) where.sportType = String(sportFilter).toUpperCase();
     if (q) {
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
         { realName: { contains: q, mode: 'insensitive' } },
         { tour: { contains: q, mode: 'insensitive' } },
+        { affiliation: { contains: q, mode: 'insensitive' } },
+        { region: { contains: q, mode: 'insensitive' } },
       ];
     }
     const take = Math.min(50, Number(limit) || 24);
@@ -70,7 +75,10 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
     // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터) + GTOUR 경기결과
     const [slotInstances, exposureCount, athleteEvents, eventResults] = await Promise.all([
       prisma.slotInstance.findMany({
-        where: { athleteId: req.params.id },
+        where: {
+          athleteId: req.params.id,
+          isActive: true, // docx 3-2: 비활성 슬롯 노출 제외
+        },
         include: {
           slotTemplate: { select: { name: true, code: true, bodyPart: true, category: true, grade: true } },
           auction: {
@@ -82,16 +90,18 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
                   id: true, maxBid: true, currentProxy: true, isWinning: true, createdAt: true,
                   brand: { select: { name: true } },
                 },
-                orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'desc' }, // docx 3-4: 최신순
                 take: 10,
               },
             },
           },
           event: { select: { id: true, name: true, dateStart: true, dateEnd: true, status: true, venue: true } },
         },
+        // docx 3-2 + 4 — 정렬: 관리자 slotOrder > 상태(OPEN/IN_AUCTION 우선) > 등록 순
         orderBy: [
-          { status: 'asc' }, // OPEN, IN_AUCTION 우선
-          { createdAt: 'asc' }, // 등록 순
+          { slotOrder: { sort: 'asc', nulls: 'last' } },
+          { status: 'asc' },
+          { createdAt: 'asc' },
         ],
       }).catch((e) => { console.error('[athlete public] slot fetch error', e); return []; }),
       prisma.roiExposure.count({ where: { athleteId: req.params.id } as any }).catch(() => 0),
