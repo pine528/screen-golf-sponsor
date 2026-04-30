@@ -380,6 +380,45 @@ router.get('/me/slots', authenticate, authorize('ATHLETE'), athleteController.ge
 router.patch('/me', authenticate, authorize('ATHLETE'), athleteController.update);
 
 /**
+ * @route PATCH /athletes/admin/:id
+ * @desc 관리자: 임의 선수 프로필 갱신 (구조화 필드 + isActive 포함)
+ *  SPONPIK 4. 권장 데이터 항목 운영 — 관리자 우선 정책
+ */
+router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const {
+      name, realName, bio, profileImageUrl, socialLinks, primarySponsors,
+      height, region, debutYear, affiliation, sportType, sportId, isActive,
+      kycStatus, blockedCategories,
+    } = req.body || {};
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (realName !== undefined) data.realName = realName;
+    if (bio !== undefined) data.bio = bio;
+    if (profileImageUrl !== undefined) data.profileImageUrl = profileImageUrl;
+    if (socialLinks !== undefined) data.socialLinks = socialLinks;
+    if (primarySponsors !== undefined) data.primarySponsors = primarySponsors;
+    if (blockedCategories !== undefined) data.blockedCategories = blockedCategories;
+    if (height !== undefined) data.height = height === '' ? null : Number(height);
+    if (region !== undefined) data.region = region || null;
+    if (debutYear !== undefined) data.debutYear = debutYear === '' ? null : Number(debutYear);
+    if (affiliation !== undefined) data.affiliation = affiliation || null;
+    if (sportType !== undefined) data.sportType = sportType || null;
+    if (sportId !== undefined) data.sportId = sportId || null;
+    if (typeof isActive === 'boolean') data.isActive = isActive;
+    if (kycStatus !== undefined) data.kycStatus = kycStatus;
+
+    if (Object.keys(data).length === 0) {
+      res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '변경할 필드가 없습니다.' } });
+      return;
+    }
+    const updated = await prisma.athlete.update({ where: { id }, data });
+    res.json({ success: true, data: updated, error: null });
+  } catch (e) { next(e); }
+});
+
+/**
  * @route PATCH /athletes/me/bank
  * @desc Update bank information
  */

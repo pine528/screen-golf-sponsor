@@ -97,6 +97,14 @@ export class AthleteService {
     bankName?: string;
     bankAccount?: string;
     bankHolder?: string;
+    // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
+    height?: number | null;
+    region?: string | null;
+    debutYear?: number | null;
+    affiliation?: string | null;
+    sportType?: string | null;
+    sportId?: string | null;
+    isActive?: boolean;
   }) {
     console.log('[AthleteService.update] Input:', { id, userId, data });
 
@@ -126,6 +134,16 @@ export class AthleteService {
     if (data.socialMedia !== undefined) updateData.socialLinks = { instagram: data.socialMedia };
     if (data.blockedCategories !== undefined) updateData.blockedCategories = data.blockedCategories;
     if (data.primarySponsors !== undefined) updateData.primarySponsors = data.primarySponsors;
+
+    // SPONPIK 4. 권장 데이터 항목 (구조화 필드) — 선수가 직접 수정 가능
+    if (data.height !== undefined) updateData.height = data.height;
+    if (data.region !== undefined) updateData.region = data.region;
+    if (data.debutYear !== undefined) updateData.debutYear = data.debutYear;
+    if (data.affiliation !== undefined) updateData.affiliation = data.affiliation;
+    if (data.sportType !== undefined) updateData.sportType = data.sportType;
+    if (data.sportId !== undefined) updateData.sportId = data.sportId;
+    // isActive는 운영자 전용 토글 — service.update에서는 제외
+    // (관리자 전용 라우트 별도 필요)
 
     // 은행 정보는 bankAccount JSON 필드에 저장
     if (data.bankName !== undefined || data.bankAccount !== undefined || data.bankHolder !== undefined) {
