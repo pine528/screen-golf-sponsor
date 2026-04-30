@@ -114,6 +114,123 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
   } catch (e) { next(e); }
 });
 
+/**
+ * @route GET /athletes/public/:id/roi-dashboard
+ * @desc 선수별 ROI 대시보드 (docx 3-5)
+ *  - 5개 카테고리, 13개 지표
+ *  - 미수집 값은 null (프론트가 - 표기)
+ */
+router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const athleteId = req.params.id;
+
+    // 선수 존재 검증
+    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId }, select: { id: true } });
+    if (!athlete) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Athlete not found' } });
+      return;
+    }
+
+    // 병렬 집계
+    const [
+      funnelEventsByName,
+      orderAgg,
+      newCustomerCount,
+      promoCodes,
+      slotsCount,
+      latestEventResult,
+    ] = await Promise.all([
+      // 풀퍼널 이벤트 카운트
+      prisma.funnelEvent.groupBy({
+        by: ['eventName'],
+        where: { athleteId },
+        _count: { _all: true },
+      }).catch(() => []),
+      // 주문 집계
+      prisma.funnelOrder.aggregate({
+        where: { athleteId },
+        _sum: { netAmount: true, refundedAmount: true, grossAmount: true },
+        _count: { _all: true },
+      }).catch(() => null),
+      // 신규 고객 수
+      prisma.funnelOrder.count({ where: { athleteId, isNewCustomer: true } }).catch(() => 0),
+      // 프로모션 코드 (쿠폰 사용량)
+      prisma.promoCode.findMany({
+        where: { athleteId },
+        select: { id: true, code: true, usageCount: true, status: true },
+      }).catch(() => []),
+      // 슬롯 수
+      prisma.slotInstance.count({ where: { athleteId } }).catch(() => 0),
+      // 최신 경기결과 (선수 성적)
+      prisma.athleteEventResult.findFirst({
+        where: { athleteId, rank: { not: null } },
+        orderBy: { eventDate: 'desc' },
+        select: { eventName: true, rank: true, score: true, eventDate: true },
+      }).catch(() => null),
+    ]);
+
+    const eventCounts: Record<string, number> = {};
+    funnelEventsByName.forEach((g: any) => { eventCounts[g.eventName] = g._count._all; });
+
+    const purchases = orderAgg?._count._all || 0;
+    const grossRevenue = Number(orderAgg?._sum.grossAmount || 0);
+    const netRevenue = Number(orderAgg?._sum.netAmount || 0) - Number(orderAgg?._sum.refundedAmount || 0);
+    const landingViews = eventCounts.LANDING_VIEW || 0;
+    const linkClicks = eventCounts.LINK_CLICK || 0;
+    const totalCouponUsage = promoCodes.reduce((sum: number, c: any) => sum + (c.usageCount || 0), 0);
+
+    // 5개 카테고리 (미수집은 null)
+    const dashboard = {
+      // 1. 미디어 노출 (RoiExposure는 campaignId 기준 → athlete 직접 매핑 어려움 = 미수집)
+      mediaExposure: {
+        broadcastCount: null,        // 중계 노출 횟수
+        broadcastSeconds: null,      // 중계 노출 시간(초)
+        captureCount: null,          // 캡처 수
+      },
+      // 2. 콘텐츠 반응 (MediaMention 등 → 미수집)
+      contentEngagement: {
+        videoViews: null,            // 조회수
+        reach: null,                 // 도달수
+      },
+      // 3. 랜딩 유입 (실데이터)
+      landingTraffic: {
+        clicks: linkClicks || null,
+        visits: landingViews || null,
+      },
+      // 4. 구매 / 전환 / ROI (실데이터)
+      conversion: {
+        conversionRate: landingViews > 0 ? Number((purchases / landingViews).toFixed(4)) : null,
+        revenue: netRevenue || null,
+        cac: null,                   // 캠페인 spent 정보 필요 → 미수집
+        roas: null,                  // 마찬가지로 미수집
+      },
+      // 5. 선수 성과 연계 (실데이터)
+      athletePerformance: {
+        couponUsage: totalCouponUsage || null,
+        latestRank: latestEventResult?.rank || null,
+        latestEventName: latestEventResult?.eventName || null,
+      },
+      // 메타
+      meta: {
+        athleteId,
+        slotsCount,
+        purchases,
+        grossRevenue,
+        promoCodesCount: promoCodes.length,
+        updatedAt: new Date().toISOString(),
+        // null 항목 비율 (수집 진행도)
+        collectionProgress: {
+          // 13개 핵심 지표 중 실제 값이 있는 것의 비율
+          collected: [linkClicks, landingViews, purchases, netRevenue, totalCouponUsage, latestEventResult?.rank].filter(v => v != null && v !== 0).length,
+          total: 13,
+        },
+      },
+    };
+
+    res.json({ success: true, data: dashboard, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
 // ============================================
 // 관리자: 선수 경기결과 CRUD (docx 3-6)
 // ============================================
