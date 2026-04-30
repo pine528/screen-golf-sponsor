@@ -42,7 +42,10 @@ router.get('/public', async (req: Request, res: Response, next: NextFunction) =>
 
 /**
  * @route GET /athletes/public/:id
- * @desc 공개 선수 상세 (비회원 접근)
+ * @desc 공개 선수 상세 (비회원 접근) — docx 3-9 구조
+ *  - 상단: 기본 프로필 + 진행 중 슬롯
+ *  - 중단: 슬롯별 실시간 경매 현황 (각 슬롯의 auction + 최근 입찰 N건)
+ *  - 하단: ROI/경기기록 (값 없으면 - 처리)
  */
 router.get('/public/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -59,20 +62,46 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 활성 슬롯 + 지난 노출 통계 함께 (있으면)
-    const [slotInstances, exposureCount] = await Promise.all([
+    // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터)
+    const [slotInstances, exposureCount, athleteEvents] = await Promise.all([
       prisma.slotInstance.findMany({
         where: { athleteId: req.params.id },
-        select: { id: true, status: true, slotTemplate: { select: { name: true, bodyPart: true } }, currentBid: true } as any,
-        take: 6,
-        orderBy: { createdAt: 'desc' },
-      }).catch(() => []),
+        include: {
+          slotTemplate: { select: { name: true, code: true, bodyPart: true, category: true, grade: true } },
+          auction: {
+            select: {
+              id: true, status: true, currentPrice: true, minBidIncrement: true,
+              startAt: true, endAt: true,
+              bids: {
+                select: {
+                  id: true, maxBid: true, currentProxy: true, isWinning: true, createdAt: true,
+                  brand: { select: { name: true } },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              },
+            },
+          },
+          event: { select: { id: true, name: true, dateStart: true, dateEnd: true, status: true, venue: true } },
+        },
+        orderBy: [
+          { status: 'asc' }, // OPEN, IN_AUCTION 우선
+          { createdAt: 'asc' }, // 등록 순
+        ],
+      }).catch((e) => { console.error('[athlete public] slot fetch error', e); return []; }),
       prisma.roiExposure.count({ where: { athleteId: req.params.id } as any }).catch(() => 0),
+      // 최근 참가 경기 (이미 끝난 것 포함, 최근 5개)
+      prisma.event.findMany({
+        where: { slotInstances: { some: { athleteId: req.params.id } } },
+        select: { id: true, name: true, tour: true, dateStart: true, dateEnd: true, status: true, venue: true, multiplier: true },
+        orderBy: { dateStart: 'desc' },
+        take: 5,
+      }).catch((e) => { console.error('[athlete public] events error', e); return []; }),
     ]);
 
     res.json({
       success: true,
-      data: { athlete, slotInstances, exposureCount },
+      data: { athlete, slotInstances, exposureCount, recentEvents: athleteEvents },
       error: null,
       request_id: (req as any).requestId,
     });
