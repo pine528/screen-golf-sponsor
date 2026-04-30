@@ -2245,3 +2245,81 @@ model BrandEventCreativeApproval {
 ### 참고
 - 투자자 지향 프레젠테이션 — 기존 사업계획서 docx를 기반으로 실제 개발 데이터 반영
 - 15슬라이드 16:9 (1920×1080), 프리텐다드 폰트, 네이비/블루 컬러 스킴
+
+---
+
+## [2026-04-29] SPONPIK 론칭 보강 — 10개 미충족 항목 전부 구현
+
+### 배경
+SPONPIK 론칭 docx 1차 검수 결과 10개 누락 항목 식별 → 전부 보강.
+
+### 1. Athlete 구조화 필드 (PDF → DB 분리)
+- `athletes`에 `height`, `region`, `debut_year`, `affiliation`, `sport_type`, `sport_id` 추가
+- bio 텍스트에만 있던 데이터를 정식 필드로 승격
+- 5명 시드 재반영 (로컬 + Railway)
+
+### 2. Event 운영 필드
+- `events`에 `category`, `qualifying_date`, `display_order`, `is_active`, `active_days`, `sport_id` 추가
+- 인덱스: `(is_active, display_order)`, `(sport_id, date_start)`
+
+### 3. SlotInstance 표시 필드
+- `slot_instances`에 `slot_name`, `slot_order`, `is_active` 추가
+- SlotTemplate.name fallback 유지 (관리자 입력 시 우선)
+
+### 4. Sport 모델 신규
+- `sports` 테이블: code/name/parent_code/display_order/is_active
+- 1차 활성: GOLF, SCREEN_GOLF
+- 2차 비활성 시드: BASEBALL, SOCCER, VOLLEYBALL, BASKETBALL
+
+### 5. 호가 리스트 (5단계 + 누적)
+- `BidTierLadder` 컴포넌트 → SlotAuctionPanel에 통합
+- 클릭 시 즉시 입찰 (BRAND 권한 + LIVE 상태에서만)
+
+### 6. 관리자 대회 활성화 + N값 화면
+- 신규: `/admin/tournament-activation` (`AdminTournamentActivation.tsx`)
+- 인라인 편집: 카테고리 / 예선일 / N일 / 표시순서 / isActive 토글
+- 신규 API: `PATCH /events/:id/activation`, `GET /events/admin/list`
+
+### 7. 관리자 우선 정책 (3-7)
+- `/events/active` 엔드포인트 갱신:
+  1순위 `Event.activeDays` → 2순위 `?days=N` → 3순위 14일 기본
+- `is_active=false` 대회는 공개 응답에서 제외
+- `MANUAL` 입력은 `GTOUR_API` 자동 동기화 시 덮어쓰지 않음
+
+### 8. Sport API
+- 신규 라우트: `/api/sports` (공개), `/api/sports/admin/all`, `PATCH/POST` (ADMIN)
+
+### 9. 납품 문서 4종
+- `docs/delivery/01_DATA_MAPPING.md` — 외부↔DB↔화면 매핑표
+- `docs/delivery/02_QA_REPORT.md` — 회귀 테스트 + 검수 결과
+- `docs/delivery/03_OPERATIONS_GUIDE.md` — 일일 운영 체크리스트
+- `docs/delivery/04_INTEGRATION_ISSUES.md` — 외부 연동 현황 + 우회책
+- `docs/delivery/README.md` — 인덱스
+
+### 10. UI 노출
+- `/athletes` 카드: 신장 · 지역 · 데뷔 노출
+- `/athletes/:id` Hero: 종목 배지 + 소속 배지 + 176cm · 성남시 · 2018년 데뷔
+
+### 영향받는 파일 (요약)
+- `src/backend/prisma/schema.prisma` — Athlete/Event/SlotInstance 확장 + Sport 신규
+- `src/backend/prisma/seed-athletes.ts` — 구조화 필드 + Sport 시드
+- `src/backend/src/routes/event.routes.ts` — 활성화 토글 + N값 우선 정책
+- `src/backend/src/routes/sport.routes.ts` (NEW)
+- `src/backend/src/routes/athlete.routes.ts` — public 응답에 신규 필드 포함
+- `src/backend/src/routes/index.ts` — sport 라우트 등록
+- `src/frontend/src/pages/PublicAthleteDetail.tsx` — Hero + BidTierLadder
+- `src/frontend/src/pages/PublicAthletes.tsx` — 카드 신장/지역
+- `src/frontend/src/pages/admin/AdminTournamentActivation.tsx` (NEW)
+- `src/frontend/src/components/Layout.tsx` — 사이드바 entry
+- `src/frontend/src/App.tsx` — 라우트
+- `docs/delivery/*` (NEW × 5)
+
+### 검증
+- `npx prisma db push` — 로컬/Railway 모두 성공
+- `npx prisma generate` — 클라이언트 갱신
+- `cd src/backend && npm run build` — 0 error
+- `cd src/frontend && npx tsc --noEmit` — 0 error
+- 5명 선수 시드 재반영 (로컬 + Railway)
+
+### 결론
+SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 운영).

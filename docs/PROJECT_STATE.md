@@ -1,10 +1,44 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-04-23 (Full Funnel Data Reporting Phase 1+2+3 전체 구축)
+> 최종 업데이트: 2026-04-29 (SPONPIK 1차 론칭 보강 — 10개 미충족 항목 전부 구현)
 
 ---
 
-## 0. 풀 퍼널 데이터 리포팅 (Full Funnel) - NEW
+## 0-A. SPONPIK 1차 론칭 보강 (2026-04-29) — NEW
+
+### 0-A.1 Athlete 구조화 필드
+- 기존 bio 텍스트만 있던 신장/지역/데뷔년/소속을 정식 컬럼으로 승격
+- 신규 컬럼: `height`, `region`, `debut_year`, `affiliation`, `sport_type`, `sport_id`
+- UI: `/athletes` 카드 + `/athletes/:id` Hero에 노출
+
+### 0-A.2 Sport 모델
+- 신규 테이블 `sports`: code/name/parent_code/display_order/is_active
+- 1차 활성: GOLF, SCREEN_GOLF
+- 2차 비활성 시드: BASEBALL, SOCCER, VOLLEYBALL, BASKETBALL
+- API: `GET /api/sports`, `PATCH /api/sports/:id` (ADMIN)
+
+### 0-A.3 Event 운영 필드 + 관리자 활성화
+- `events` 신규 컬럼: `category`, `qualifying_date`, `display_order`, `is_active`, `active_days`, `sport_id`
+- 화면: `/admin/tournament-activation` — 토글/N값/카테고리 인라인 편집
+- 관리자 우선 정책: `Event.activeDays > query.days > 14`
+
+### 0-A.4 SlotInstance 표시 보조
+- `slot_instances` 신규 컬럼: `slot_name`, `slot_order`, `is_active`
+- 비어있으면 SlotTemplate.name 사용
+
+### 0-A.5 호가 리스트 (5단계 + 누적)
+- `BidTierLadder` 컴포넌트 → SlotAuctionPanel 통합
+- 클릭 시 즉시 입찰 (BRAND + LIVE)
+
+### 0-A.6 납품 문서
+- `docs/delivery/01_DATA_MAPPING.md` — 외부↔DB↔화면 매핑
+- `docs/delivery/02_QA_REPORT.md` — QA 결과
+- `docs/delivery/03_OPERATIONS_GUIDE.md` — 일일 운영 체크
+- `docs/delivery/04_INTEGRATION_ISSUES.md` — 외부 연동 현황
+
+---
+
+## 0. 풀 퍼널 데이터 리포팅 (Full Funnel)
 
 선수 연계형 프로모션 코드·트래킹 링크·브랜드 미니스토어 기반 매출 증명 시스템
 
