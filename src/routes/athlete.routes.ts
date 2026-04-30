@@ -13,7 +13,12 @@ const router = Router();
 router.get('/public', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { q, tour, sportType, sport, page = '1', limit = '24' } = req.query as any;
-    const where: any = { isActive: true }; // docx 4. status — 운영 비활성 선수 제외
+    // docx 3-8: 회원가입 + 등록 완료된 선수만 노출 (KYC APPROVED 필수)
+    // docx 4. status: is_active=true (운영 활성)
+    const where: any = {
+      isActive: true,
+      kycStatus: 'APPROVED',
+    };
     if (tour) where.tour = tour;
     // SPONPIK 3-8 — 종목별 소팅
     const sportFilter = sportType || sport;
@@ -62,12 +67,14 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         id: true, name: true, realName: true, tour: true,
         profileImageUrl: true, bio: true, socialLinks: true, primarySponsors: true,
         createdAt: true,
-        // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
+        // SPONPIK 4. 권장 데이터 항목 (구조화 필드 + status)
         height: true, region: true, debutYear: true, affiliation: true, sportType: true,
+        isActive: true, kycStatus: true,
         sport: { select: { code: true, name: true, parentCode: true } },
       },
     });
-    if (!athlete) {
+    // docx 3-8: KYC 미승인 또는 비활성 선수는 공개 상세에서 제외 (404)
+    if (!athlete || !athlete.isActive || athlete.kycStatus !== 'APPROVED') {
       res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Athlete not found' } });
       return;
     }
@@ -225,6 +232,24 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         latestRank: latestEventResult?.rank || null,
         latestEventName: latestEventResult?.eventName || null,
       },
+      // SPONPIK docx 4 — roi_score (단일 종합 점수, 0-100)
+      // 산출식: 클릭(20) + 방문(20) + 구매(30) + 쿠폰(20) + 순위(10)
+      // 각 영역에서 데이터가 있으면 비례 점수, 없으면 0점.
+      // 모든 항목이 미수집이면 null (- 표기).
+      roiScore: (() => {
+        const components = [
+          { weight: 20, value: linkClicks > 0 ? Math.min(100, linkClicks / 10) : null },     // 클릭
+          { weight: 20, value: landingViews > 0 ? Math.min(100, landingViews / 50) : null }, // 방문
+          { weight: 30, value: purchases > 0 ? Math.min(100, purchases * 5) : null },         // 구매
+          { weight: 20, value: totalCouponUsage > 0 ? Math.min(100, totalCouponUsage * 2) : null }, // 쿠폰
+          { weight: 10, value: latestEventResult?.rank ? Math.max(0, 100 - latestEventResult.rank * 5) : null }, // 순위
+        ];
+        const collected = components.filter(c => c.value !== null);
+        if (collected.length === 0) return null;
+        const totalWeight = collected.reduce((s, c) => s + c.weight, 0);
+        const score = collected.reduce((s, c) => s + (c.value as number) * c.weight, 0) / totalWeight;
+        return Number(score.toFixed(1));
+      })(),
       // 메타
       meta: {
         athleteId,
