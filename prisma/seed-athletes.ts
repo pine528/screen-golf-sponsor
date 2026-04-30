@@ -233,6 +233,16 @@ async function main() {
   await ensureSports();
   const golfSport = await prisma.sport.findUnique({ where: { code: 'GOLF' } });
 
+  // SPONPIK 1차 론칭 정합성 — 구조화 필드(height) 누락 선수는 자동 비활성
+  // (docx 4 권장 데이터 항목 미충족 시 공개 노출 차단)
+  const cleaned = await prisma.athlete.updateMany({
+    where: { height: null, isActive: true },
+    data: { isActive: false },
+  });
+  if (cleaned.count > 0) {
+    console.log(`🧹 구조화 필드 누락 선수 ${cleaned.count}명 자동 비활성화`);
+  }
+
   for (const a of ATHLETES) {
     const passwordHash = await bcrypt.hash(a.password, 12);
 
