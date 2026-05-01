@@ -50,6 +50,19 @@ export class CampaignAssetsService {
       throw new BadRequestError('Brand mismatch');
     }
 
+    // SPONPIK docx 4 — 비활성/미승인 선수에 대한 자산 생성 차단
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { isActive: true, kycStatus: true },
+    });
+    if (!athlete) throw new NotFoundError('Athlete not found');
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수에 대한 자산 생성은 불가합니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 자산 생성 가능합니다');
+    }
+
     // 기존 자산 존재 여부 (멱등 검증)
     const [existingCode, existingLink, existingStore] = await Promise.all([
       prisma.promoCode.findFirst({ where: { campaignId, athleteId, status: 'ACTIVE' } }),
