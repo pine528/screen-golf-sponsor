@@ -473,18 +473,31 @@ export class AuctionService {
   async processScheduledAuctions() {
     const now = new Date();
 
+    // SPONPIK docx 4 — 비활성 entity 위의 SCHEDULED 경매는 cron에서 자동 시작 차단
     const toStart = await prisma.auction.findMany({
       where: {
         status: 'SCHEDULED',
         startAt: { lte: now },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
       },
     });
 
+    let started = 0;
     for (const auction of toStart) {
-      await this.startAuction(auction.id);
+      try {
+        await this.startAuction(auction.id);
+        started++;
+      } catch (e: any) {
+        // 부분 실패는 무시하고 다음 경매 진행 (이미 비활성 필터링했지만 race condition 대비)
+        console.warn(`[processScheduledAuctions] skip auction ${auction.id}:`, e?.message);
+      }
     }
 
-    return toStart.length;
+    return started;
   }
 
   // Scheduler job: End expired auctions
