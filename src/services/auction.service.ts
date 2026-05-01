@@ -466,12 +466,18 @@ export class AuctionService {
    * Featured Auctions: 어드민이 설정한 특별 공개 경매 목록
    * - isFeatured=true인 LIVE 또는 SCHEDULED 경매
    * - 비로그인 사용자도 조회 가능
+   * - SPONPIK docx 4: 비활성 entity 제외
    */
   async getFeaturedAuctions() {
     return prisma.auction.findMany({
       where: {
         isFeatured: true,
         status: { in: ['LIVE', 'SCHEDULED'] },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
       },
       orderBy: [
         { status: 'asc' }, // LIVE first
