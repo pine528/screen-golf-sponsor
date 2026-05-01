@@ -16,14 +16,32 @@ export class AuctionService {
     maxExtensionSec?: number;
     minBidIncrement?: number;
   }) {
-    // Check slot instance exists and is available
+    // Check slot instance exists and is available (athlete/event 비활성 동시 검증)
     const slotInstance = await prisma.slotInstance.findUnique({
       where: { id: data.slotInstanceId },
-      include: { auction: true },
+      include: {
+        auction: true,
+        athlete: { select: { isActive: true, kycStatus: true } },
+        event: { select: { isActive: true } },
+      },
     });
 
     if (!slotInstance) {
       throw new NotFoundError('Slot instance not found');
+    }
+
+    // SPONPIK docx 4 — 비활성 entity 위에 새 경매 생성 차단
+    if (!slotInstance.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (!slotInstance.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수의 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (slotInstance.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (!slotInstance.event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회의 슬롯에는 경매를 개설할 수 없습니다');
     }
 
     if (slotInstance.status !== 'OPEN') {
