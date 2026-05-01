@@ -13,8 +13,8 @@ const prisma = new PrismaClient();
 // 슬롯 템플릿 정의 (실제 BodyPart enum 값 사용)
 const SLOT_TEMPLATES = [
   { code: 'CAP_F',     name: '모자 정면',   bodyPart: 'CAP_FRONT' as BodyPart,  category: 'CAP' as SlotCategory,   grade: 'S' as SlotGrade, sizeMaxWMm: 50, sizeMaxHMm: 30, basePrice: 5_000_000 },
-  { code: 'CHEST_L',   name: '가슴 좌측',   bodyPart: 'CHEST_L' as BodyPart,    category: 'TOP' as SlotCategory,   grade: 'S' as SlotGrade, sizeMaxWMm: 80, sizeMaxHMm: 80, basePrice: 8_000_000 },
-  { code: 'CHEST_R',   name: '가슴 우측',   bodyPart: 'CHEST_R' as BodyPart,    category: 'TOP' as SlotCategory,   grade: 'S' as SlotGrade, sizeMaxWMm: 80, sizeMaxHMm: 80, basePrice: 8_000_000 },
+  { code: 'CHEST_L',   name: '상의 좌측',   bodyPart: 'CHEST_L' as BodyPart,    category: 'TOP' as SlotCategory,   grade: 'S' as SlotGrade, sizeMaxWMm: 80, sizeMaxHMm: 80, basePrice: 8_000_000 },
+  { code: 'CHEST_R',   name: '상의 우측',   bodyPart: 'CHEST_R' as BodyPart,    category: 'TOP' as SlotCategory,   grade: 'S' as SlotGrade, sizeMaxWMm: 80, sizeMaxHMm: 80, basePrice: 8_000_000 },
   { code: 'SLEEVE_L',  name: '소매 좌측',   bodyPart: 'SLEEVE_L' as BodyPart,   category: 'TOP' as SlotCategory,   grade: 'A' as SlotGrade, sizeMaxWMm: 60, sizeMaxHMm: 60, basePrice: 3_000_000 },
   { code: 'BELT',      name: '벨트',       bodyPart: 'CAP_BACK' as BodyPart,   category: 'PANTS' as SlotCategory, grade: 'B' as SlotGrade, sizeMaxWMm: 50, sizeMaxHMm: 30, basePrice: 2_000_000 },
 ];
@@ -93,11 +93,11 @@ async function main() {
   await backfillEventIntegrity();
   await backfillSlotIntegrity();
 
-  // 1) SlotTemplate upsert
+  // 1) SlotTemplate upsert (이름 변경도 반영 — '가슴 좌/우' → '상의 좌측/우측')
   for (const t of SLOT_TEMPLATES) {
     await prisma.slotTemplate.upsert({
       where: { code: t.code },
-      update: {},
+      update: { name: t.name },
       create: {
         code: t.code,
         name: t.name,

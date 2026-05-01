@@ -322,7 +322,7 @@ async function main() {
     // Phase 1 - TOP (9 slots)
     {
       code: 'CHEST_L',
-      name: '가슴 좌',
+      name: '상의 좌측',
       bodyPart: BodyPart.CHEST_L,
       sizeMaxWMm: 70,
       sizeMaxHMm: 40,
@@ -336,7 +336,7 @@ async function main() {
       phase: 1,
       category: SlotCategory.TOP,
       grade: SlotGrade.S,
-      nameKr: '가슴 좌',
+      nameKr: '상의 좌측',
       nameEn: 'Chest Left',
       uiHeadline: '상체 고정 노출',
       uiCopy: '어드레스/스윙 미디움샷에서 가장 안정적. 가독성과 체류시간 우수.',
@@ -352,7 +352,7 @@ async function main() {
     },
     {
       code: 'CHEST_R',
-      name: '가슴 우',
+      name: '상의 우측',
       bodyPart: BodyPart.CHEST_R,
       sizeMaxWMm: 70,
       sizeMaxHMm: 40,
@@ -366,10 +366,10 @@ async function main() {
       phase: 1,
       category: SlotCategory.TOP,
       grade: SlotGrade.S,
-      nameKr: '가슴 우',
+      nameKr: '상의 우측',
       nameEn: 'Chest Right',
       uiHeadline: '중앙권 노출 확률↑',
-      uiCopy: '가슴 좌와 동급. 카메라 편차에도 상체 중앙권에 걸릴 확률이 높음.',
+      uiCopy: '상의 좌측과 동급. 카메라 편차에도 상체 중앙권에 걸릴 확률이 높음.',
       tags: ['가독성', '안정노출', '미디움'],
       openRule: '대회 설정에 따라 1개만 오픈될 수 있음(의류브랜드/공식스폰 점유)',
       exclusivityGroup: 'CHEST',
@@ -792,7 +792,7 @@ async function main() {
     where: { user: { email: 'athlete@example.com' } },
   });
 
-  // 2. 슬롯 템플릿 가져오기 (CHEST_L: 가슴 좌측)
+  // 2. 슬롯 템플릿 가져오기 (CHEST_L: 상의 좌측)
   const slotTemplate = await prisma.slotTemplate.findUnique({
     where: { code: 'CHEST_L' },
   });
