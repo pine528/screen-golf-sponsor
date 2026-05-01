@@ -251,6 +251,14 @@ router.get('/athletes/:id', async (req: AuthRequest, res: Response, next: NextFu
         kycStatus: true,
         createdAt: true,
         updatedAt: true,
+        // SPONPIK docx 4 권장 데이터 항목
+        height: true,
+        region: true,
+        debutYear: true,
+        affiliation: true,
+        sportType: true,
+        isActive: true,
+        sport: { select: { code: true, name: true } },
         // 민감정보 제외: bankAccount, taxInfo, kycDocuments
         user: {
           select: {
