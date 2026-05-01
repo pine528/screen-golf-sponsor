@@ -238,7 +238,18 @@ export class AuctionService {
   }
 
   async startAuction(id: string) {
-    const auction = await prisma.auction.findUnique({ where: { id } });
+    const auction = await prisma.auction.findUnique({
+      where: { id },
+      include: {
+        slotInstance: {
+          select: {
+            isActive: true,
+            athlete: { select: { isActive: true, kycStatus: true } },
+            event: { select: { isActive: true } },
+          },
+        },
+      },
+    });
 
     if (!auction) {
       throw new NotFoundError('Auction not found');
@@ -246,6 +257,20 @@ export class AuctionService {
 
     if (auction.status !== 'SCHEDULED') {
       throw new BadRequestError('Auction is not in scheduled status');
+    }
+
+    // SPONPIK docx 4 — 비활성 entity 위에서 경매 시작 차단
+    if (!auction.slotInstance.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯의 경매를 시작할 수 없습니다');
+    }
+    if (!auction.slotInstance.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수의 경매를 시작할 수 없습니다');
+    }
+    if (auction.slotInstance.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 경매를 시작할 수 없습니다');
+    }
+    if (!auction.slotInstance.event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회의 경매를 시작할 수 없습니다');
     }
 
     return prisma.auction.update({
