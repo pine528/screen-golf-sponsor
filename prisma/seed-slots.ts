@@ -36,6 +36,24 @@ const MOCK_BIDS = [
   { delta: 2_000_000, timeAgoMin: 120 },
 ];
 
+async function backfillEventIntegrity() {
+  // docx 4 권장 데이터 미충족 (category=null && sportId=null && qualifyingDate=null) 이벤트 비활성
+  const incompleteEvents = await prisma.event.updateMany({
+    where: {
+      isActive: true,
+      AND: [
+        { category: null },
+        { sportId: null },
+        { qualifyingDate: null },
+      ],
+    },
+    data: { isActive: false },
+  });
+  if (incompleteEvents.count > 0) {
+    console.log(`🧹 docx 4 권장 데이터 미충족 이벤트 ${incompleteEvents.count}개 자동 비활성`);
+  }
+}
+
 async function backfillSlotIntegrity() {
   // docx 4 권장 데이터: 누락된 slot_name/slot_order 일괄 보강 (5명 시드 외 기존 슬롯도 정리)
   const orphans = await prisma.slotInstance.findMany({
@@ -71,7 +89,8 @@ async function backfillSlotIntegrity() {
 async function main() {
   console.log('🌱 5명 선수 슬롯/경매/입찰 시드 시작...\n');
 
-  // 0) 기존 데이터 정합성 보강 (slot_name/slot_order)
+  // 0) 기존 데이터 정합성 보강 (event 미충족 + slot_name/slot_order)
+  await backfillEventIntegrity();
   await backfillSlotIntegrity();
 
   // 1) SlotTemplate upsert
