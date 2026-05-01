@@ -32,6 +32,13 @@ export class EventService {
     broadcastEpisode?: string;
     multiplier?: number;
     venue?: string;
+    // SPONPIK 4. 권장 데이터 항목
+    category?: string | null;
+    qualifyingDate?: Date | null;
+    displayOrder?: number;
+    isActive?: boolean;
+    activeDays?: number | null;
+    sportId?: string | null;
   }) {
     return prisma.event.create({
       data: {
@@ -144,6 +151,13 @@ export class EventService {
     multiplier: number;
     venue: string;
     status: EventStatus;
+    // SPONPIK 4. 권장 데이터 항목
+    category: string | null;
+    qualifyingDate: Date | null;
+    displayOrder: number;
+    isActive: boolean;
+    activeDays: number | null;
+    sportId: string | null;
   }>) {
     return prisma.event.update({
       where: { id },
