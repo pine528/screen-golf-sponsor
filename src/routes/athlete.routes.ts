@@ -146,9 +146,12 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
   try {
     const athleteId = req.params.id;
 
-    // 선수 존재 검증
-    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId }, select: { id: true } });
-    if (!athlete) {
+    // 선수 존재 + 활성 검증 (docx 4 — 비활성/미승인 선수 ROI 노출 차단)
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { id: true, isActive: true, kycStatus: true },
+    });
+    if (!athlete || !athlete.isActive || athlete.kycStatus !== 'APPROVED') {
       res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Athlete not found' } });
       return;
     }
