@@ -814,13 +814,28 @@ export class AdminService {
   }) {
     const { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy, directBuyPrice } = data;
 
-    // Validate athlete
-    const athlete = await prisma.athlete.findUnique({ where: { id: athleteId } });
+    // Validate athlete (활성 + KYC 검증, docx 4)
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { id: true, isActive: true, kycStatus: true },
+    });
     if (!athlete) throw new NotFoundError('Athlete not found');
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수에게 추천 경매를 생성할 수 없습니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 추천 경매 생성 가능합니다');
+    }
 
-    // Validate event
-    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    // Validate event (활성 검증)
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, isActive: true },
+    });
     if (!event) throw new NotFoundError('Event not found');
+    if (!event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회에는 추천 경매를 생성할 수 없습니다');
+    }
 
     // Validate slot template
     const template = await prisma.slotTemplate.findUnique({ where: { id: slotTemplateId } });
