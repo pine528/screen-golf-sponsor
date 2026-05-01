@@ -1,5 +1,5 @@
 import prisma from '../models/prisma';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, BadRequestError } from '../utils/errors';
 import { EventStatus } from '@prisma/client';
 
 // 날짜 기반으로 이벤트 상태 계산
@@ -182,6 +182,21 @@ export class EventService {
   }
 
   async addParticipant(eventId: string, athleteId: string) {
+    // SPONPIK docx 4 — 비활성/미승인 선수는 대회 참가 등록 불가
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { isActive: true, kycStatus: true },
+    });
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수는 대회 참가 등록할 수 없습니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 대회 참가 등록 가능합니다');
+    }
+
     return prisma.eventParticipation.create({
       data: {
         eventId,
