@@ -36,6 +36,14 @@ export class DonationService {
       throw new NotFoundError('선수를 찾을 수 없습니다');
     }
 
+    // SPONPIK docx 4 — 비활성/미승인 선수 후원 차단 (재무 우회 방지)
+    if (!athlete.isActive) {
+      throw new BadRequestError('현재 후원을 받지 않는 선수입니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료되지 않은 선수입니다');
+    }
+
     // 3. 자기 자신에게 후원 방지
     if (athlete.userId === donorUserId) {
       throw new BadRequestError('자기 자신에게는 후원할 수 없습니다');
