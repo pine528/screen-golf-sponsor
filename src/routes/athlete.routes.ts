@@ -403,11 +403,46 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
     if (socialLinks !== undefined) data.socialLinks = socialLinks;
     if (primarySponsors !== undefined) data.primarySponsors = primarySponsors;
     if (blockedCategories !== undefined) data.blockedCategories = blockedCategories;
-    if (height !== undefined) data.height = height === '' ? null : Number(height);
-    if (region !== undefined) data.region = region || null;
-    if (debutYear !== undefined) data.debutYear = debutYear === '' ? null : Number(debutYear);
-    if (affiliation !== undefined) data.affiliation = affiliation || null;
-    if (sportType !== undefined) data.sportType = sportType || null;
+    // 범위 검증 (서비스 레이어와 동일 정책)
+    if (height !== undefined) {
+      const h = height === '' || height === null ? null : Number(height);
+      if (h !== null && (isNaN(h) || h < 100 || h > 250)) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '신장은 100~250cm 범위' } });
+        return;
+      }
+      data.height = h;
+    }
+    if (region !== undefined) {
+      if (region && String(region).length > 100) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '거주 지역은 100자 이내' } });
+        return;
+      }
+      data.region = region || null;
+    }
+    if (debutYear !== undefined) {
+      const dy = debutYear === '' || debutYear === null ? null : Number(debutYear);
+      const currentYear = new Date().getFullYear();
+      if (dy !== null && (isNaN(dy) || dy < 1950 || dy > currentYear + 1)) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: `데뷔 연도는 1950~${currentYear + 1} 범위` } });
+        return;
+      }
+      data.debutYear = dy;
+    }
+    if (affiliation !== undefined) {
+      if (affiliation && String(affiliation).length > 200) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '소속은 200자 이내' } });
+        return;
+      }
+      data.affiliation = affiliation || null;
+    }
+    if (sportType !== undefined) {
+      const allowed = ['GOLF', 'SCREEN_GOLF', 'BASEBALL', 'SOCCER', 'VOLLEYBALL', 'BASKETBALL', 'TENNIS'];
+      if (sportType && !allowed.includes(sportType)) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '지원하지 않는 종목' } });
+        return;
+      }
+      data.sportType = sportType || null;
+    }
     if (sportId !== undefined) data.sportId = sportId || null;
     if (typeof isActive === 'boolean') data.isActive = isActive;
     if (kycStatus !== undefined) data.kycStatus = kycStatus;

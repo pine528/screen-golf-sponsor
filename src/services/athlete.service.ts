@@ -1,5 +1,5 @@
 import prisma from '../models/prisma';
-import { NotFoundError, ForbiddenError } from '../utils/errors';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { KycStatus } from '@prisma/client';
 
 export class AthleteService {
@@ -136,11 +136,39 @@ export class AthleteService {
     if (data.primarySponsors !== undefined) updateData.primarySponsors = data.primarySponsors;
 
     // SPONPIK 4. 권장 데이터 항목 (구조화 필드) — 선수가 직접 수정 가능
-    if (data.height !== undefined) updateData.height = data.height;
-    if (data.region !== undefined) updateData.region = data.region;
-    if (data.debutYear !== undefined) updateData.debutYear = data.debutYear;
-    if (data.affiliation !== undefined) updateData.affiliation = data.affiliation;
-    if (data.sportType !== undefined) updateData.sportType = data.sportType;
+    // 범위 검증 (악의적 값 차단)
+    if (data.height !== undefined) {
+      if (data.height !== null && (data.height < 100 || data.height > 250)) {
+        throw new BadRequestError('신장은 100~250cm 범위로 입력해주세요');
+      }
+      updateData.height = data.height;
+    }
+    if (data.region !== undefined) {
+      if (data.region !== null && data.region.length > 100) {
+        throw new BadRequestError('거주 지역은 100자 이내로 입력해주세요');
+      }
+      updateData.region = data.region;
+    }
+    if (data.debutYear !== undefined) {
+      const currentYear = new Date().getFullYear();
+      if (data.debutYear !== null && (data.debutYear < 1950 || data.debutYear > currentYear + 1)) {
+        throw new BadRequestError(`데뷔 연도는 1950~${currentYear + 1} 범위로 입력해주세요`);
+      }
+      updateData.debutYear = data.debutYear;
+    }
+    if (data.affiliation !== undefined) {
+      if (data.affiliation !== null && data.affiliation.length > 200) {
+        throw new BadRequestError('소속은 200자 이내로 입력해주세요');
+      }
+      updateData.affiliation = data.affiliation;
+    }
+    if (data.sportType !== undefined) {
+      // 화이트리스트 검증 (1차 골프/스크린골프)
+      if (data.sportType !== null && !['GOLF', 'SCREEN_GOLF', 'BASEBALL', 'SOCCER', 'VOLLEYBALL', 'BASKETBALL', 'TENNIS'].includes(data.sportType)) {
+        throw new BadRequestError('지원하지 않는 종목입니다');
+      }
+      updateData.sportType = data.sportType;
+    }
     if (data.sportId !== undefined) updateData.sportId = data.sportId;
     // isActive는 운영자 전용 토글 — service.update에서는 제외
     // (관리자 전용 라우트 별도 필요)
