@@ -374,7 +374,12 @@ export class SlotInstanceService {
   ) {
     const slot = await prisma.slotInstance.findUnique({
       where: { id: slotId },
-      include: { auction: true, slotTemplate: true },
+      include: {
+        auction: true,
+        slotTemplate: true,
+        athlete: { select: { isActive: true, kycStatus: true } },
+        event: { select: { isActive: true } },
+      },
     });
 
     if (!slot) {
@@ -383,6 +388,20 @@ export class SlotInstanceService {
 
     if (slot.athleteId !== athleteId) {
       throw new ForbiddenError('Not authorized to update this slot');
+    }
+
+    // SPONPIK docx 4 — 비활성 entity 위에서 판매모드 변경 차단
+    if (!slot.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯의 판매모드를 변경할 수 없습니다');
+    }
+    if (!slot.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수의 슬롯 판매모드를 변경할 수 없습니다');
+    }
+    if (slot.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯 판매모드를 변경할 수 없습니다');
+    }
+    if (!slot.event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회의 슬롯 판매모드를 변경할 수 없습니다');
     }
 
     if (slot.status !== 'OPEN' && slot.status !== 'IN_AUCTION') {
