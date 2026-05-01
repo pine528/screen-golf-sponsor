@@ -114,15 +114,18 @@ export class MiniStoreService {
             id: true, name: true, dateEnd: true,
             contracts: {
               take: 1,
-              include: { contract: { include: { athlete: { select: { id: true, name: true, profileImageUrl: true, tour: true } } } } },
+              include: { contract: { include: { athlete: { select: { id: true, name: true, profileImageUrl: true, tour: true, isActive: true, kycStatus: true } } } } },
             },
           },
         },
       },
     });
     if (!store) throw new NotFoundError('Mini store not found or not published');
-    // 매칭된 첫 선수 정보 평탄화
-    const athlete = store.campaign.contracts[0]?.contract.athlete || null;
+    // 매칭된 첫 선수 정보 평탄화 (SPONPIK docx 4 — 비활성/미승인 선수 정보 노출 차단)
+    const rawAthlete = store.campaign.contracts[0]?.contract.athlete || null;
+    const athlete = rawAthlete && rawAthlete.isActive && rawAthlete.kycStatus === 'APPROVED'
+      ? { id: rawAthlete.id, name: rawAthlete.name, profileImageUrl: rawAthlete.profileImageUrl, tour: rawAthlete.tour }
+      : null;
 
     // wireframe TABLE 31: "Promo Expired" 상태 체크
     const activePromo = await prisma.promoCode.findFirst({
