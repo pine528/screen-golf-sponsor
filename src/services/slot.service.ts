@@ -507,6 +507,20 @@ export class SlotInstanceService {
       throw new NotFoundError('Slot not found');
     }
 
+    // SPONPIK docx 4 — 운영 비활성 entity 차단 (서버 사이드 강제, bid와 동일)
+    if (!slot.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯입니다');
+    }
+    if (!slot.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수입니다');
+    }
+    if (slot.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯입니다');
+    }
+    if (slot.event && (slot.event as any).isActive === false) {
+      throw new BadRequestError('비활성 상태인 대회입니다');
+    }
+
     // ★ 즉시구매 가능 상태 확인: OPEN 또는 IN_AUCTION(경매+즉시구매 둘 다 설정된 경우)
     const validStatuses = ['OPEN', 'IN_AUCTION'];
     if (!validStatuses.includes(slot.status)) {
