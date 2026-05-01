@@ -510,10 +510,29 @@ export class AgencyService {
       throw new ForbiddenError('Not authorized to manage this athlete');
     }
 
-    // 이벤트 확인
-    const event = await prisma.event.findUnique({ where: { id: data.eventId } });
+    // SPONPIK docx 4 — 비활성/미승인 선수 차단
+    const athleteCheck = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { isActive: true, kycStatus: true },
+    });
+    if (!athleteCheck) throw new NotFoundError('Athlete not found');
+    if (!athleteCheck.isActive) {
+      throw new BadRequestError('비활성 상태인 선수에게 슬롯을 일괄 생성할 수 없습니다');
+    }
+    if (athleteCheck.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 슬롯 생성 가능합니다');
+    }
+
+    // 이벤트 확인 (활성 검증 포함)
+    const event = await prisma.event.findUnique({
+      where: { id: data.eventId },
+      select: { id: true, isActive: true },
+    });
     if (!event) {
       throw new NotFoundError('Event not found');
+    }
+    if (!event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회에는 슬롯을 일괄 생성할 수 없습니다');
     }
 
     // 템플릿들 확인
