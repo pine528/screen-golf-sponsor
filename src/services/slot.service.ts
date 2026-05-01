@@ -95,20 +95,32 @@ export class SlotInstanceService {
     slotTemplateId: string;
     reservePrice?: number;
   }) {
-    // Check if event exists
+    // Check if event exists (활성 검증 포함)
     const event = await prisma.event.findUnique({
       where: { id: data.eventId },
+      select: { id: true, isActive: true },
     });
     if (!event) {
       throw new NotFoundError('Event not found');
     }
+    // SPONPIK docx 4 — 비활성 대회에 슬롯 생성 차단
+    if (!event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회에는 슬롯을 생성할 수 없습니다');
+    }
 
-    // Check if athlete exists
+    // Check if athlete exists (활성 + KYC 검증)
     const athlete = await prisma.athlete.findUnique({
       where: { id: data.athleteId },
+      select: { id: true, isActive: true, kycStatus: true },
     });
     if (!athlete) {
       throw new NotFoundError('Athlete not found');
+    }
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수에게 슬롯을 생성할 수 없습니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 슬롯 생성 가능합니다');
     }
 
     // Check if slot template exists
