@@ -180,8 +180,9 @@ export class SlotInstanceService {
     enableDirectBuy?: boolean;
     page?: number;
     limit?: number;
+    includeInactive?: boolean; // ADMIN 전용
   }) {
-    const { eventId, athleteId, slotCode, status, enableDirectBuy, page = 1, limit = 20 } = filters;
+    const { eventId, athleteId, slotCode, status, enableDirectBuy, page = 1, limit = 20, includeInactive = false } = filters;
 
     const where: any = {};
     if (eventId) where.eventId = eventId;
@@ -190,6 +191,12 @@ export class SlotInstanceService {
     if (enableDirectBuy !== undefined) where.enableDirectBuy = enableDirectBuy;
     if (slotCode) {
       where.slotTemplate = { code: slotCode };
+    }
+    // SPONPIK docx 4 — 공개 목록은 비활성 슬롯/선수/대회 제외
+    if (!includeInactive) {
+      where.isActive = true;
+      where.athlete = { isActive: true, kycStatus: 'APPROVED' };
+      where.event = { isActive: true };
     }
 
     const [instances, total] = await Promise.all([
@@ -251,8 +258,12 @@ export class SlotInstanceService {
     maxPrice?: number;
   }) {
     // ★ OPEN (즉시구매만/판매모드 미설정) + IN_AUCTION (경매 활성화) 모두 조회
+    // SPONPIK docx 4 — 비활성 슬롯/선수/대회 제외
     const where: any = {
       status: { in: ['OPEN', 'IN_AUCTION'] },
+      isActive: true,
+      athlete: { isActive: true, kycStatus: 'APPROVED' },
+      event: { isActive: true },
     };
 
     if (filters?.eventId) where.eventId = filters.eventId;

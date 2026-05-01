@@ -107,13 +107,24 @@ export class AuctionService {
     athleteId?: string;
     page?: number;
     limit?: number;
+    includeInactive?: boolean; // ADMIN 전용
   }) {
-    const { status, eventId, athleteId, page = 1, limit = 20 } = filters;
+    const { status, eventId, athleteId, page = 1, limit = 20, includeInactive = false } = filters;
 
     const where: any = {};
     if (status) where.status = status;
-    if (eventId) where.slotInstance = { eventId };
-    if (athleteId) where.slotInstance = { ...where.slotInstance, athleteId };
+
+    // SPONPIK docx 4 — 공개 목록은 비활성 선수/슬롯/대회의 경매 제외
+    // (관리자 명시 요청 시 includeInactive=true)
+    const slotFilter: any = {};
+    if (eventId) slotFilter.eventId = eventId;
+    if (athleteId) slotFilter.athleteId = athleteId;
+    if (!includeInactive) {
+      slotFilter.isActive = true;
+      slotFilter.athlete = { isActive: true, kycStatus: 'APPROVED' };
+      slotFilter.event = { isActive: true };
+    }
+    if (Object.keys(slotFilter).length > 0) where.slotInstance = slotFilter;
 
     const [auctions, total] = await Promise.all([
       prisma.auction.findMany({
@@ -148,8 +159,16 @@ export class AuctionService {
   }
 
   async getLiveAuctions() {
+    // SPONPIK docx 4 — 공개 LIVE 응답은 비활성 선수/슬롯/대회 제외
     return prisma.auction.findMany({
-      where: { status: 'LIVE' },
+      where: {
+        status: 'LIVE',
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
+      },
       orderBy: { endAt: 'asc' },
       include: {
         slotInstance: {
@@ -177,11 +196,14 @@ export class AuctionService {
     const threshold = new Date(now.getTime() + minutes * 60 * 1000);
 
     return prisma.auction.findMany({
+      // SPONPIK docx 4 — 비활성 선수/슬롯/대회 제외
       where: {
         status: 'LIVE',
-        endAt: {
-          gte: now,
-          lte: threshold,
+        endAt: { gte: now, lte: threshold },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
         },
       },
       orderBy: { endAt: 'asc' },
