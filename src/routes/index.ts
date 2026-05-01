@@ -38,6 +38,7 @@ import { brandCreativeApprovalRoutes, adminCreativeApprovalRoutes } from './crea
 import voteV2Routes from './voteV2.routes';
 import roiRoutes from './roi.routes';
 import sportRoutes from './sport.routes';
+import youtubeRoutes from './youtube.routes';
 // Full Funnel Data Reporting (스폰픽 풀 퍼널)
 import funnelRoutes from './funnel.routes';
 import funnelReportRoutes from './funnelReport.routes';
@@ -96,6 +97,7 @@ router.use('/admin/creative-approvals', adminCreativeApprovalRoutes);
 router.use('/votes', voteV2Routes);  // Vote V2 → /votes (메인 투표 시스템)
 router.use('/roi', roiRoutes);  // ROI 리포트 대시보드
 router.use('/sports', sportRoutes);  // SPONPIK 종목 카테고리 (1차: 골프/스크린골프)
+router.use('/youtube', youtubeRoutes);  // SPONPIK Phase 2 SNS — YouTube Data API 연동
 
 // ===== Full Funnel Data Reporting =====
 // 공개 미니스토어 (먼저 마운트): /api/store/brand/:slug

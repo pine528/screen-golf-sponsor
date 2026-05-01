@@ -22,6 +22,7 @@ import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
 import { funnelSettlementCron } from './cron/funnelSettlement.cron';
+import { youtubeSyncCron } from './cron/youtube.cron';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
@@ -209,6 +210,16 @@ cron.schedule('0 3 * * *', async () => {
     }
   } catch (error) {
     console.error('[Cron] Escrow expiry processing error:', error);
+  }
+}, cronOptions);
+
+// SPONPIK Phase 2 SNS — YouTube 채널/영상 동기화 (매일 03:30 KST)
+cron.schedule('30 3 * * *', async () => {
+  try {
+    const result = await youtubeSyncCron.runDaily();
+    console.log('[Cron] YouTube sync:', result);
+  } catch (error) {
+    console.error('[Cron] YouTube sync error:', error);
   }
 }, cronOptions);
 

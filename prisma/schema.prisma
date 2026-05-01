@@ -180,6 +180,9 @@ model Athlete {
   funnelEvents  FunnelEvent[]
   funnelOrders  FunnelOrder[]
 
+  // SNS 연동 (Phase 2)
+  youtubeChannel YoutubeChannel?
+
   @@map("athletes")
 }
 
@@ -3031,4 +3034,52 @@ model AthleteEventResult {
   @@index([athleteId, eventDate(sort: Desc)])
   @@index([athleteId, source])
   @@map("athlete_event_results")
+}
+
+// ============================================
+// YouTube 채널 연동 (Phase 2 SNS — ROI 자동화 docx §4.3)
+// ============================================
+
+model YoutubeChannel {
+  id              String    @id @default(uuid())
+  athleteId       String    @unique @map("athlete_id")
+  channelId       String    @map("channel_id") // YouTube channel ID (UCxxxxx)
+  channelHandle   String?   @map("channel_handle") // @username
+  title           String
+  description     String?
+  thumbnailUrl    String?   @map("thumbnail_url")
+  subscriberCount Int?      @map("subscriber_count")
+  videoCount      Int?      @map("video_count")
+  totalViews      BigInt?   @map("total_views")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  syncStatus      String    @default("PENDING") @map("sync_status") // PENDING / OK / FAILED
+  syncError       String?   @map("sync_error")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  athlete Athlete       @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  videos  YoutubeVideo[]
+
+  @@index([channelId])
+  @@map("youtube_channels")
+}
+
+model YoutubeVideo {
+  id            String   @id @default(uuid())
+  channelDbId   String   @map("channel_db_id")
+  videoId       String   @unique @map("video_id")
+  title         String
+  description   String?
+  thumbnailUrl  String?  @map("thumbnail_url")
+  publishedAt   DateTime @map("published_at")
+  viewCount     Int      @default(0) @map("view_count")
+  likeCount     Int      @default(0) @map("like_count")
+  commentCount  Int      @default(0) @map("comment_count")
+  durationSec   Int?     @map("duration_sec")
+  lastSyncedAt  DateTime @default(now()) @map("last_synced_at")
+
+  channel YoutubeChannel @relation(fields: [channelDbId], references: [id], onDelete: Cascade)
+
+  @@index([channelDbId, publishedAt(sort: Desc)])
+  @@map("youtube_videos")
 }
