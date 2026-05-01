@@ -23,7 +23,7 @@ export class BidService {
     maxBid: number,
     autoBid: boolean = true
   ): Promise<BidResult> {
-    // Get auction with current bids
+    // Get auction with current bids (event도 포함 — 비활성 검증용)
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {
@@ -31,6 +31,7 @@ export class BidService {
           include: {
             athlete: true,
             slotTemplate: true,
+            event: { select: { isActive: true } },
           },
         },
         bids: {
@@ -49,6 +50,21 @@ export class BidService {
 
     if (new Date() > auction.endAt) {
       throw new BadRequestError('Auction has ended');
+    }
+
+    // SPONPIK docx 4 — 운영 비활성 entity 차단 (서버 사이드 강제)
+    const slotInst = auction.slotInstance;
+    if (!slotInst.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯입니다');
+    }
+    if (!slotInst.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수입니다');
+    }
+    if (slotInst.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯입니다');
+    }
+    if (slotInst.event && (slotInst.event as any).isActive === false) {
+      throw new BadRequestError('비활성 상태인 대회입니다');
     }
 
     // Get brand and check restrictions
