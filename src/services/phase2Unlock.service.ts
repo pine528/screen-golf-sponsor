@@ -411,6 +411,23 @@ export class Phase2UnlockService {
    * Phase 2 수동 승인 (Admin용)
    */
   async approvePhase2Slots(eventId: string, athleteId: string, adminUserId: string) {
+    // SPONPIK docx 4 — 비활성/미승인 선수 + 비활성 대회 차단
+    const [athleteCheck, eventCheck] = await Promise.all([
+      prisma.athlete.findUnique({
+        where: { id: athleteId },
+        select: { isActive: true, kycStatus: true },
+      }),
+      prisma.event.findUnique({
+        where: { id: eventId },
+        select: { isActive: true },
+      }),
+    ]);
+    if (!athleteCheck) throw new Error('Athlete not found');
+    if (!athleteCheck.isActive) throw new Error('비활성 상태인 선수에 대한 Phase 2 승인 불가');
+    if (athleteCheck.kycStatus !== 'APPROVED') throw new Error('KYC 미승인 선수에 대한 Phase 2 승인 불가');
+    if (!eventCheck) throw new Error('Event not found');
+    if (!eventCheck.isActive) throw new Error('비활성 상태인 대회에 대한 Phase 2 승인 불가');
+
     const availability = await this.getSlotAvailabilityForEvent(eventId, athleteId);
 
     if (!availability.isPhase2Eligible) {
