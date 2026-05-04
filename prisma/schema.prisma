@@ -182,6 +182,7 @@ model Athlete {
 
   // SNS 연동 (Phase 2)
   youtubeChannel YoutubeChannel?
+  mentions       AthleteMention[]
 
   @@map("athletes")
 }
@@ -3082,4 +3083,55 @@ model YoutubeVideo {
 
   @@index([channelDbId, publishedAt(sort: Desc)])
   @@map("youtube_videos")
+}
+
+// ============================================
+// 선수 출연 영상 (3rd-party YouTube 채널 mention)
+// SPONPIK Phase 2 SNS — 옵션 B (검색 + 수동 확인 하이브리드)
+// ============================================
+
+enum MentionStatus {
+  PENDING   // 자동 검색으로 발견된 후보 (확정 대기)
+  APPROVED  // 본인/관리자가 출연 확정
+  REJECTED  // 무관한 영상으로 판정
+}
+
+enum MentionSource {
+  AUTO_SEARCH    // YouTube search API로 자동 발견
+  MANUAL         // 운영자가 수동 추가
+  SELF_REPORTED  // 선수 본인이 URL 붙여넣기
+}
+
+model AthleteMention {
+  id              String         @id @default(uuid())
+  athleteId       String         @map("athlete_id")
+  videoId         String         @map("video_id") // YouTube videoId
+  // 영상/채널 메타 (캐시)
+  channelId       String?        @map("channel_id")
+  channelTitle    String?        @map("channel_title")
+  videoTitle      String         @map("video_title")
+  videoThumbnail  String?        @map("video_thumbnail")
+  publishedAt     DateTime       @map("published_at")
+  // 통계 (cron 갱신)
+  viewCount       Int            @default(0) @map("view_count")
+  likeCount       Int            @default(0) @map("like_count")
+  commentCount    Int            @default(0) @map("comment_count")
+  // 큐레이션 메타
+  status          MentionStatus  @default(PENDING)
+  source          MentionSource  @default(AUTO_SEARCH)
+  approvedBy      String?        @map("approved_by") // userId
+  approvedAt      DateTime?      @map("approved_at")
+  rejectedReason  String?        @map("rejected_reason")
+  lastSyncedAt    DateTime       @default(now()) @map("last_synced_at")
+  syncStatus      String         @default("OK") @map("sync_status")
+  syncError       String?        @map("sync_error")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, videoId])
+  @@index([athleteId, status])
+  @@index([status, lastSyncedAt])
+  @@map("athlete_mentions")
 }

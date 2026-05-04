@@ -223,6 +223,16 @@ cron.schedule('30 3 * * *', async () => {
   }
 }, cronOptions);
 
+// SPONPIK Phase 2 SNS — 선수 출연 영상(mention) 통계 갱신 (매일 04:00 KST)
+cron.schedule('0 4 * * *', async () => {
+  try {
+    const result = await youtubeSyncCron.runMentionStats();
+    console.log('[Cron] YouTube mention stats:', result);
+  } catch (error) {
+    console.error('[Cron] YouTube mention stats error:', error);
+  }
+}, cronOptions);
+
 // Clean up old read notifications weekly (Sunday 4 AM KST)
 cron.schedule('0 4 * * 0', async () => {
   try {

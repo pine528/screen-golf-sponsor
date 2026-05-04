@@ -14,6 +14,7 @@
  */
 import prisma from '../models/prisma';
 import { youtubeService } from '../services/youtube.service';
+import { athleteMentionService } from '../services/athleteMention.service';
 
 export class YoutubeSyncCron {
   /** 모든 연결된 채널 동기화 */
@@ -64,6 +65,21 @@ export class YoutubeSyncCron {
     }
     console.log(`[youtube-cron] 완료 — success=${success}, failed=${failed}`);
     return { synced: success, failed, total: channels.length };
+  }
+
+  /**
+   * 출연 영상(AthleteMention APPROVED) 통계 갱신
+   * - 별도 호출 (cron 분리: 채널 vs 멘션)
+   * - quota: 50개당 1 unit (videos.list batch)
+   */
+  async runMentionStats(maxBatch: number = 200) {
+    if (!youtubeService.isEnabled()) {
+      console.log('[youtube-cron-mention] YOUTUBE_API_KEY 미설정 — 스킵');
+      return { refreshed: 0, failed: 0, skipped: true };
+    }
+    const result = await athleteMentionService.refreshApprovedStats(maxBatch);
+    console.log(`[youtube-cron-mention] 완료 — refreshed=${result.refreshed}, failed=${result.failed}`);
+    return { ...result, skipped: false };
   }
 }
 
