@@ -138,15 +138,29 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
 
 /**
  * @route GET /athletes/public/:id/roi-dashboard
- * @desc 선수별 ROI 대시보드 (docx 3-5)
- *  - 5개 카테고리, 13개 지표
- *  - 미수집 값은 null (프론트가 - 표기)
+ * @desc 선수 ROI 대시보드 (docx '선수 상세 페이지 수정개발' 2026-05-04)
+ *
+ * 계약유형별 2단 구조:
+ *  - 기본형 (BASIC, 모든 사용자): 4개 축 — 미디어/콘텐츠/팬덤/선수성과
+ *  - 확장형 (EXTENDED, 중장기 계약 브랜드): + 랜딩 유입 + 구매/전환/ROI
+ *
+ * 종합점수 산정:
+ *  - 기본형: 미디어(30) + 콘텐츠(20) + 팬덤(20) + 선수성과(30) = 100
+ *  - 확장형: 미디어(20) + 콘텐츠(15) + 팬덤(15) + 선수성과(20) + 랜딩(10) + 구매(20) = 100
+ *
+ * 등급: A (≥80) / B (≥65) / C (≥50) / D (≥35) / E (<35)
+ *
+ * 산정 상태 배지 (data collection rate 기반):
+ *  - 공식 산정 (OFFICIAL): 70%+
+ *  - 예비 산정 (PRELIMINARY): 40-69%
+ *  - 산정중 (CALCULATING): <40%
  */
 router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const athleteId = req.params.id;
+    const viewType = String(req.query.viewType || 'basic').toLowerCase() === 'extended' ? 'EXTENDED' : 'BASIC';
 
-    // 선수 존재 + 활성 검증 (docx 4 — 비활성/미승인 선수 ROI 노출 차단)
+    // 선수 존재 + 활성 검증
     const athlete = await prisma.athlete.findUnique({
       where: { id: athleteId },
       select: { id: true, isActive: true, kycStatus: true },
@@ -160,38 +174,71 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
     const [
       funnelEventsByName,
       orderAgg,
-      newCustomerCount,
       promoCodes,
-      slotsCount,
+      slotsBreakdown,
       latestEventResult,
+      recentResults,
+      youtubeChannel,
+      mentionAgg,
+      upcomingEvents,
     ] = await Promise.all([
-      // 풀퍼널 이벤트 카운트
       prisma.funnelEvent.groupBy({
         by: ['eventName'],
         where: { athleteId },
         _count: { _all: true },
       }).catch(() => []),
-      // 주문 집계
       prisma.funnelOrder.aggregate({
         where: { athleteId },
         _sum: { netAmount: true, refundedAmount: true, grossAmount: true },
         _count: { _all: true },
       }).catch(() => null),
-      // 신규 고객 수
-      prisma.funnelOrder.count({ where: { athleteId, isNewCustomer: true } }).catch(() => 0),
-      // 프로모션 코드 (쿠폰 사용량)
       prisma.promoCode.findMany({
         where: { athleteId },
         select: { id: true, code: true, usageCount: true, status: true },
       }).catch(() => []),
-      // 슬롯 수
-      prisma.slotInstance.count({ where: { athleteId } }).catch(() => 0),
-      // 최신 경기결과 (선수 성적)
+      prisma.slotInstance.groupBy({
+        by: ['status'],
+        where: { athleteId, isActive: true },
+        _count: { _all: true },
+      }).catch(() => []),
       prisma.athleteEventResult.findFirst({
         where: { athleteId, rank: { not: null } },
         orderBy: { eventDate: 'desc' },
-        select: { eventName: true, rank: true, score: true, eventDate: true },
+        select: { eventName: true, rank: true, score: true, eventDate: true, summary: true },
       }).catch(() => null),
+      // 최근 3개 대회 (평균 순위용)
+      prisma.athleteEventResult.findMany({
+        where: { athleteId, rank: { not: null } },
+        orderBy: { eventDate: 'desc' },
+        take: 3,
+        select: { rank: true },
+      }).catch(() => []),
+      prisma.youtubeChannel.findUnique({
+        where: { athleteId },
+        include: {
+          videos: {
+            orderBy: { publishedAt: 'desc' },
+            take: 20,
+            select: { viewCount: true, likeCount: true, commentCount: true },
+          },
+        },
+      }).catch(() => null),
+      prisma.athleteMention.aggregate({
+        where: { athleteId, status: 'APPROVED' },
+        _sum: { viewCount: true, likeCount: true, commentCount: true },
+        _count: { _all: true },
+      }).catch(() => null),
+      prisma.event.findMany({
+        where: {
+          slotInstances: { some: { athleteId, isActive: true } },
+          isActive: true,
+          dateStart: { gte: new Date() },
+          status: 'UPCOMING',
+        },
+        orderBy: { dateStart: 'asc' },
+        take: 1,
+        select: { id: true, name: true, dateStart: true, venue: true, tour: true },
+      }).catch(() => []),
     ]);
 
     const eventCounts: Record<string, number> = {};
@@ -204,70 +251,251 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
     const linkClicks = eventCounts.LINK_CLICK || 0;
     const totalCouponUsage = promoCodes.reduce((sum: number, c: any) => sum + (c.usageCount || 0), 0);
 
-    // 5개 카테고리 (미수집은 null)
+    // YouTube + Mentions 집계
+    const ytSubscribers = youtubeChannel?.subscriberCount ?? null;
+    const ytTotalViews = youtubeChannel?.totalViews ? Number(youtubeChannel.totalViews) : null;
+    const ytRecentViews = (youtubeChannel?.videos || []).reduce((s, v) => s + v.viewCount, 0);
+    const ytRecentLikes = (youtubeChannel?.videos || []).reduce((s, v) => s + v.likeCount, 0);
+    const ytRecentComments = (youtubeChannel?.videos || []).reduce((s, v) => s + v.commentCount, 0);
+    const mentionViews = Number(mentionAgg?._sum.viewCount || 0);
+    const mentionLikes = Number(mentionAgg?._sum.likeCount || 0);
+    const mentionComments = Number(mentionAgg?._sum.commentCount || 0);
+    const mentionCount = mentionAgg?._count._all || 0;
+
+    // 슬롯 현황 분리
+    const slotsByStatus: Record<string, number> = {};
+    slotsBreakdown.forEach((g: any) => { slotsByStatus[g.status] = g._count._all; });
+    const slotsTotal = Object.values(slotsByStatus).reduce((s, n) => s + n, 0);
+    const slotsInAuction = (slotsByStatus.IN_AUCTION || 0) + (slotsByStatus.OPEN || 0);
+    const slotsSold = (slotsByStatus.SOLD || 0) + (slotsByStatus.RESERVED || 0);
+
+    // 최근 3개 평균 순위
+    const recentAvgRank = recentResults.length > 0
+      ? recentResults.reduce((s, r) => s + (r.rank || 0), 0) / recentResults.length
+      : null;
+
+    // ============================================
+    // 점수 산정 (각 축 0~100, 데이터 없으면 null)
+    // ============================================
+
+    // 미디어노출지수 (현재 자동 수집 미구현 → null이지만 멘션 영상 수가 있으면 일부 반영)
+    const mediaScore = mentionCount > 0 ? Math.min(100, mentionCount * 5) : null;
+
+    // 콘텐츠 반응: YouTube 본인 채널 + 출연 영상의 조회/좋아요/댓글
+    const totalContentViews = ytRecentViews + mentionViews;
+    const totalContentLikes = ytRecentLikes + mentionLikes;
+    const totalContentComments = ytRecentComments + mentionComments;
+    const contentScore = totalContentViews > 0
+      ? Math.min(100, Math.log10(totalContentViews + 1) * 15)  // 로그 스케일
+      : null;
+
+    // 팬덤지수: 구독자 + 멘션 + 쿠폰
+    const fandomComponents: number[] = [];
+    if (ytSubscribers != null && ytSubscribers > 0) fandomComponents.push(Math.min(100, Math.log10(ytSubscribers + 1) * 18));
+    if (mentionCount > 0) fandomComponents.push(Math.min(100, mentionCount * 7));
+    if (totalCouponUsage > 0) fandomComponents.push(Math.min(100, totalCouponUsage * 4));
+    const fandomScore = fandomComponents.length > 0
+      ? fandomComponents.reduce((s, v) => s + v, 0) / fandomComponents.length
+      : null;
+
+    // 선수성과/대회가치: 최근 순위 + 다음 대회 유무
+    let athleteScore: number | null = null;
+    if (recentAvgRank != null) {
+      // 1위=100, 10위=70, 30위=40, 50위 이상=20
+      athleteScore = Math.max(20, Math.min(100, 100 - (recentAvgRank - 1) * 3));
+      // 다음 참가 예정 대회 있으면 +5 보너스
+      if (upcomingEvents.length > 0) athleteScore = Math.min(100, athleteScore + 5);
+    }
+
+    // 랜딩 유입 (확장형)
+    const landingScore = (linkClicks > 0 || landingViews > 0)
+      ? Math.min(100, ((linkClicks / 10) + (landingViews / 50)) / 2)
+      : null;
+
+    // 구매/전환/ROI (확장형)
+    const conversionScore = (purchases > 0 || totalCouponUsage > 0)
+      ? Math.min(100, (purchases * 5) + (totalCouponUsage * 2))
+      : null;
+
+    // 가중 평균 (수집된 항목만)
+    const weighted = (items: { value: number | null; weight: number }[]) => {
+      const collected = items.filter(i => i.value !== null);
+      if (collected.length === 0) return null;
+      const totalW = collected.reduce((s, i) => s + i.weight, 0);
+      return Number((collected.reduce((s, i) => s + (i.value as number) * i.weight, 0) / totalW).toFixed(1));
+    };
+
+    const basicScore = weighted([
+      { value: mediaScore, weight: 30 },
+      { value: contentScore, weight: 20 },
+      { value: fandomScore, weight: 20 },
+      { value: athleteScore, weight: 30 },
+    ]);
+
+    const extendedScore = weighted([
+      { value: mediaScore, weight: 20 },
+      { value: contentScore, weight: 15 },
+      { value: fandomScore, weight: 15 },
+      { value: athleteScore, weight: 20 },
+      { value: landingScore, weight: 10 },
+      { value: conversionScore, weight: 20 },
+    ]);
+
+    // 등급
+    const toGrade = (s: number | null) => {
+      if (s == null) return null;
+      if (s >= 80) return 'A';
+      if (s >= 65) return 'B';
+      if (s >= 50) return 'C';
+      if (s >= 35) return 'D';
+      return 'E';
+    };
+
+    // 데이터 수집률 (기본형 4개 축 기준)
+    const basicCollected = [mediaScore, contentScore, fandomScore, athleteScore].filter(v => v !== null).length;
+    const basicCollectionRate = Math.round(basicCollected / 4 * 100);
+    const extCollected = [mediaScore, contentScore, fandomScore, athleteScore, landingScore, conversionScore].filter(v => v !== null).length;
+    const extCollectionRate = Math.round(extCollected / 6 * 100);
+    const collectionRate = viewType === 'EXTENDED' ? extCollectionRate : basicCollectionRate;
+
+    // 산정 상태 배지
+    const statusBadge =
+      collectionRate >= 70 ? 'OFFICIAL' :
+      collectionRate >= 40 ? 'PRELIMINARY' :
+      'CALCULATING';
+
+    // 신뢰도 (수집률 + 데이터량 가중)
+    const reliability =
+      collectionRate >= 70 ? 'HIGH' :
+      collectionRate >= 40 ? 'MEDIUM' :
+      'LOW';
+
     const dashboard = {
-      // 1. 미디어 노출 (RoiExposure는 campaignId 기준 → athlete 직접 매핑 어려움 = 미수집)
+      viewType, // 'BASIC' | 'EXTENDED'
+
+      // 종합 점수 (메인 카드)
+      summary: {
+        score: viewType === 'EXTENDED' ? extendedScore : basicScore,
+        grade: toGrade(viewType === 'EXTENDED' ? extendedScore : basicScore),
+        statusBadge, // OFFICIAL / PRELIMINARY / CALCULATING
+        statusLabel:
+          statusBadge === 'OFFICIAL' ? '공식 산정' :
+          statusBadge === 'PRELIMINARY' ? '예비 산정' : '산정중',
+        collectionRate,    // 0~100 %
+        reliability,       // HIGH / MEDIUM / LOW
+        reliabilityLabel: reliability === 'HIGH' ? '높음' : reliability === 'MEDIUM' ? '보통' : '낮음',
+        updatedAt: new Date().toISOString(),
+        latestPerformance: latestEventResult ? {
+          eventName: latestEventResult.eventName,
+          rank: latestEventResult.rank,
+          eventDate: latestEventResult.eventDate,
+        } : null,
+        // 양쪽 점수 모두 노출 (UI 토글용)
+        basicScore,
+        extendedScore,
+      },
+
+      // 4개 핵심 카드 (기본형)
       mediaExposure: {
-        broadcastCount: null,        // 중계 노출 횟수
-        broadcastSeconds: null,      // 중계 노출 시간(초)
-        captureCount: null,          // 캡처 수
+        score: mediaScore,
+        broadcastCount: null,
+        broadcastSeconds: null,
+        captureCount: null,
+        patchExposureEstimate: null,
+        articleMentions: null,
+        highlightCount: null,
+        mentionVideos: mentionCount || null,
       },
-      // 2. 콘텐츠 반응 (MediaMention 등 → 미수집)
       contentEngagement: {
-        videoViews: null,            // 조회수
-        reach: null,                 // 도달수
+        score: contentScore,
+        videoViews: totalContentViews || null,
+        reach: ytSubscribers,
+        likes: totalContentLikes || null,
+        comments: totalContentComments || null,
+        shares: null,
+        saves: null,
+        engagementRate: totalContentViews > 0
+          ? Number(((totalContentLikes + totalContentComments) / totalContentViews * 100).toFixed(2))
+          : null,
       },
-      // 3. 랜딩 유입 (실데이터)
+      fandom: {
+        score: fandomScore,
+        followers: ytSubscribers,
+        followerGrowthPct: null,
+        fanCommentsMentions: mentionComments || null,
+        fanEvents: null,
+        voteParticipationRate: null,
+        ugcCount: mentionCount || null,
+      },
+      athletePerformance: {
+        score: athleteScore,
+        latestRank: latestEventResult?.rank || null,
+        recentAvgRank: recentAvgRank != null ? Number(recentAvgRank.toFixed(1)) : null,
+        latestEventName: latestEventResult?.eventName || null,
+        nextEvent: upcomingEvents[0] || null,
+        exposureExpectation: null,
+      },
+
+      // 확장형 추가 카드
       landingTraffic: {
+        score: landingScore,
         clicks: linkClicks || null,
         visits: landingViews || null,
+        ctr: linkClicks > 0 && eventCounts.IMPRESSION_LOGGED
+          ? Number((linkClicks / eventCounts.IMPRESSION_LOGGED * 100).toFixed(2))
+          : null,
+        newVisitors: null,
+        avgDwellTime: null,
       },
-      // 4. 구매 / 전환 / ROI (실데이터)
       conversion: {
-        conversionRate: landingViews > 0 ? Number((purchases / landingViews).toFixed(4)) : null,
+        score: conversionScore,
+        conversions: purchases || null,
+        purchases: purchases || null,
         revenue: netRevenue || null,
-        cac: null,                   // 캠페인 spent 정보 필요 → 미수집
-        roas: null,                  // 마찬가지로 미수집
-      },
-      // 5. 선수 성과 연계 (실데이터)
-      athletePerformance: {
         couponUsage: totalCouponUsage || null,
-        latestRank: latestEventResult?.rank || null,
-        latestEventName: latestEventResult?.eventName || null,
+        cvr: landingViews > 0 ? Number((purchases / landingViews * 100).toFixed(2)) : null,
+        cac: null,
+        roas: null,
       },
-      // SPONPIK docx 4 — roi_score (단일 종합 점수, 0-100)
-      // 산출식: 클릭(20) + 방문(20) + 구매(30) + 쿠폰(20) + 순위(10)
-      // 각 영역에서 데이터가 있으면 비례 점수, 없으면 0점.
-      // 모든 항목이 미수집이면 null (- 표기).
-      roiScore: (() => {
-        const components = [
-          { weight: 20, value: linkClicks > 0 ? Math.min(100, linkClicks / 10) : null },     // 클릭
-          { weight: 20, value: landingViews > 0 ? Math.min(100, landingViews / 50) : null }, // 방문
-          { weight: 30, value: purchases > 0 ? Math.min(100, purchases * 5) : null },         // 구매
-          { weight: 20, value: totalCouponUsage > 0 ? Math.min(100, totalCouponUsage * 2) : null }, // 쿠폰
-          { weight: 10, value: latestEventResult?.rank ? Math.max(0, 100 - latestEventResult.rank * 5) : null }, // 순위
-        ];
-        const collected = components.filter(c => c.value !== null);
-        if (collected.length === 0) return null;
-        const totalWeight = collected.reduce((s, c) => s + c.weight, 0);
-        const score = collected.reduce((s, c) => s + (c.value as number) * c.weight, 0) / totalWeight;
-        return Number(score.toFixed(1));
-      })(),
-      // 메타
-      meta: {
-        athleteId,
-        slotsCount,
-        purchases,
-        grossRevenue,
-        promoCodesCount: promoCodes.length,
-        updatedAt: new Date().toISOString(),
-        // null 항목 비율 (수집 진행도)
-        collectionProgress: {
-          // 13개 핵심 지표 중 실제 값이 있는 것의 비율
-          collected: [linkClicks, landingViews, purchases, netRevenue, totalCouponUsage, latestEventResult?.rank].filter(v => v != null && v !== 0).length,
-          total: 13,
+
+      // 슬롯 / 대회 영역
+      operations: {
+        slots: {
+          total: slotsTotal,
+          inAuction: slotsInAuction,
+          sold: slotsSold,
         },
+        recentEvent: latestEventResult,
+        nextEvent: upcomingEvents[0] || null,
       },
+
+      // 점수 산정 가중치 안내
+      scoringRules: {
+        basic: [
+          { axis: '미디어노출지수', weight: 30 },
+          { axis: '콘텐츠 반응', weight: 20 },
+          { axis: '팬덤지수', weight: 20 },
+          { axis: '선수성과 / 대회가치', weight: 30 },
+        ],
+        extended: [
+          { axis: '미디어노출지수', weight: 20 },
+          { axis: '콘텐츠 반응', weight: 15 },
+          { axis: '팬덤지수', weight: 15 },
+          { axis: '선수성과 / 대회가치', weight: 20 },
+          { axis: '랜딩 유입', weight: 10 },
+          { axis: '구매 / 전환 / ROI', weight: 20 },
+        ],
+      },
+
+      // 데이터 출처
+      dataSources: [
+        { code: 'GTOUR_OFFICIAL', name: 'GTOUR 공식기록', status: latestEventResult ? 'OK' : 'MISSING' },
+        { code: 'SPONPIK_INTERNAL', name: 'SPONPIK 내부 슬롯', status: slotsTotal > 0 ? 'OK' : 'MISSING' },
+        { code: 'SNS_REACTIONS', name: 'SNS 반응 데이터', status: ytSubscribers != null || mentionCount > 0 ? 'OK' : 'MISSING' },
+        { code: 'CONTENT_DATA', name: '콘텐츠 데이터', status: totalContentViews > 0 ? 'OK' : 'MISSING' },
+        { code: 'BRAND_TRACKING', name: '브랜드 트래킹', status: linkClicks > 0 ? 'OK' : 'MISSING' },
+        { code: 'MANUAL_INPUT', name: '관리자 수기 입력', status: 'OK' },
+      ],
     };
 
     res.json({ success: true, data: dashboard, error: null, request_id: (req as any).requestId });
