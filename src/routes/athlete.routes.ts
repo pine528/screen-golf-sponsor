@@ -178,6 +178,8 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       slotsBreakdown,
       latestEventResult,
       recentResults,
+      seasonResults,
+      upcomingEventsList,
       youtubeChannel,
       mentionAgg,
       upcomingEvents,
@@ -213,6 +215,25 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         take: 3,
         select: { rank: true },
       }).catch(() => []),
+      // F 섹션 — 추가 권장 항목용
+      // 시즌 누적 (현재 연도 기준) + 최근 5개 추이 (차트용)
+      prisma.athleteEventResult.findMany({
+        where: { athleteId, eventDate: { gte: new Date(new Date().getFullYear(), 0, 1) } },
+        orderBy: { eventDate: 'desc' },
+        select: { rank: true, eventDate: true, eventName: true, score: true },
+      }).catch(() => []),
+      // 향후 대회 일정 (3개) — 예정된 대회들
+      prisma.event.findMany({
+        where: {
+          slotInstances: { some: { athleteId, isActive: true } },
+          isActive: true,
+          dateStart: { gte: new Date() },
+          status: 'UPCOMING',
+        },
+        orderBy: { dateStart: 'asc' },
+        take: 5,
+        select: { id: true, name: true, dateStart: true, dateEnd: true, venue: true, tour: true, category: true },
+      }).catch(() => []),
       prisma.youtubeChannel.findUnique({
         where: { athleteId },
         include: {
@@ -243,6 +264,24 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
 
     const eventCounts: Record<string, number> = {};
     funnelEventsByName.forEach((g: any) => { eventCounts[g.eventName] = g._count._all; });
+
+    // F 섹션 — 추가 권장 항목 통계 (docx §9)
+    const seasonRanked = seasonResults.filter((r: any) => r.rank != null);
+    const seasonAvgRank = seasonRanked.length > 0
+      ? Number((seasonRanked.reduce((s: number, r: any) => s + r.rank, 0) / seasonRanked.length).toFixed(1))
+      : null;
+    const seasonBestRank = seasonRanked.length > 0
+      ? Math.min(...seasonRanked.map((r: any) => r.rank as number))
+      : null;
+    const seasonTop10Count = seasonRanked.filter((r: any) => r.rank <= 10).length;
+    const seasonTop3Count = seasonRanked.filter((r: any) => r.rank <= 3).length;
+    // 최근 5개 추이 (recent → recent_oldest 순서)
+    const recentTrend = seasonResults.slice(0, 5).reverse().map((r: any) => ({
+      eventName: r.eventName,
+      eventDate: r.eventDate,
+      rank: r.rank,
+      score: r.score,
+    }));
 
     const purchases = orderAgg?._count._all || 0;
     const grossRevenue = Number(orderAgg?._sum.grossAmount || 0);
@@ -341,16 +380,6 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       { value: conversionScore, weight: 20 },
     ]);
 
-    // 등급
-    const toGrade = (s: number | null) => {
-      if (s == null) return null;
-      if (s >= 80) return 'A';
-      if (s >= 65) return 'B';
-      if (s >= 50) return 'C';
-      if (s >= 35) return 'D';
-      return 'E';
-    };
-
     // 데이터 수집률 (기본형 4개 축 기준)
     const basicCollected = [mediaScore, contentScore, fandomScore, athleteScore].filter(v => v !== null).length;
     const basicCollectionRate = Math.round(basicCollected / 4 * 100);
@@ -364,11 +393,23 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       collectionRate >= 40 ? 'PRELIMINARY' :
       'CALCULATING';
 
-    // 신뢰도 (수집률 + 데이터량 가중)
+    // 신뢰도
     const reliability =
       collectionRate >= 70 ? 'HIGH' :
       collectionRate >= 40 ? 'MEDIUM' :
       'LOW';
+
+    // 등급 — docx §11: '산정중' 상태에서는 보수적 처리 (한 단계 낮춤)
+    const toGrade = (s: number | null) => {
+      if (s == null) return null;
+      // 산정중일 때 등급 보수적 처리: 한 단계 낮춤 (E는 E 유지)
+      const adjusted = statusBadge === 'CALCULATING' ? Math.max(0, s - 15) : s;
+      if (adjusted >= 80) return 'A';
+      if (adjusted >= 65) return 'B';
+      if (adjusted >= 50) return 'C';
+      if (adjusted >= 35) return 'D';
+      return 'E';
+    };
 
     const dashboard = {
       viewType, // 'BASIC' | 'EXTENDED'
@@ -467,6 +508,18 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         },
         recentEvent: latestEventResult,
         nextEvent: upcomingEvents[0] || null,
+        upcomingList: upcomingEventsList || [],  // 향후 대회 일정 5개
+      },
+
+      // F 섹션 — 경기결과/분석 추가 권장 항목 (docx §9)
+      matchAnalysis: {
+        recentAvgRank: recentAvgRank != null ? Number(recentAvgRank.toFixed(1)) : null,  // 최근 3개 평균
+        seasonAvgRank,                  // 시즌 누적 평균
+        seasonBestRank,                 // 시즌 최고 순위
+        seasonTop3Count,                // TOP 3 횟수
+        seasonTop10Count,               // TOP 10 횟수
+        seasonTotalEvents: seasonRanked.length, // 시즌 출전 대회 수
+        recentTrend,                    // 최근 5개 추이 (시간순)
       },
 
       // 점수 산정 가중치 안내
