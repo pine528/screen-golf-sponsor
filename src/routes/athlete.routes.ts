@@ -540,14 +540,14 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         ],
       },
 
-      // 데이터 출처
+      // 데이터 출처 — docx §10 G-3 정확 6종 (명칭 docx 그대로 일치)
       dataSources: [
         { code: 'GTOUR_OFFICIAL', name: 'GTOUR 공식기록', status: latestEventResult ? 'OK' : 'MISSING' },
-        { code: 'SPONPIK_INTERNAL', name: 'SPONPIK 내부 슬롯', status: slotsTotal > 0 ? 'OK' : 'MISSING' },
+        { code: 'SPONPIK_INTERNAL', name: 'SPONPIK 내부 슬롯 데이터', status: slotsTotal > 0 ? 'OK' : 'MISSING' },
         { code: 'SNS_REACTIONS', name: 'SNS 반응 데이터', status: ytSubscribers != null || mentionCount > 0 ? 'OK' : 'MISSING' },
         { code: 'CONTENT_DATA', name: '콘텐츠 데이터', status: totalContentViews > 0 ? 'OK' : 'MISSING' },
-        { code: 'BRAND_TRACKING', name: '브랜드 트래킹', status: linkClicks > 0 ? 'OK' : 'MISSING' },
-        { code: 'MANUAL_INPUT', name: '관리자 수기 입력', status: 'OK' },
+        { code: 'BRAND_TRACKING', name: '브랜드 전용 트래킹 데이터', status: linkClicks > 0 ? 'OK' : 'MISSING' },
+        { code: 'MANUAL_INPUT', name: '관리자 수기 입력 데이터', status: 'OK' },
       ],
     };
 
