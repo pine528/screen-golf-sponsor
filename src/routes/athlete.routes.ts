@@ -431,9 +431,12 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
           rank: latestEventResult.rank,
           eventDate: latestEventResult.eventDate,
         } : null,
-        // 양쪽 점수 모두 노출 (UI 토글용)
+        // 양쪽 점수 + 등급 모두 노출 (UI 토글용)
+        // docx §11 보수적 처리(산정중 시 -15)는 backend toGrade 에서만 적용 → frontend 자체 매핑하면 위배
         basicScore,
+        basicGrade: toGrade(basicScore),
         extendedScore,
+        extendedGrade: toGrade(extendedScore),
       },
 
       // 4개 핵심 카드 (기본형)
