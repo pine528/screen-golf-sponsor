@@ -10,6 +10,48 @@
 
 ---
 
+## [2026-05-06] 선수 상세 ROI 대시보드 docx 무한 재검토 9개 누락 보강
+
+### 변경 사항 (docx "SPONPIK 선수 상세 페이지 수정개발_20260504" 정합)
+1. **B-2 보조 정보 카드 예시 형식 정확화** (docx §4 B-2)
+   - "최근 업데이트": 'YYYY.MM.DD HH:MM' 형식 (예: 2026.05.03 14:20)
+   - "최근 성과": '대회명 / 순위' 형식 (예: 2026 WGTOUR 1차 / 2위)
+2. **F. 경기결과 투어명 표시** (docx §9 F)
+   - EventResultsByYear 에 투어명(KLPGA/WGTOUR) 배지 추가
+   - r.tour 우선 → athlete.tour fallback
+3. **AthleteEventResult.tour 컬럼 추가** (마이그레이션 20260506)
+4. **G. ScoringAndDataSources viewMode 동기화**
+   - 하드코딩 "BASIC" 제거 → PublicAthleteDetail 의 roiViewMode state 끌어올림
+   - RoiDashboard 토글 ↔ G 가중치 표 즉시 동기화 (controlled mode)
+5. **데이터 출처 6종 docx 정확 명칭** (docx §10 G-3)
+   - 'SPONPIK 내부 슬롯' → 'SPONPIK 내부 슬롯 데이터'
+   - '브랜드 트래킹' → '브랜드 전용 트래킹 데이터'
+   - '관리자 수기 입력' → '관리자 수기 입력 데이터'
+6. **ROI 대시보드 화면명 breadcrumb** (docx §13)
+   - 섹션 상단에 "선수 상세 > ROI 대시보드" 노출
+7. **A 기본 프로필 '프로 입회연도' 정확 표기** (docx §4 A)
+   - "{year}년 데뷔" → "프로 입회 {year}년"
+8. **산정중 보수적 등급 처리** (docx §11)
+   - backend summary 응답에 basicGrade/extendedGrade 분리 노출
+   - frontend 자체 score→grade 매핑 → backend grade 우선 사용
+   - "산정중 → 보수적 처리(-15)" 규칙이 viewMode 토글 시에도 적용
+9. **B-1 산정 기준 풀네임 + 헤더** (docx §4 B-1)
+   - '미디어' → '미디어노출지수', '콘텐츠' → '콘텐츠 반응' 등
+   - "📐 산정 기준" 헤더 추가
+
+### 영향 파일
+- `src/frontend/src/pages/PublicAthleteDetail.tsx`
+- `src/backend/src/routes/athlete.routes.ts`
+- `src/backend/prisma/schema.prisma`
+- `src/backend/prisma/migrations/20260506_add_event_result_tour/migration.sql`
+
+### 검증
+- frontend `npx tsc --noEmit` 0 errors
+- backend `npm run build` 성공
+- frontend `npm run build` 성공
+
+---
+
 ## [2026-04-24] Full Funnel: api_spec 형식 마지막 정합성 2개
 
 ### 변경
