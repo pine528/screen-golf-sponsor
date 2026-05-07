@@ -3017,6 +3017,7 @@ model AthleteEventResult {
   // 대회 정보 (외부 데이터 = 우리 Event 모델과 별개로 free-text)
   eventName       String   @map("event_name") // 대회명
   eventDate       DateTime @map("event_date") // 개최일 (정렬·연도 그룹용)
+  tour            String? // 투어명 (예: KLPGA, WGTOUR, GTOUR) — docx §9 F 필수 표시 항목
   category        String? // 경기 구분 (예: 정규투어, 챔피언십)
   // 결과
   rank            Int? // 순위 (null = 미공개/예선 탈락)
