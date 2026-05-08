@@ -3,6 +3,9 @@ import { athleteController } from '../controllers/athlete.controller';
 import { agencyAthleteRequestController } from '../controllers/agencyAthleteRequest.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import prisma from '../models/prisma';
+import * as mediaExposureService from '../services/mediaExposure.service';
+import * as naverNewsService from '../services/naverNews.service';
+import * as followerSnapshotService from '../services/followerSnapshot.service';
 
 const router = Router();
 
@@ -183,6 +186,10 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       youtubeChannel,
       mentionAgg,
       upcomingEvents,
+      // docx §6 C-1, C-3 자동/수동 수집 데이터 (Phase 미구현 보강)
+      mediaExposureAgg,
+      newsArticleCount,
+      followerGrowthRate,
     ] = await Promise.all([
       prisma.funnelEvent.groupBy({
         by: ['eventName'],
@@ -260,6 +267,12 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         take: 1,
         select: { id: true, name: true, dateStart: true, venue: true, tour: true },
       }).catch(() => []),
+      // docx §6 C-1 — 미디어노출 누적 (수동 입력 + 자동 수집)
+      mediaExposureService.aggregateMediaExposure(athleteId).catch(() => null),
+      // docx §6 C-1 articleMentions 자동 — 최근 90일 네이버 뉴스 기사 수
+      naverNewsService.countRecentArticles(athleteId, 90).catch(() => 0),
+      // docx §6 C-3 최근 증가율 — 7일 전 vs 현재 YouTube 구독자
+      followerSnapshotService.getGrowthRate(athleteId, 'YOUTUBE', 7).catch(() => null),
     ]);
 
     const eventCounts: Record<string, number> = {};
@@ -317,8 +330,29 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
     // 점수 산정 (각 축 0~100, 데이터 없으면 null)
     // ============================================
 
-    // 미디어노출지수 (현재 자동 수집 미구현 → null이지만 멘션 영상 수가 있으면 일부 반영)
-    const mediaScore = mentionCount > 0 ? Math.min(100, mentionCount * 5) : null;
+    // 미디어노출지수 — 수동 입력(mediaExposureAgg) + 자동 수집(mention 영상, 뉴스 기사) 통합
+    // - 방송 횟수 가중치 높음, 패치 노출 + 하이라이트 + 기사 + 멘션 영상 합산
+    const mediaComponents: number[] = [];
+    if (mediaExposureAgg) {
+      // 방송 노출: 1회당 8점 (10회 = 80점)
+      if (mediaExposureAgg.broadcastCount > 0)
+        mediaComponents.push(Math.min(100, mediaExposureAgg.broadcastCount * 8));
+      // 패치/로고 노출: 1회당 3점
+      if (mediaExposureAgg.patchExposureEstimate > 0)
+        mediaComponents.push(Math.min(100, mediaExposureAgg.patchExposureEstimate * 3));
+      // 하이라이트: 1회당 5점
+      if (mediaExposureAgg.highlightCount > 0)
+        mediaComponents.push(Math.min(100, mediaExposureAgg.highlightCount * 5));
+    }
+    // 자동 수집된 뉴스 기사 (최근 90일)
+    if (newsArticleCount > 0)
+      mediaComponents.push(Math.min(100, newsArticleCount * 4));
+    // 출연 영상 (mention)
+    if (mentionCount > 0)
+      mediaComponents.push(Math.min(100, mentionCount * 5));
+    const mediaScore = mediaComponents.length > 0
+      ? Number((mediaComponents.reduce((s, v) => s + v, 0) / mediaComponents.length).toFixed(1))
+      : null;
 
     // 콘텐츠 반응: YouTube 본인 채널 + 출연 영상의 조회/좋아요/댓글
     const totalContentViews = ytRecentViews + mentionViews;
@@ -440,14 +474,17 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       },
 
       // 4개 핵심 카드 (기본형)
+      // docx §6 C-1 — 수동 입력(mediaExposureAgg) + 자동 수집(news, mention) 통합
       mediaExposure: {
         score: mediaScore,
-        broadcastCount: null,
-        broadcastSeconds: null,
-        captureCount: null,
-        patchExposureEstimate: null,
-        articleMentions: null,
-        highlightCount: null,
+        broadcastCount: mediaExposureAgg?.broadcastCount ?? null,
+        broadcastSeconds: mediaExposureAgg?.broadcastSeconds ?? null,
+        patchExposureEstimate: mediaExposureAgg?.patchExposureEstimate ?? null,
+        // articleMentions = 수동 입력 합 + 자동 수집(네이버 뉴스 90일)
+        articleMentions: ((mediaExposureAgg?.articleMentions ?? 0) + newsArticleCount) || null,
+        articleMentionsAuto: newsArticleCount || null,  // 자동 수집 분리 표시
+        articleMentionsManual: mediaExposureAgg?.articleMentions ?? null,
+        highlightCount: mediaExposureAgg?.highlightCount ?? null,
         mentionVideos: mentionCount || null,
       },
       contentEngagement: {
@@ -465,7 +502,8 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       fandom: {
         score: fandomScore,
         followers: ytSubscribers,
-        followerGrowthPct: null,
+        // docx §6 C-3 — followerGrowthPct: 7일 전 vs 현재 YouTube 구독자 (자동 계산)
+        followerGrowthPct: followerGrowthRate,
         fanCommentsMentions: mentionComments || null,
         fanEvents: null,
         voteParticipationRate: null,
@@ -633,6 +671,94 @@ router.delete('/event-results/:resultId', authenticate, authorize('ADMIN'), asyn
   try {
     await prisma.athleteEventResult.delete({ where: { id: req.params.resultId } });
     res.json({ success: true, data: { deleted: true }, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+// ============================================
+// docx §6 C-1 미디어노출 수동 입력 (관리자)
+// ============================================
+import { roiAutoSyncCron } from '../cron/followerSnapshot.cron';
+
+/** GET /athletes/:id/media-exposures — 운영자 또는 본인 */
+router.get('/:id/media-exposures', authenticate, async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    if (req.user.role !== 'ADMIN') {
+      const a = await prisma.athlete.findUnique({ where: { id }, select: { userId: true } });
+      if (!a || a.userId !== req.user.id) {
+        res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Forbidden' } });
+        return;
+      }
+    }
+    const items = await mediaExposureService.listMediaExposures(id);
+    res.json({ success: true, data: items, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /athletes/:id/media-exposures — 관리자 (수기 입력) */
+router.post('/:id/media-exposures', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const { id } = req.params;
+    const { broadcastCount, broadcastSeconds, patchExposureEstimate, articleMentions, highlightCount, periodStart, periodEnd, source, notes } = req.body;
+    if (!periodStart || !periodEnd) {
+      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'periodStart, periodEnd 필수' } });
+      return;
+    }
+    const created = await mediaExposureService.createMediaExposure({
+      athleteId: id,
+      broadcastCount, broadcastSeconds, patchExposureEstimate, articleMentions, highlightCount,
+      periodStart, periodEnd, source, notes,
+    });
+    res.json({ success: true, data: created, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** PATCH /athletes/media-exposures/:exposureId */
+router.patch('/media-exposures/:exposureId', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const updated = await mediaExposureService.updateMediaExposure(req.params.exposureId, req.body);
+    res.json({ success: true, data: updated, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** DELETE /athletes/media-exposures/:exposureId */
+router.delete('/media-exposures/:exposureId', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    await mediaExposureService.deleteMediaExposure(req.params.exposureId);
+    res.json({ success: true, data: { deleted: true }, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+// ============================================
+// docx §6 C-1 / C-3 — 자동 수집 수동 트리거 (운영 디버깅용)
+// ============================================
+
+/** POST /athletes/:id/sync-news — 한 선수의 네이버 뉴스 즉시 수집 */
+router.post('/:id/sync-news', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const a = await prisma.athlete.findUnique({ where: { id: req.params.id }, select: { name: true } });
+    if (!a) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Athlete not found' } });
+      return;
+    }
+    const r = await naverNewsService.syncAthleteNews(req.params.id, a.name, { extraKeyword: req.body.extraKeyword || '골프' });
+    res.json({ success: true, data: r, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /athletes/sync-followers-all — 모든 선수의 팔로워 스냅샷 즉시 캡처 */
+router.post('/sync-followers-all', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const r = await roiAutoSyncCron.runFollowerSnapshot();
+    res.json({ success: true, data: r, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /athletes/sync-news-all — 모든 선수의 네이버 뉴스 즉시 수집 */
+router.post('/sync-news-all', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const r = await roiAutoSyncCron.runNewsSync();
+    res.json({ success: true, data: r, error: null, request_id: (req as any).requestId });
   } catch (e) { next(e); }
 });
 

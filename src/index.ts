@@ -23,6 +23,7 @@ import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
 import { funnelSettlementCron } from './cron/funnelSettlement.cron';
 import { youtubeSyncCron } from './cron/youtube.cron';
+import { roiAutoSyncCron } from './cron/followerSnapshot.cron';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
@@ -230,6 +231,26 @@ cron.schedule('0 4 * * *', async () => {
     console.log('[Cron] YouTube mention stats:', result);
   } catch (error) {
     console.error('[Cron] YouTube mention stats error:', error);
+  }
+}, cronOptions);
+
+// docx §6 C-3 — 팔로워 일별 스냅샷 (증가율 계산용, 매일 04:30 KST)
+cron.schedule('30 4 * * *', async () => {
+  try {
+    const result = await roiAutoSyncCron.runFollowerSnapshot();
+    console.log('[Cron] Follower snapshot:', result);
+  } catch (error) {
+    console.error('[Cron] Follower snapshot error:', error);
+  }
+}, cronOptions);
+
+// docx §6 C-1 — 네이버 뉴스 자동 수집 (기사 언급 수, 매일 05:00 KST)
+cron.schedule('0 5 * * *', async () => {
+  try {
+    const result = await roiAutoSyncCron.runNewsSync();
+    console.log('[Cron] News sync:', result);
+  } catch (error) {
+    console.error('[Cron] News sync error:', error);
   }
 }, cronOptions);
 

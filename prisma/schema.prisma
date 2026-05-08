@@ -184,6 +184,11 @@ model Athlete {
   youtubeChannel YoutubeChannel?
   mentions       AthleteMention[]
 
+  // ROI 자동/수동 수집 (docx §6 C-1, C-3 미구현 항목 보강)
+  mediaExposures      AthleteMediaExposure[]
+  followerSnapshots   AthleteFollowerSnapshot[]
+  newsArticles        AthleteNewsArticle[]
+
   @@map("athletes")
 }
 
@@ -3135,4 +3140,77 @@ model AthleteMention {
   @@index([athleteId, status])
   @@index([status, lastSyncedAt])
   @@map("athlete_mentions")
+}
+
+// ============================================
+// AthleteMediaExposure (docx §6 C-1 미디어노출 - 수동/관리자 입력)
+// 자동 수집 미구현 항목 (방송 중계, 패치 노출, 하이라이트 등) 보강
+// 시기별로 누적 (월 단위 또는 이벤트 단위 권장)
+// ============================================
+
+model AthleteMediaExposure {
+  id                       String    @id @default(uuid())
+  athleteId                String    @map("athlete_id")
+  // docx §6 C-1 표시 항목
+  broadcastCount           Int       @default(0)  @map("broadcast_count")           // 중계 노출 횟수
+  broadcastSeconds         Int       @default(0)  @map("broadcast_seconds")         // 중계 노출 시간(초)
+  patchExposureEstimate    Int       @default(0)  @map("patch_exposure_estimate")   // 패치/로고 노출 추정 횟수
+  articleMentions          Int       @default(0)  @map("article_mentions")          // 기사/외부 언급 수 (수동, 자동은 newsArticles 별도)
+  highlightCount           Int       @default(0)  @map("highlight_count")           // 하이라이트 노출 수
+  // 메타
+  periodStart              DateTime  @map("period_start")                            // 측정 기간 시작
+  periodEnd                DateTime  @map("period_end")                              // 측정 기간 종료
+  source                   String    @default("MANUAL")  // MANUAL | GTOUR_API | CRAWLER | AI_VIDEO
+  notes                    String?   // 관리자 메모
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, periodEnd(sort: Desc)])
+  @@map("athlete_media_exposures")
+}
+
+// ============================================
+// AthleteFollowerSnapshot (docx §6 C-3 팬덤지수 - 최근 증가율 자동 계산용)
+// cron job 으로 일 1회 YouTube/Instagram 팔로워 스냅샷 저장
+// ============================================
+
+model AthleteFollowerSnapshot {
+  id              String   @id @default(uuid())
+  athleteId       String   @map("athlete_id")
+  source          String   // YOUTUBE | INSTAGRAM | TWITTER (확장 가능)
+  followerCount   Int      @map("follower_count")   // 해당 시점 팔로워/구독자 수
+  totalViews      BigInt?  @map("total_views")      // 해당 시점 누적 조회수 (옵션)
+  capturedAt      DateTime @default(now()) @map("captured_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, source, capturedAt])
+  @@index([athleteId, source, capturedAt(sort: Desc)])
+  @@map("athlete_follower_snapshots")
+}
+
+// ============================================
+// AthleteNewsArticle (docx §6 C-1 기사/외부 언급 자동 수집)
+// 네이버 뉴스 검색 API / 다른 소스에서 수집한 기사 메타
+// ============================================
+
+model AthleteNewsArticle {
+  id              String   @id @default(uuid())
+  athleteId       String   @map("athlete_id")
+  title           String
+  url             String
+  publisher       String?  // 매체명 (예: 조선일보, 뉴시스)
+  publishedAt     DateTime @map("published_at")
+  description     String?  @db.Text  // 본문 일부 (검색 결과 snippet)
+  source          String   @default("NAVER_NEWS")  // NAVER_NEWS | GOOGLE_NEWS | MANUAL
+  language        String?  @default("ko")
+  capturedAt      DateTime @default(now()) @map("captured_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, url])
+  @@index([athleteId, publishedAt(sort: Desc)])
+  @@map("athlete_news_articles")
 }
