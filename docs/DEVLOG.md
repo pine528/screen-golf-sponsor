@@ -10,6 +10,67 @@
 
 ---
 
+## [2026-05-08] ROI 대시보드 미구현 항목 자동·수동 수집 시스템 (docx §6 C-1, C-3 보강)
+
+### 변경 사항
+docx §6 C-1 (미디어노출) + C-3 (팬덤지수 증가율) 의 자동 수집 미구현 항목을
+**자동 수집 + 관리자 수동 입력** 두 트랙으로 보강.
+
+### Phase 1-3: Backend 자동·수동 수집 시스템
+1. **신규 모델 3종** (Prisma schema)
+   - `AthleteMediaExposure`: 방송/패치/하이라이트 등 수동 입력 (관리자 CRUD)
+   - `AthleteFollowerSnapshot`: 일별 YouTube 구독자 스냅샷 (증가율 계산용)
+   - `AthleteNewsArticle`: 네이버 뉴스 검색 자동 수집
+2. **신규 서비스 3종**
+   - `mediaExposure.service.ts`: 수동 입력 CRUD + 누적 합계 집계
+   - `followerSnapshot.service.ts`: 스냅샷 캡처 + 7일 증가율 자동 계산
+   - `naverNews.service.ts`: 네이버 검색 API + 90일 기사 카운트
+3. **Cron 2종 추가**
+   - 매일 04:30 KST: 모든 active 선수의 YouTube 구독자 스냅샷
+   - 매일 05:00 KST: 모든 active 선수의 네이버 뉴스 자동 수집
+     (NAVER_CLIENT_ID/SECRET 환경변수 설정 시 작동)
+4. **ROI 대시보드 응답 통합**
+   - mediaExposure 카드: 모든 항목이 실제 데이터로 채워짐
+   - articleMentions = 수동 입력 합 + 자동 수집(네이버 뉴스 90일)
+   - fandom.followerGrowthPct: 7일 전 vs 현재 자동 계산
+5. **관리자 라우트 7종 신규**
+   - GET/POST/PATCH/DELETE `/athletes/:id/media-exposures`
+   - POST `/athletes/:id/sync-news` (단일 선수 즉시)
+   - POST `/athletes/sync-followers-all` (전체 즉시)
+   - POST `/athletes/sync-news-all` (전체 즉시)
+
+### Phase 4: Frontend 관리자 UI
+- 신규 페이지 `/admin/athletes/media-exposure`
+  - 선수 선택 → 미디어 노출 기록 CRUD
+  - 누적 합계 5장 카드 (현재 ROI 대시보드 반영값 즉시 확인)
+  - 자동 수집 3종 즉시 트리거 (디버깅·긴급용)
+- api.ts 7종 메서드, Layout 사이드바 메뉴, App.tsx 라우터 등록
+
+### 마이그레이션
+- `20260508_add_media_exposure_followers_news` (Railway 적용 완료)
+
+### 영향 파일
+- `src/backend/prisma/schema.prisma` (3개 모델 + relations)
+- `src/backend/src/services/mediaExposure.service.ts` (신규)
+- `src/backend/src/services/followerSnapshot.service.ts` (신규)
+- `src/backend/src/services/naverNews.service.ts` (신규)
+- `src/backend/src/cron/followerSnapshot.cron.ts` (신규)
+- `src/backend/src/routes/athlete.routes.ts` (라우트 + ROI 통합)
+- `src/backend/src/index.ts` (cron 등록)
+- `src/backend/.env.example` (NAVER_CLIENT_ID/SECRET 추가)
+- `src/frontend/src/services/api.ts` (7종 메서드)
+- `src/frontend/src/pages/admin/AdminMediaExposure.tsx` (신규)
+- `src/frontend/src/App.tsx`, `src/frontend/src/components/Layout.tsx` (라우트/메뉴)
+
+### 후속 필요 작업
+1. `NAVER_CLIENT_ID` + `NAVER_CLIENT_SECRET` 환경변수 등록 (https://developers.naver.com/apps)
+   - 무료, 일 25,000건. 미설정 시 cron skip + 수동 트리거 빈 결과
+2. 운영 첫 cron 실행 시 (04:30/05:00 KST 다음 주기)
+   - 팔로워 스냅샷부터 누적되어 7일 후부터 증가율 표시
+3. 향후 Instagram Graph API / AI 영상 분석 등 추가 자동 수집 확장 가능
+
+---
+
 ## [2026-05-07] 선수 상세 docx 8차 정밀 재검토 — 미세 형식 + hint + §7-2 표현
 
 ### 변경 사항 (docx 미세 형식 정합)
