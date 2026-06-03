@@ -277,35 +277,35 @@ class RoiReportService {
       if (hasKoreanFont) {
         doc.registerFont('Korean', fontPath!);
         doc.font('Korean');
+        // 폰트 메트릭 워밍업 — 첫 text() 폰트 미적용 버그 방지 (보이지 않는 영역에 출력)
+        doc.fontSize(8).text(' ', 0, -100);
       }
-      // 폰트 적용 보장 헬퍼
-      const useKorean = () => { if (hasKoreanFont) doc.font('Korean'); };
+      const F = () => hasKoreanFont ? doc.font('Korean') : doc;
 
       // 제목
-      useKorean();
-      doc.fontSize(24).text(data.title, { align: 'center' });
+      F().fontSize(24).text(data.title, { align: 'center' });
       doc.moveDown();
 
       // 기간 정보
-      doc.fontSize(12).text(
+      F().fontSize(12).text(
         `기간: ${this.formatDate(data.periodStart)} ~ ${this.formatDate(data.periodEnd)}`,
         { align: 'center' }
       );
       doc.moveDown(2);
 
       // 캠페인 정보
-      doc.fontSize(16).text('캠페인 정보', { underline: true });
+      F().fontSize(16).text('캠페인 정보', { underline: true });
       doc.moveDown(0.5);
-      doc.fontSize(12)
+      F().fontSize(12)
         .text(`캠페인명: ${data.campaign.name}`)
         .text(`브랜드: ${data.campaign.brand.name}`)
         .text(`예산: ${this.formatCurrency(data.campaign.budget)}`);
       doc.moveDown(2);
 
       // KPI 요약
-      doc.fontSize(16).text('KPI 요약', { underline: true });
+      F().fontSize(16).text('KPI 요약', { underline: true });
       doc.moveDown(0.5);
-      doc.fontSize(12)
+      F().fontSize(12)
         .text(`총 노출 횟수: ${data.metrics.totalExposures}회`)
         .text(`유효 노출 횟수: ${data.metrics.validExposures}회`)
         .text(`유효율: ${(data.metrics.validityRate * 100).toFixed(1)}%`)
@@ -315,27 +315,27 @@ class RoiReportService {
 
       // 슬롯별 성과
       if (data.metrics.slotMetrics.length > 0) {
-        doc.fontSize(16).text('슬롯별 성과', { underline: true });
+        F().fontSize(16).text('슬롯별 성과', { underline: true });
         doc.moveDown(0.5);
 
         for (const slot of data.metrics.slotMetrics) {
-          doc.fontSize(12)
+          F().fontSize(12)
             .text(`${slot.slotType}: ${slot.exposureCount}회 노출, ${this.formatDurationKo(slot.totalDuration)}`);
         }
         doc.moveDown(2);
       }
 
       // 검수 현황
-      doc.fontSize(16).text('검수 현황', { underline: true });
+      F().fontSize(16).text('검수 현황', { underline: true });
       doc.moveDown(0.5);
-      doc.fontSize(12)
+      F().fontSize(12)
         .text(`대기 중: ${data.metrics.reviewStats.pending}건`)
         .text(`승인됨: ${data.metrics.reviewStats.approved}건`)
         .text(`거부됨: ${data.metrics.reviewStats.rejected}건`);
       doc.moveDown(2);
 
       // 푸터
-      doc.fontSize(10)
+      F().fontSize(10)
         .text(
           `생성일시: ${new Date().toLocaleString('ko-KR')} | SPONPIK ROI 리포트 시스템`,
           { align: 'center' }
