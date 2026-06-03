@@ -14,6 +14,49 @@ const prisma = new PrismaClient();
 
 const router = Router();
 
+// [임시 진단] 폰트 디버그 — 인증 전에 배치
+router.get('/_debug/font', async (_req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const PDFDocument = require('pdfkit');
+  const cands = [
+    path.join(__dirname, '../../assets/fonts/NotoSansKR-Regular.ttf'),
+    path.join(process.cwd(), 'assets/fonts/NotoSansKR-Regular.ttf'),
+  ];
+  const result: any = { cwd: process.cwd(), dirname: __dirname, candidates: [] };
+  for (const c of cands) {
+    let exists = false, size = 0, sig = '';
+    try { exists = fs.existsSync(c); if (exists) { size = fs.statSync(c).size; sig = fs.readFileSync(c).slice(0, 4).toString('hex'); } } catch {}
+    result.candidates.push({ path: c, exists, size, sig });
+  }
+  // 실제 PDF 생성 테스트 (제목 + ₩)
+  try {
+    const fp = cands.find((c) => fs.existsSync(c));
+    result.usedFont = fp || null;
+    if (fp) {
+      const doc = new PDFDocument();
+      const chunks: Buffer[] = [];
+      doc.on('data', (d: Buffer) => chunks.push(d));
+      doc.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        result.pdfBytes = buf.length;
+        // PDF 내부에 폰트 임베드 흔적 확인
+        result.hasFontFile = buf.includes(Buffer.from('FontFile'));
+        result.pdfkitVersion = require('pdfkit/package.json').version;
+        res.json(result);
+      });
+      doc.registerFont('K', fp);
+      doc.font('K').fontSize(24).text('엘렌실라 ₩0 김수아', 50, 50);
+      doc.end();
+    } else {
+      res.json(result);
+    }
+  } catch (e: any) {
+    result.error = e.message;
+    res.json(result);
+  }
+});
+
 // 모든 라우트는 인증 필요
 router.use(authenticate);
 
