@@ -39,14 +39,11 @@ router.get('/_debug/font', async (_req, res) => {
       doc.on('data', (d: Buffer) => chunks.push(d));
       doc.on('end', () => {
         const buf = Buffer.concat(chunks);
-        result.pdfBytes = buf.length;
-        // PDF 내부에 폰트 임베드 흔적 확인
-        result.hasFontFile = buf.includes(Buffer.from('FontFile'));
-        result.pdfkitVersion = require('pdfkit/package.json').version;
-        res.json(result);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.send(buf);
       });
       doc.registerFont('K', fp);
-      doc.font('K').fontSize(24).text('엘렌실라 ₩0 김수아', 50, 50);
+      doc.font('K').fontSize(24).text('엘렌실라 ₩0 김수아 테스트', 50, 50);
       doc.end();
     } else {
       res.json(result);
