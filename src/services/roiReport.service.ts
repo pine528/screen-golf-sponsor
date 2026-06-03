@@ -283,7 +283,7 @@ class RoiReportService {
       const F = () => hasKoreanFont ? doc.font('Korean') : doc;
 
       // 제목
-      F().fontSize(24).text(data.title, { align: 'center' });
+      F().fontSize(24).text(this.sanitizePdfText(data.title), { align: 'center' });
       doc.moveDown();
 
       // 기간 정보
@@ -297,8 +297,8 @@ class RoiReportService {
       F().fontSize(16).text('캠페인 정보', { underline: true });
       doc.moveDown(0.5);
       F().fontSize(12)
-        .text(`캠페인명: ${data.campaign.name}`)
-        .text(`브랜드: ${data.campaign.brand.name}`)
+        .text(this.sanitizePdfText(`캠페인명: ${data.campaign.name}`))
+        .text(this.sanitizePdfText(`브랜드: ${data.campaign.brand.name}`))
         .text(`예산: ${this.formatCurrency(data.campaign.budget)}`);
       doc.moveDown(2);
 
@@ -652,10 +652,19 @@ class RoiReportService {
    * 유틸리티: 통화 포맷
    */
   private formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-    }).format(amount);
+    // ₩ 기호는 NotoSansKR PDF 임베드 시 깨지므로 '원' 표기 사용
+    return `${new Intl.NumberFormat('ko-KR').format(amount)}원`;
+  }
+
+  /**
+   * PDF 폰트에서 깨지는 특수문자를 안전한 문자로 치환
+   */
+  private sanitizePdfText(text: string): string {
+    return String(text)
+      .replace(/×/g, 'x')   // 곱셈기호 → 영문 x
+      .replace(/₩/g, '')    // 원화기호 제거 (formatCurrency에서 '원' 처리)
+      .replace(/✓/g, 'O')   // 체크 → O
+      .replace(/[–—]/g, '-'); // em/en dash → hyphen
   }
 
   /**
