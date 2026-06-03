@@ -266,9 +266,14 @@ class RoiReportService {
 
       doc.pipe(writeStream);
 
-      // 한글 폰트 설정 (Windows: 맑은 고딕)
-      const fontPath = 'C:/Windows/Fonts/malgun.ttf';
-      if (fs.existsSync(fontPath)) {
+      // 한글 폰트 설정 (번들 NotoSansKR 우선 → Windows malgun 폴백)
+      const fontCandidates = [
+        path.join(__dirname, '../../assets/fonts/NotoSansKR-Regular.ttf'), // 번들 (Render/Linux)
+        path.join(process.cwd(), 'assets/fonts/NotoSansKR-Regular.ttf'),
+        'C:/Windows/Fonts/malgun.ttf', // 로컬 윈도우 폴백
+      ];
+      const fontPath = fontCandidates.find((fp) => fs.existsSync(fp));
+      if (fontPath) {
         doc.registerFont('Korean', fontPath);
         doc.font('Korean');
       }
