@@ -273,12 +273,16 @@ class RoiReportService {
         'C:/Windows/Fonts/malgun.ttf', // 로컬 윈도우 폴백
       ];
       const fontPath = fontCandidates.find((fp) => fs.existsSync(fp));
-      if (fontPath) {
-        doc.registerFont('Korean', fontPath);
+      const hasKoreanFont = !!fontPath;
+      if (hasKoreanFont) {
+        doc.registerFont('Korean', fontPath!);
         doc.font('Korean');
       }
+      // 폰트 적용 보장 헬퍼
+      const useKorean = () => { if (hasKoreanFont) doc.font('Korean'); };
 
       // 제목
+      useKorean();
       doc.fontSize(24).text(data.title, { align: 'center' });
       doc.moveDown();
 
