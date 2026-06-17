@@ -148,7 +148,11 @@ model Athlete {
   height            Int?      // 신장 (cm)
   region            String?   // 출신/거주 지역
   debutYear         Int?      @map("debut_year")    // 데뷔 연도 (예: 2018)
-  affiliation       String?   // 소속팀/소속사 (tour와 별개의 소속)
+  affiliation       String?   // 소속팀/소속사 (tour와 별개의 소속) — 프로필 '소속' 항목
+  // SPONPIK 선수 프로필 구조화 — bio 줄글을 항목별로 분리 (소속=affiliation / 학력 / 수상 / 경력)
+  education         String?   // 학력 (예: 공주대 교육대학원 석사 · 중등 2급 정교사(체육))
+  awards            String?   // 수상 (예: 대전광역시장배 준우승 · KPGA 프론티어투어 4위)
+  career            String?   // 경력 (예: 전 GDR아카데미 대전스마트시티점 프로)
   sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
   sportId           String?   @map("sport_id")
   isActive          Boolean   @default(true) @map("is_active")  // 운영 활성/비활성 (관리자 토글, docx 4. status)

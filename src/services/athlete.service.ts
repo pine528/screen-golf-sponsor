@@ -102,6 +102,9 @@ export class AthleteService {
     region?: string | null;
     debutYear?: number | null;
     affiliation?: string | null;
+    education?: string | null;
+    awards?: string | null;
+    career?: string | null;
     sportType?: string | null;
     sportId?: string | null;
     isActive?: boolean;
@@ -161,6 +164,15 @@ export class AthleteService {
         throw new BadRequestError('소속은 200자 이내로 입력해주세요');
       }
       updateData.affiliation = data.affiliation;
+    }
+    // 선수 프로필 구조화 — 학력/수상/경력 (각 500자 이내)
+    for (const key of ['education', 'awards', 'career'] as const) {
+      if (data[key] !== undefined) {
+        if (data[key] !== null && (data[key] as string).length > 500) {
+          throw new BadRequestError('학력/수상/경력은 각 500자 이내로 입력해주세요');
+        }
+        updateData[key] = data[key];
+      }
     }
     if (data.sportType !== undefined) {
       // 화이트리스트 검증 (1차 골프/스크린골프)

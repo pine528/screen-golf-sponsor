@@ -72,6 +72,8 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         createdAt: true,
         // SPONPIK 4. 권장 데이터 항목 (구조화 필드 + status)
         height: true, region: true, debutYear: true, affiliation: true, sportType: true,
+        // 선수 프로필 구조화 — 학력/수상/경력
+        education: true, awards: true, career: true,
         isActive: true, kycStatus: true,
         sport: { select: { code: true, name: true, parentCode: true } },
       },
@@ -804,6 +806,7 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
       name, realName, bio, profileImageUrl, socialLinks, primarySponsors,
       height, region, debutYear, affiliation, sportType, sportId, isActive,
       kycStatus, blockedCategories,
+      education, awards, career,
     } = req.body || {};
     const data: any = {};
     if (name !== undefined) data.name = name;
@@ -844,6 +847,16 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
         return;
       }
       data.affiliation = affiliation || null;
+    }
+    // 선수 프로필 구조화 — 학력/수상/경력 (각 500자 이내)
+    for (const [key, val] of [['education', education], ['awards', awards], ['career', career]] as const) {
+      if (val !== undefined) {
+        if (val && String(val).length > 500) {
+          res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: `${key}는 500자 이내` } });
+          return;
+        }
+        data[key] = val || null;
+      }
     }
     if (sportType !== undefined) {
       const allowed = ['GOLF', 'SCREEN_GOLF', 'BASEBALL', 'SOCCER', 'VOLLEYBALL', 'BASKETBALL', 'TENNIS'];
