@@ -2626,3 +2626,255 @@ SPONPIK 론칭 docx 1차 검수 결과 10개 누락 항목 식별 → 전부 보
 
 ### 결론
 SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 운영).
+
+## [2026-06-05] 장정우 프로 선수 등록 (KPGA TOUR PRO)
+
+### 변경 사항
+- 장정우 프로(KPGA) 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 182cm · 1999.07.24생 · 분당그린피아골프연습장 소속 · 2021 KPGA 투어프로 수석합격
+  - 2026 신한투자증권 GTOUR 2차 우승 / 2025 샤브올데이 GTOUR MIXED 2차 준우승
+- 입상내역 8건 AthleteEventResult 등록 (MANUAL)
+- 프로필 사진 추가 → 프론트엔드 main 푸시 (Vercel 배포)
+
+### 영향받는 파일
+- `src/backend/prisma/register-jang-jeongwoo.ts` (신규 등록 스크립트)
+- `src/frontend/public/golfers/jang-jeongwoo.jpeg` (사진)
+
+### 참고
+- PDF 출처: TalkFile_장정우프로 프로필.pdf
+- 운영 DB 선수 수: 20 → 21명
+
+## [2026-06-05] 박현주 프로 선수 등록 (KLPGA 준회원 · GTOUR)
+
+### 변경 사항
+- 박현주 프로 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 1996.04.22생 · 경기 파주 운정신도시 · GTOUR 입회 2012 · 레슨 11년차 · 파주 청해골프 소속
+  - SNS: 인스타 hyun._.juuuu / 유튜브 박푸로 / 틱톡 hjttgolf
+  - 2017 롯데렌터카 WGTOUR 4차·CHAMPIONSHIP 우승 / 2017 GTOUR 상금랭킹 2위
+- 입상내역 10건 AthleteEventResult 등록 (MANUAL)
+- 프로필 사진 추가 → 프론트엔드 main 푸시 (Vercel 배포)
+- ※ 연락처(개인 휴대폰)는 개인정보로 미등록
+
+### 영향받는 파일
+- `src/backend/prisma/register-park-hyunju.ts` (신규 등록 스크립트)
+- `src/frontend/public/golfers/park-hyunju.jpg` (사진)
+
+### 참고
+- 출처: 박현주프로 프로필 이미지
+- 운영 DB 선수 수: 21 → 22명
+
+## [2026-06-05] 강채린 프로 선수 등록 (KLPGA 정회원 · WGTOUR 2026 루키)
+
+### 변경 사항
+- 강채린 프로 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 2001.03.20생 · 2022.06 KLPGA 정회원(회원번호 1530) · WGTOUR 2026 루키 · 중앙대 골프전공 수석 졸업
+  - 계약/후원: 미즈노(2025)·브리지스톤(2024)·탱크샤프트(2022~) → primarySponsors 반영
+  - 2026 WGTOUR 롯데렌터카 4차 29위 / 2022 점프투어 6차전 준우승·상금순위 5위
+- 수상 이력 9건 AthleteEventResult 등록 (MANUAL)
+- 프로필 사진(스윙 정면) 추가 → 프론트엔드 main 푸시 (Vercel 배포)
+
+### 영향받는 파일
+- `src/backend/prisma/register-kang-chaerin.ts` (신규 등록 스크립트)
+- `src/frontend/public/golfers/kang-chaerin.png` (사진)
+
+### 참고
+- 출처: 강채린 프로필.pdf
+- 운영 DB 선수 수: 22 → 23명
+
+## [2026-06-09] 박은수(Taena Park) 프로 선수 등록 (KLPGA 정회원 · CLPGA 차이나투어)
+
+### 변경 사항
+- 박은수 프로 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 168cm · 1989.06.01생 · 2015.10 KLPGA 정회원(회원번호 1092) · 비거리 230m · 제주 출신 · Artisan Golf 소속
+  - 협찬: 1879와인·조아제약·플렉스파워 → primarySponsors 반영
+  - 2016 WGTOUR 루키상 / CLPGA 차이나투어(2013~2018) / 호주 골프유학 5년
+- 입상내역 8건 AthleteEventResult 등록 (MANUAL)
+- 프로필 사진(전신) 추가 → 프론트엔드 main 푸시 (Vercel 배포)
+
+### 영향받는 파일
+- `src/backend/prisma/register-park-eunsoo.ts` (신규 등록 스크립트)
+- `src/frontend/public/golfers/park-eunsoo.jpg` (사진)
+
+### 참고
+- 출처: 뉴)박은수 프로필-1-1.pdf
+- 운영 DB 선수 수: 23 → 24명
+
+## [2026-06-09] 중복 선수 계정 통합 + 자가가입 계정 발견
+
+### 변경 사항
+- 박현주·강채린 중복 레코드 통합 (운영 DB 24명 → 22명)
+  - 선수 본인 실제 이메일 계정(KEEP)에 사진·프로필·입상내역 이전 후 sponpik 중복 계정(DROP) 삭제
+  - 박현주: eee4330@naver.com 유지 (입상 10건 이전)
+  - 강채린: happycl001@naver.com 유지, 기존 height 163cm 보존 (입상 9건 이전)
+- 원인: 두 선수가 **본인이 직접 가입**해둔 계정이 이미 있었으나, 이름 중복 확인 없이 새 sponpik 계정으로 등록 → 중복 발생
+
+### 발견 (중요)
+- 위한이·박종원·서관훈·요코야마미즈카·최서영·김다훈·강채린·박현주 = **선수 자가가입 실계정**
+  - 근거: 개인 이메일(naver/gmail), 생성일 제각각(일괄 아님), bcrypt 비번, KYC 대부분 NOT_SUBMITTED
+  - 대조: 관리자 시드 계정은 `*@sponpik.com` + KYC APPROVED 패턴
+- **운영 규칙 추가**: 선수 등록 전 반드시 이름으로 기존(자가가입) 계정 존재 여부 확인 → 중복 방지
+
+### 영향받는 파일
+- `src/backend/prisma/merge-duplicates.ts` (통합 스크립트)
+
+### 참고
+- 자가가입 6명(위한이 등)은 사진·프로필 미입력(KYC 미완) 상태 — 자료 확보 시 보강 예정
+
+## [2026-06-10] 문준혁(Jun Hyuk Moon) 프로 선수 등록 (KPGA 코리안투어 1부)
+
+### 변경 사항
+- 문준혁 프로 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 182cm · 1996.03.05생 · 제주 출신 · 경희대 골프산업학과 · 2016 KPGA 선발 수석 · 스릭슨 협찬
+  - 2016 챌린지투어 우승 / 2023 스릭슨투어 우승 / 2026 KPGA 1부 활동 / JGTO Q-School 4위
+- 입상내역 9건 AthleteEventResult 등록 (docx 수상경력 + KPGA 공식 시즌기록 통합)
+- 프로필 사진 추가 → 프론트엔드 main 푸시 (Vercel 배포)
+
+### KPGA 공식기록 연동 (memberId 00042826)
+- KPGA API(api.kpga.co.kr/player/seasonRecord) 직접 호출로 시즌별 성적 반영
+  - 2016 상금랭킹 11위·포인트랭킹 4위, 2023 상금랭킹 26위·TOP10 1회, 2024 12경기·TOP10 1회, 2026 상금랭킹 42위
+- 참고: /player/gameResult(개별 대회) 엔드포인트는 빈 배열 반환 → 시즌 요약으로 대체
+
+### 영향받는 파일
+- `src/backend/prisma/register-moon-junhyuk.ts` (신규 등록 스크립트)
+- `src/frontend/public/golfers/moon-junhyuk.jpg` (사진)
+
+### 참고
+- 출처: 문준혁 프로 프로필 요약.docx + KPGA 공식기록
+- 운영 DB 선수 수: 22 → 23명
+
+## [2026-06-10] 안준혁 프로 선수 등록 (2025 프로 입회 · NZ 주니어 대표 출신)
+
+### 변경 사항
+- 안준혁 프로 운영 DB(Railway) 등록: User(ATHLETE) + Athlete 프로필 upsert
+  - 1999.02.25생 · 2025 프로 입회 · 뉴질랜드 캔터베리/크라이스트처치 주니어 대표 출신
+  - Russley U18 2013·2014 우승, Terrace Down U16 우승, 2014 Christchurch Int'l 준우승
+- 입상내역 9건 AthleteEventResult 등록 (NZ 주니어 아마추어)
+- ※ 연락처(개인 휴대폰)는 개인정보로 미등록
+- ⚠️ 사진(ahn-junhyuk.jpg) 파일 미확보 → profileImageUrl 경로만 설정, 추후 사진 추가+푸시 필요
+
+### 영향받는 파일
+- `src/backend/prisma/register-ahn-junhyuk.ts` (신규 등록 스크립트)
+
+### 참고
+- 출처: 안준혁 프로필 이미지
+- 운영 DB 선수 수: 23 → 24명
+
+## [2026-06-10] 안준혁 프로 사진 추가 + 스폰서 반영 (후속)
+- 사진 ahn-junhyuk.jpg (E:\안준혁.jpg) → 3:4 상반신 크롭(1200×1600) 후 프론트엔드 main 푸시
+- 스폰서 '서인이앤씨'(사진 패치 확인) → primarySponsors + bio 반영, 운영 DB 갱신
+- 영향: `src/frontend/public/golfers/ahn-junhyuk.jpg`, `src/backend/prisma/register-ahn-junhyuk.ts`
+
+## [2026-06-10] 김진아2 프로 선수 등록 (KLPGA 정회원 · 2025 루키)
+
+### 변경 사항
+- 김진아2 프로 운영 DB(Railway) 등록 (KLPGA 등록명 '김진아2', 동명이인 구분)
+  - 2007년생 · 172cm · 2025.08 KLPGA 정회원(회원번호 01737) · 2025 프로 데뷔 루키
+  - KLPGA 2025 드림투어 6개 대회(최고 T18, 컷통과 3) → AthleteEventResult 6건(score 포함)
+- 프로필 사진(3:4 상반신) 추가 → 프론트엔드 main 푸시
+
+### 영향받는 파일
+- `src/backend/prisma/register-kim-jina.ts`
+- `src/frontend/public/golfers/kim-jina.jpg`
+
+### 참고
+- 출처: 김진아2 프로필 카드 + KLPGA 2025 드림투어 성적표
+- 운영 DB 선수 수: 24 → 25명
+
+## [2026-06-10] 정윤경 프로 선수 등록 (KLPGA 정회원 · 드림투어 · 2025 루키)
+
+### 변경 사항
+- 정윤경 프로 운영 DB(Railway) 등록
+  - 2006.07.21생 · 162cm · 2025.09 KLPGA 정회원(회원번호 01745) · 드림투어 활동
+  - 2025 KLPGA 점프투어 15차전 우승 + 주니어/아마추어 성적 → AthleteEventResult 7건
+- 프로필 사진(3:4 상반신) 추가 → 프론트엔드 main 푸시
+- ※ 연락처/이메일(개인정보)는 미등록
+
+### 영향받는 파일
+- `src/backend/prisma/register-jeong-yunkyung.ts`
+- `src/frontend/public/golfers/jeong-yunkyung.jpg`
+
+### 참고
+- 출처: 정윤경 후원 제안용 선수 프로필
+- 운영 DB 선수 수: 25 → 26명
+
+## [2026-06-10] 김은채·최우영 신규 등록 + 김다훈 통합
+
+### 변경 사항
+- 김은채(KIM EUN CHAE) 신규 등록: 2001년생 · 2019 KLPGA 정회원(01351) · 수원 · 광교 카카오프렌즈 소속 · 2026 WGTOUR · 루베로(LUVERO) 후원 / 입상 6건. 사진은 지원서 PDF 임베드 이미지 추출.
+- 최우영(Wooyoung Choi) 신규 등록: KPGA 투어프로 · 미국 톨레도대 졸업/한체대 대학원 · NCAA Mountain West 단체전 우승 / 입상 5건. 인스타 heyimwy_cc_7, 유튜브 우영프로.
+- 김다훈: 기존 자가가입 계정(dhk7422@naver.com)에 통합 — KPGA 투어프로, 2017 JTBC 파운더스컵 우승, GTOUR 활동중 / 입상 5건. (신규 계정 X)
+- 사진 3종 3:4 상반신 크롭 후 프론트엔드 main 푸시
+- ※ 연락처/개인 이메일은 미등록
+
+### 영향받는 파일
+- `src/backend/prisma/register-kim-eunchae.ts`, `register-choi-wooyoung.ts`, `register-kim-dahoon.ts`
+- `src/frontend/public/golfers/kim-eunchae.jpg`, `kim-dahoon.jpg`, `choi-wooyoung.jpg`
+
+### 참고
+- 운영 DB 선수 수: 26 → 28명 (김은채·최우영 신규 2명, 김다훈은 기존 계정 통합)
+
+## [2026-06-10] 이정우 프로 선수 등록 (KPGA · 대전) + 김진아2 수정
+- 이정우(KPGA 투어프로) 신규 등록: 공주대 교육대학원 석사·중등 정교사(체육)·대전체육고 출신·대전 / 입상 2건(대전시장배 준우승, KPGA 프론티어투어 4위). ※ 대회 연도 미상→추정(확인 필요)
+  - `src/backend/prisma/register-lee-jungwoo.ts`, `src/frontend/public/golfers/lee-jungwoo.jpg`
+- 김진아2 수정: 점프투어 10차전 T2·12차전 T6, 2026 정규투어 시드순위전 본선 추가 + 메인 스폰서 미즈노 (입상 6→9건)
+- 운영 DB 선수 수: 28 → 29명
+
+## [2026-06-10] 최서영 프로 통합 (자가가입 계정)
+- 최서영: 기존 자가가입 계정(tjdud0213@naver.com)에 통합 — KLPGA 정회원·홍익대 산업스포츠학과 / 입상 5건(2021 호반 드림투어 3위, 2020 솔라고 점프투어 9차전 준우승, KYGA 볼빅배 국제대회 우승 등). 사진 3:4 크롭 후 main 푸시.
+  - tour WGTOUR→KLPGA, kyc APPROVED. KYGA/경인일보 연도 추정(확인 필요). 전 소속(노랑통닭/골프앤요트/Callaway)·연락처는 미반영.
+  - `src/backend/prisma/register-choi-seoyoung.ts`, `src/frontend/public/golfers/choi-seoyoung.jpg`
+- 운영 DB 선수 수: 29명 유지 (최서영은 기존 계정 통합)
+
+## [2026-06-10] 브랜드 후원 문의 → 카카오톡 채널 연결 (수동 매칭 1차)
+
+### 변경 사항
+- 전역 플로팅 "브랜드 후원 문의" 버튼 + 팝업 추가 (모든 페이지)
+- 카카오톡 채널(스폰픽 비즈니스) 1:1 채팅 URL 연결
+  - 환경변수 `VITE_KAKAO_CHANNEL_ID=_xxxxx` 설정 시 `pf.kakao.com/_xxxxx/chat` 연결
+  - 미설정 시 support@sponpik.com 이메일 폴백
+- 목적: 선수슬롯-브랜드 자동매칭 도입 전, 수동 연결(상담) 채널 확보. 인스타 바이오에도 동일 채널 링크 사용 가능.
+
+### 영향받는 파일
+- `src/frontend/src/components/BrandInquiryButton.tsx` (신규)
+- `src/frontend/src/App.tsx` (전역 마운트)
+
+### 운영자 설정 필요 (TODO)
+1. 카카오톡 채널 개설 → 채널 공개 ID(_xxxxx) 확보
+2. Vercel 환경변수 `VITE_KAKAO_CHANNEL_ID` 등록 후 재배포
+
+## [2026-06-10] 카카오 채널 연결 완료
+- 스폰픽 카카오 채널 개설(_xmpxknX) → BrandInquiryButton 기본값에 반영(공개 ID, 하드코딩 안전)
+- 채팅 URL https://pf.kakao.com/_xmpxknX/chat (HTTP 200 확인)
+- 인스타 바이오/링크트리에 동일 링크 사용 가능
+- TODO(운영자): 채널 관리자센터에서 채팅 사용 ON, 팀원은 관리자 초대로 각자 계정 운영
+
+## [2026-06-12] 황지현·이하민 프로 선수 등록 (KLPGA)
+- 황지현(KLPGA 정회원 2022.05·부산·단국대 골프전공): 2022 점프투어 상금랭킹 6위 등 입상 7건. 유튜브 '공치는 명훈이'·'골신골덕' 출연.
+- 이하민(KLPGA 준회원·점프투어/WGTOUR 활동): 2019 FUTURE CHAMPIONS 우승, 2017 SCPGA Hansen Dam 3위, 2023 솔라고 점프투어 12차전 8위 / 입상 4건.
+- 사진 2종 3:4 크롭 후 main 푸시. 연락처/개인 이메일 미반영.
+- `register-hwang-jihyun.ts`, `register-lee-hamin.ts`, `public/golfers/hwang-jihyun.jpg`, `lee-hamin.jpg`
+- 운영 DB 선수 수: 24(active) → 26명
+
+## [2026-06-12] 요코야마 미즈카 통합 + 김하림 신규 등록 (KLPGA)
+- 요코야마 미즈카: 자가가입 계정(hyj5299@naver.com)에 통합. PDF 이력서(전주예술고·원광대 경영학과·전북 익산·프로번호 01576·SNS골프스튜디오 소속·2026 WGTOUR) 반영, 입상 7건. tour WGTOUR→KLPGA, 이름 '요코야마미즈카'→'요코야마 미즈카'.
+- 김하림: 신규 등록. KLPGA 정회원·중앙대 골프전공·2025 KCGF 전국대학 선수권 개인전 우승 등 입상 4건. (※ 사용자 확인: PDF는 요코야마 것, 인라인 불릿은 김하림 것)
+- 사진 2종 3:4 크롭 후 main 푸시. 연락처/개인 이메일 미반영.
+- `register-yokoyama-mizuka.ts`, `register-kim-harim.ts`, `public/golfers/yokoyama-mizuka.jpg`, `kim-harim.jpg`
+- 운영 DB 선수 수: 26 → 27명 (요코야마는 기존 계정 통합, 김하림 신규)
+
+## [2026-06-12] 메인 페이지 모바일 히어로 UI 개편
+- 모바일 히어로를 디자인 시안에 맞게 개편: 4줄 헤드라인(당신의 브랜드 민트 강조) + SPONPIK FOUNDER PRO NO1/배진리 프로/Bae Jinri(스크립트) HTML 텍스트 + 골퍼 누끼(우측) + 장식 점 6개
+- 누끼: bae-jinri-cutout.png의 박힌 텍스트 제거 → bae-jinri-hero.png 신규(모바일 전용)
+- 데스크톱(lg+)은 기존 3컬럼(텍스트/누끼/경매카드) 유지. 모바일/데스크톱 분기는 CSS 반응형(lg:hidden / hidden lg:block)
+- 검증: TS 통과, mobile(375)·desktop(1280) DOM 검증 통과, 콘솔 에러 0
+- 영향: `src/frontend/src/pages/Home.tsx`, `src/frontend/public/golfers/bae-jinri-hero.png`
+
+## [2026-06-17] 선수 프로필 구조화 — 소속/학력/수상/경력 분리
+- 기존 `bio` 줄글 한 덩어리를 항목별 구조로 분리: 소속(affiliation, 기존) + 학력/수상/경력(신규 3필드)
+- 공개 선수 상세 상단 프로필을 라벨 구조(소속/학력/수상/경력)로 렌더. 4필드 모두 비면 기존 bio 줄글 폴백(하위호환). 사진 좌상단 tour 배지(예: KPGA) 오버레이 추가, 중복되던 affiliation 배지는 제거
+- 관리자 빠른 편집 패널에 학력/수상/경력 textarea 추가(각 500자), 표시 영역에도 3행 추가
+- 스키마: Athlete에 `education`/`awards`/`career` nullable TEXT 추가. 마이그레이션 `20260617_add_athlete_profile_sections`
+- 백엔드 반영: `/athletes/public/:id` select, `/athletes/admin/:id` PATCH(검증 500자), `athlete.service.update`(self-edit), `/admin/entities/athletes/:id` select
+- 검증: Prisma generate OK, backend tsc --noEmit exit 0, frontend tsc 통과
+- ⚠️ 운영 DB 마이그레이션 미적용(배포 시 `prisma migrate deploy`). 기존 선수는 데이터 입력 전까지 bio 폴백
+- 영향: `prisma/schema.prisma`, `prisma/migrations/20260617_add_athlete_profile_sections/migration.sql`, `src/routes/athlete.routes.ts`, `src/routes/admin.entities.routes.ts`, `src/services/athlete.service.ts`, `src/frontend/src/pages/PublicAthleteDetail.tsx`, `src/frontend/src/pages/admin/AdminEntityDetail.tsx`
