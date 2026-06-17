@@ -42,7 +42,7 @@ const ATHLETES = [
     education: '홍익대학교 산업스포츠학과 졸업',
     awards: '제30회 서울시장배 우승 · 제31회 서울시협회장배 우승 · KLPGA 그랜드 삼대인 점프투어 3차전 준우승 · 파워풀엑스 솔라고 9차전 준우승 · 10차전 4위',
     career: 'KLPGA Master Professional 교습가 · 2015 서울특별시 대표 · 前 대방건설 소속단 투어 프로 · 前 팀 레노마 소속 투어프로',
-    profileImageUrl: null as string | null,
+    profileImageUrl: '/golfers/shin-hyeonjeong.jpg' as string | null,
     socialLinks: { instagram: '_hyeonjeongg' } as Record<string, string>,
     region: '경기도 하남시',
     debutYear: null as number | null,
