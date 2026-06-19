@@ -3035,7 +3035,9 @@ model AthleteEventResult {
   // 분석
   summary         String? // 분석 요약 (자유 텍스트)
   // 메타
-  source          String   @default("MANUAL") // MANUAL | GTOUR_API | CRAWLER
+  source          String   @default("MANUAL") // MANUAL | GTOUR_API | CRAWLER | ATHLETE_SELF
+  // 공개 승인 상태 — 선수 자가등록은 PENDING(비공개) → 관리자 승인 시 APPROVED(공개). 관리자/외부수집은 기본 APPROVED.
+  status          String   @default("APPROVED") // APPROVED | PENDING | REJECTED
   sourceUpdatedAt DateTime @default(now()) @map("source_updated_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

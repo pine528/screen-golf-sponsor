@@ -124,9 +124,9 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         orderBy: { dateStart: 'desc' },
         take: 5,
       }).catch((e) => { console.error('[athlete public] events error', e); return []; }),
-      // GTOUR 등 경기결과 (docx 3-6, 최신순)
+      // GTOUR 등 경기결과 (docx 3-6, 최신순) — 공개는 승인(APPROVED)만. 선수 자가등록 PENDING은 비공개
       prisma.athleteEventResult.findMany({
-        where: { athleteId: req.params.id },
+        where: { athleteId: req.params.id, status: 'APPROVED' },
         orderBy: { eventDate: 'desc' },
         take: 30,
       }).catch((e) => { console.error('[athlete public] eventResults error', e); return []; }),
@@ -599,6 +599,73 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
 });
 
 // ============================================
+// 선수 본인: 경기결과 자가등록 (status PENDING → 관리자 승인 필요)
+// ※ '/:id/event-results' 보다 먼저 등록해야 '/me' 가 :id 로 잡히지 않음
+// ============================================
+
+/** GET /athletes/me/event-results — 본인 결과 전체(PENDING 포함) */
+router.get('/me/event-results', authenticate, authorize('ATHLETE'), async (req: any, res, next) => {
+  try {
+    const athleteId = req.user.athleteId;
+    if (!athleteId) { res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: '선수 계정이 아닙니다' } }); return; }
+    const items = await prisma.athleteEventResult.findMany({ where: { athleteId }, orderBy: { eventDate: 'desc' } });
+    res.json({ success: true, data: items, error: null });
+  } catch (e) { next(e); }
+});
+
+/** POST /athletes/me/event-results — 본인 자가등록 (PENDING) */
+router.post('/me/event-results', authenticate, authorize('ATHLETE'), async (req: any, res, next) => {
+  try {
+    const athleteId = req.user.athleteId;
+    if (!athleteId) { res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: '선수 계정이 아닙니다' } }); return; }
+    const { eventName, eventDate, tour, category, rank, score, totalRounds, summary } = req.body;
+    if (!eventName || !eventDate) { res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'eventName, eventDate 필수' } }); return; }
+    const created = await prisma.athleteEventResult.create({
+      data: {
+        athleteId, eventName, eventDate: new Date(eventDate), tour: tour || null, category: category || null,
+        rank: rank ?? null, score: score || null, totalRounds: totalRounds ?? null, summary: summary || null,
+        source: 'ATHLETE_SELF', status: 'PENDING',
+      },
+    });
+    res.json({ success: true, data: created, error: null });
+  } catch (e) { next(e); }
+});
+
+/** PATCH /athletes/me/event-results/:resultId — 본인 결과 수정 (수정 시 재승인 위해 PENDING) */
+router.patch('/me/event-results/:resultId', authenticate, authorize('ATHLETE'), async (req: any, res, next) => {
+  try {
+    const athleteId = req.user.athleteId;
+    const r = await prisma.athleteEventResult.findUnique({ where: { id: req.params.resultId } });
+    if (!r || r.athleteId !== athleteId) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: '결과를 찾을 수 없습니다' } }); return; }
+    const updated = await prisma.athleteEventResult.update({
+      where: { id: req.params.resultId },
+      data: {
+        ...(req.body.eventName != null && { eventName: req.body.eventName }),
+        ...(req.body.eventDate && { eventDate: new Date(req.body.eventDate) }),
+        ...(req.body.tour !== undefined && { tour: req.body.tour || null }),
+        ...(req.body.category !== undefined && { category: req.body.category || null }),
+        ...(req.body.rank !== undefined && { rank: req.body.rank }),
+        ...(req.body.score !== undefined && { score: req.body.score || null }),
+        ...(req.body.summary !== undefined && { summary: req.body.summary || null }),
+        status: 'PENDING',
+      },
+    });
+    res.json({ success: true, data: updated, error: null });
+  } catch (e) { next(e); }
+});
+
+/** DELETE /athletes/me/event-results/:resultId — 본인 결과 삭제 */
+router.delete('/me/event-results/:resultId', authenticate, authorize('ATHLETE'), async (req: any, res, next) => {
+  try {
+    const athleteId = req.user.athleteId;
+    const r = await prisma.athleteEventResult.findUnique({ where: { id: req.params.resultId } });
+    if (!r || r.athleteId !== athleteId) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: '결과를 찾을 수 없습니다' } }); return; }
+    await prisma.athleteEventResult.delete({ where: { id: req.params.resultId } });
+    res.json({ success: true, data: { deleted: true }, error: null });
+  } catch (e) { next(e); }
+});
+
+// ============================================
 // 관리자: 선수 경기결과 CRUD (docx 3-6)
 // ============================================
 
@@ -673,6 +740,15 @@ router.delete('/event-results/:resultId', authenticate, authorize('ADMIN'), asyn
   try {
     await prisma.athleteEventResult.delete({ where: { id: req.params.resultId } });
     res.json({ success: true, data: { deleted: true }, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/** PATCH /athletes/event-results/:resultId/approve — 관리자 승인/반려 (선수 자가등록 검수) */
+router.patch('/event-results/:resultId/approve', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const status = req.body.status === 'REJECTED' ? 'REJECTED' : 'APPROVED';
+    const updated = await prisma.athleteEventResult.update({ where: { id: req.params.resultId }, data: { status } });
+    res.json({ success: true, data: updated, error: null, request_id: (req as any).requestId });
   } catch (e) { next(e); }
 });
 
