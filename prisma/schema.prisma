@@ -464,13 +464,23 @@ model EventParticipation {
 // Slot Template & Instance
 // ============================================
 
+// ⚠️ 값 순서는 운영 DB(pg_enum)와 동일해야 함 — db push가 enum 재생성을 시도하지 않도록
+//    새 값은 반드시 "맨 끝에" 추가할 것 (ALTER TYPE ADD VALUE는 끝에 붙음)
 enum BodyPart {
+  // Legacy (backward compatibility)
+  SHIRT_CHEST_LEFT
+  SHIRT_CHEST_RIGHT
+  SHIRT_SLEEVE_LEFT
+  SHIRT_SLEEVE_RIGHT
+  CAP_SIDE_LEFT
+  CAP_BACK
+  PANTS_BELT
+  SHIRT_BACK
   // CAP (모자)
   CAP_FRONT
   CAP_BRIM_TOP
   CAP_SIDE_L
   CAP_SIDE_R
-  CAP_BACK
   // TOP (상의)
   CHEST_L
   CHEST_R
@@ -480,28 +490,21 @@ enum BodyPart {
   SLEEVE_R
   BACK_SHOULDER_L
   BACK_SHOULDER_R
-  // v2.0 개정 — 어깨라인(쇄골) 좌/우 (A+)
-  SHOULDER_LINE_L
-  SHOULDER_LINE_R
   // PANTS (하의) - Phase 2
   PANTS_HIP_SIDE_FACING
   PANTS_THIGH_SIDE_FACING
-  // Legacy (backward compatibility)
-  SHIRT_CHEST_LEFT
-  SHIRT_CHEST_RIGHT
-  SHIRT_SLEEVE_LEFT
-  SHIRT_SLEEVE_RIGHT
-  CAP_SIDE_LEFT
-  PANTS_BELT
-  SHIRT_BACK
+  // v2.0 개정 — 어깨라인(쇄골) 좌/우 (A+)
+  SHOULDER_LINE_L
+  SHOULDER_LINE_R
 }
 
+// ⚠️ 값 순서는 운영 DB(pg_enum)와 동일해야 함 — 새 값은 맨 끝에만 추가
 enum SlotGrade {
   S
-  A_PLUS // A+ (프리미엄 확장 — v2.0 어깨라인)
   A
   B
   C
+  A_PLUS // A+ (프리미엄 확장 — v2.0 어깨라인)
 }
 
 enum SlotCategory {
