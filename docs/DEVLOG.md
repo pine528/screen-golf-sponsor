@@ -2896,3 +2896,14 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - 메인: 히어로~슬롯 사이 '스폰픽 추천선수 및 신규등록선수' — 좌(추천)/우(신규) 3명씩 4.5초 자동 롤링
 - 검증: 양쪽 tsc 통과, 로컬 브라우저 메인/목록 DOM 체크 전부 통과, 콘솔 에러 0
 - 영향: `prisma/apply-item2-changes.ts`, `src/routes/athlete.routes.ts`, `src/frontend/src/pages/PublicAthletes.tsx`, `Home.tsx`
+
+## [2026-07-28] 선수화면 개편 4번 항목 — 슬롯 명세 v2.0 + 9월 대회 슬롯 오픈
+- 슬롯 패치 명세서 v2.0 개정본 반영: 템플릿 17개 upsert (사이즈·재질·등급·기준단가·UI카피). 신규 SHOULDER_LINE_L/R(어깨라인·쇄골, A+ ₩900,000), enum(BodyPart·SlotGrade) 확장
+- 9월 대회 생성: "2026 신한투자증권 GTOUR 7차" (9/12, 이름·날짜는 가칭 — 관리자에서 수정 가능)
+- 엑셀 sponsorSlots(Y) 기준 26명 슬롯 347개 오픈:
+  · 모자정면(CAP_FRONT) 21건 = 경매 LIVE (시작가 ₩2,500,000 · 최소단위 ₩100,000 · 9/9 18시 마감)
+  · 나머지 326건 = 직접판매 (enableDirectBuy, 명세 기준단가)
+  · 염돈웅(엑셀 슬롯 미표기)·모자뒷면(양식에 없음)은 미생성
+- ⚠️ 사고/복구: Render 빌드의 prisma db push --accept-data-loss가 enum 순서 불일치(schema 중간삽입 vs DB 끝추가)로 SHOULDER_LINE 템플릿·슬롯 48건 삭제 → schema enum 순서를 DB와 정렬, render.yaml에서 --accept-data-loss 제거, 데이터 재생성으로 복구 완료
+- 규칙: 앞으로 enum 새 값은 반드시 schema 맨 끝에 추가할 것
+- 검증: 운영 API 김영민 16슬롯(어깨라인 A+ 포함)·LIVE 경매 21건·총 347 확인
