@@ -46,8 +46,15 @@ router.get('/public', async (req: Request, res: Response, next: NextFunction) =>
           socialLinks: true, primarySponsors: true,
           // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
           height: true, region: true, debutYear: true, affiliation: true, sportType: true,
+          // 2026-07 항목2 — 추천/신규 노출용
+          isRecommended: true, recommendOrder: true, createdAt: true, snsStats: true, tourQualification: true,
         },
-        orderBy: { createdAt: 'desc' },
+        // 추천 우선(운영 지정 순) → 신규 가입 최신순
+        orderBy: [
+          { isRecommended: 'desc' },
+          { recommendOrder: { sort: 'asc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
         take, skip,
       }),
     ]);
