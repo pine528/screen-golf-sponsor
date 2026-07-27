@@ -74,6 +74,9 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         height: true, region: true, debutYear: true, affiliation: true, sportType: true,
         // 선수 프로필 구조화 — 학력/수상/경력
         education: true, awards: true, career: true,
+        // 2026-07 선수화면 개편 확장 필드
+        birthDate: true, birthplace: true, weight: true, tourQualification: true,
+        activityFields: true, highlights: true, snsStats: true,
         isActive: true, kycStatus: true,
         sport: { select: { code: true, name: true, parentCode: true } },
       },
@@ -84,8 +87,8 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터) + GTOUR 경기결과
-    const [slotInstances, exposureCount, athleteEvents, eventResults] = await Promise.all([
+    // 활성 슬롯 + 각 슬롯의 경매 + 최근 입찰 5건 (실데이터) + GTOUR 경기결과 + 온도지수 재료
+    const [slotInstances, exposureCount, athleteEvents, eventResults, fanFavorites, brandContracts, votesCreated, voteParticipants, purchaseCount, donationCount] = await Promise.all([
       prisma.slotInstance.findMany({
         where: {
           athleteId: req.params.id,
@@ -130,11 +133,46 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         orderBy: { eventDate: 'desc' },
         take: 30,
       }).catch((e) => { console.error('[athlete public] eventResults error', e); return []; }),
+      // ===== 스폰픽 온도 재료 (카운트만 — 저비용) =====
+      prisma.favoriteAthlete.count({ where: { athleteId: req.params.id } }).catch(() => 0),
+      prisma.contract.count({ where: { athleteId: req.params.id } }).catch(() => 0),
+      prisma.voteV2.count({ where: { target: { path: ['playerId'], equals: req.params.id } } }).catch(() => 0),
+      prisma.voteParticipationV2.count({ where: { vote: { target: { path: ['playerId'], equals: req.params.id } } } }).catch(() => 0),
+      prisma.funnelOrder.count({ where: { athleteId: req.params.id } }).catch(() => 0),
+      prisma.donation.count({ where: { athleteId: req.params.id } }).catch(() => 0),
     ]);
+
+    // ===== 스폰픽 온도 (2026-07 정책) =====
+    // 기본 30도에서 시작, 활동 신호로 상승, 최대 100도.
+    //  - 팬 관심등록 0.8도 / 브랜드 신호(계약) 2도 / 투표 개설 1.5도 / 투표 참여 0.05도
+    //  - 구매활동(퍼널 주문) 1도 / 도네이션 0.5도
+    //  - 커뮤니티(게시글·좋아요·댓글): 모델 미구현 — 구현 시 반영 (현재 0)
+    const communityScore = 0;
+    const tempRaw = 30
+      + fanFavorites * 0.8
+      + brandContracts * 2
+      + votesCreated * 1.5
+      + voteParticipants * 0.05
+      + purchaseCount * 1
+      + donationCount * 0.5
+      + communityScore;
+    const sponpikTemp = {
+      value: Math.round(Math.min(100, tempRaw) * 10) / 10,
+      base: 30,
+      max: 100,
+      stats: {
+        fans: fanFavorites,           // 관심 등록 (팬)
+        brandContracts,               // 브랜드 계약 신호
+        votesCreated,                 // VOTE 등록
+        voteParticipants,             // 실제 투표 참여
+        purchases: purchaseCount + donationCount, // 구매/도네이션 활동
+        community: communityScore,    // 커뮤니티 지수 (미구현 — 0)
+      },
+    };
 
     res.json({
       success: true,
-      data: { athlete, slotInstances, exposureCount, recentEvents: athleteEvents, eventResults },
+      data: { athlete, slotInstances, exposureCount, recentEvents: athleteEvents, eventResults, sponpikTemp },
       error: null,
       request_id: (req as any).requestId,
     });
@@ -183,6 +221,7 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       slotsBreakdown,
       latestEventResult,
       recentResults,
+      allRankedResults,
       seasonResults,
       upcomingEventsList,
       youtubeChannel,
@@ -223,6 +262,13 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
         orderBy: { eventDate: 'desc' },
         take: 3,
         select: { rank: true },
+      }).catch(() => []),
+      // 전체 순위 결과 (최신성 가중 선수성과 점수용 — 1년내 100% / 1-2년 90% / 2-3년 80% / 3-5년 70% / 5년+ 50%)
+      prisma.athleteEventResult.findMany({
+        where: { athleteId, rank: { not: null }, status: 'APPROVED' },
+        orderBy: { eventDate: 'desc' },
+        take: 40,
+        select: { rank: true, eventDate: true },
       }).catch(() => []),
       // F 섹션 — 추가 권장 항목용
       // 시즌 누적 (현재 연도 기준) + 최근 5개 추이 (차트용)
@@ -373,12 +419,31 @@ router.get('/public/:id/roi-dashboard', async (req: Request, res: Response, next
       ? fandomComponents.reduce((s, v) => s + v, 0) / fandomComponents.length
       : null;
 
-    // 선수성과/대회가치: 최근 순위 + 다음 대회 유무
+    // 선수성과/대회가치: 최신성 가중 순위 점수 + 다음 대회 유무
+    // 정책(2026-07): 성적 반영 가중치 — 1년 이내 100% / 1~2년 90% / 2~3년 80% / 3~5년 70% / 5년 이상 50%
+    const recencyWeight = (eventDate: Date): number => {
+      const years = (Date.now() - new Date(eventDate).getTime()) / (365.25 * 24 * 3600 * 1000);
+      if (years <= 1) return 1.0;
+      if (years <= 2) return 0.9;
+      if (years <= 3) return 0.8;
+      if (years <= 5) return 0.7;
+      return 0.5;
+    };
     let athleteScore: number | null = null;
-    if (recentAvgRank != null) {
-      // 1위=100, 10위=70, 30위=40, 50위 이상=20
-      athleteScore = Math.max(20, Math.min(100, 100 - (recentAvgRank - 1) * 3));
+    if (allRankedResults.length > 0) {
+      // 대회별 점수: 1위=100, 10위=73, 30위=13 (min 10) → 최신성 가중 평균
+      let wSum = 0, wTotal = 0;
+      for (const r of allRankedResults) {
+        const rankScore = Math.max(10, Math.min(100, 100 - ((r.rank as number) - 1) * 3));
+        const w = recencyWeight(r.eventDate);
+        wSum += rankScore * w;
+        wTotal += w;
+      }
+      athleteScore = Math.round((wSum / wTotal) * 10) / 10;
       // 다음 참가 예정 대회 있으면 +5 보너스
+      if (upcomingEvents.length > 0) athleteScore = Math.min(100, athleteScore + 5);
+    } else if (recentAvgRank != null) {
+      athleteScore = Math.max(20, Math.min(100, 100 - (recentAvgRank - 1) * 3));
       if (upcomingEvents.length > 0) athleteScore = Math.min(100, athleteScore + 5);
     }
 

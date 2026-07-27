@@ -153,6 +153,16 @@ model Athlete {
   education         String?   // 학력 (예: 공주대 교육대학원 석사 · 중등 2급 정교사(체육))
   awards            String?   // 수상 (예: 대전광역시장배 준우승 · KPGA 프론티어투어 4위)
   career            String?   // 경력 (예: 전 GDR아카데미 대전스마트시티점 프로)
+  // 2026-07 선수화면 개편 — 엑셀 프로필 양식 기반 확장 필드
+  birthDate         String?   @map("birth_date")        // 생년월일 표기 (예: 1996.07.30)
+  birthplace        String?                             // 출신지역 (region=거주지와 구분)
+  weight            Int?                                // 체중 (kg)
+  tourQualification String?   @map("tour_qualification") // 투어 자격 (예: KPGA TOUR PRO, KLPGA 정회원)
+  activityFields    Json?     @map("activity_fields")   // 현재 활동분야 {tour1,gtour,lesson,proAm,sns,youtube,tour2,etc}
+  highlights        Json?                               // 주요 이력 bullet 배열 (string[])
+  snsStats          Json?     @map("sns_stats")         // {instagramFollowers, youtubeChannel, youtubeSubs} (원문 문자열)
+  sponsorSlots      Json?     @map("sponsor_slots")     // 엑셀 후원가능 슬롯 {슬롯명: bool} (9월 대회 경매용)
+  sizes             Json?                               // {hat, top, glove, shoe} (협찬 제작용)
   sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
   sportId           String?   @map("sport_id")
   isActive          Boolean   @default(true) @map("is_active")  // 운영 활성/비활성 (관리자 토글, docx 4. status)
