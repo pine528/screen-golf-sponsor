@@ -480,6 +480,9 @@ enum BodyPart {
   SLEEVE_R
   BACK_SHOULDER_L
   BACK_SHOULDER_R
+  // v2.0 개정 — 어깨라인(쇄골) 좌/우 (A+)
+  SHOULDER_LINE_L
+  SHOULDER_LINE_R
   // PANTS (하의) - Phase 2
   PANTS_HIP_SIDE_FACING
   PANTS_THIGH_SIDE_FACING
@@ -495,6 +498,7 @@ enum BodyPart {
 
 enum SlotGrade {
   S
+  A_PLUS // A+ (프리미엄 확장 — v2.0 어깨라인)
   A
   B
   C
