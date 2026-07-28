@@ -19,7 +19,7 @@ export default function Contact() {
         </div>
 
         <p className="text-lg text-slate-600 mb-12">
-          SponsorGolf 이용 중 궁금한 점이나 문제가 있으시면 언제든 문의해 주세요.
+          SPONPIK 이용 중 궁금한 점이나 문제가 있으시면 언제든 문의해 주세요.
         </p>
 
         <div className="grid md:grid-cols-2 gap-6 mb-12">
@@ -32,10 +32,10 @@ export default function Contact() {
               상세한 문의사항은 이메일로 보내주세요.
             </p>
             <a
-              href="mailto:support@sponsorgolf.com"
+              href="mailto:support@sponpik.com"
               className="text-emerald-600 font-semibold hover:underline"
             >
-              support@sponsorgolf.com
+              support@sponpik.com
             </a>
           </div>
 
@@ -76,7 +76,7 @@ export default function Contact() {
               카카오톡 채널에서 빠르게 상담받으세요.
             </p>
             <span className="text-emerald-600 font-semibold">
-              @SponsorGolf
+              @SPONPIK
             </span>
           </div>
         </div>

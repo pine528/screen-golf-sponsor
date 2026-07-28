@@ -43,12 +43,21 @@ export const useAuth = create<AuthState>()(
       register: async (data: RegisterData) => {
         let response;
 
-        // FAN 역할이면 fanRegister 호출, 아니면 기존 register 호출
+        // FAN 역할이면 fanRegister 호출, AGENCY면 agencyRegister 호출, 아니면 기존 register 호출
         if (data.role === 'FAN') {
           response = await api.fanRegister({
             email: data.email,
             password: data.password,
             nickname: data.nickname,
+          });
+        } else if (data.role === 'AGENCY') {
+          response = await api.agencyRegister({
+            email: data.email,
+            password: data.password,
+            name: data.name || '',
+            bizNo: data.bizNo,
+            contactName: data.contactName,
+            contactPhone: data.contactPhone,
           });
         } else {
           response = await api.register(data);

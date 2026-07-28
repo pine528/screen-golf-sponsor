@@ -292,7 +292,7 @@ export function Faq() {
                 고객센터로 문의해 주시면 빠르게 답변해 드리겠습니다.
               </p>
               <a
-                href="mailto:support@sponsorgolf.com"
+                href="mailto:support@sponpik.com"
                 className="btn btn-primary inline-flex items-center gap-2 text-sm"
               >
                 문의하기

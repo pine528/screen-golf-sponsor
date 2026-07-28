@@ -22,7 +22,7 @@ export default function Privacy() {
           <p className="text-slate-500 mb-8">시행일: 2026년 1월 1일</p>
 
           <p>
-            SponsorGolf(이하 "회사")는 이용자의 개인정보를 중요하게 생각하며,
+            SPONPIK(이하 "회사")는 이용자의 개인정보를 중요하게 생각하며,
             「개인정보 보호법」을 준수하고 있습니다.
           </p>
 
@@ -124,7 +124,7 @@ export default function Privacy() {
           <ul>
             <li>성명: 홍길동</li>
             <li>직위: 개인정보보호책임자</li>
-            <li>이메일: privacy@sponsorgolf.com</li>
+            <li>이메일: privacy@sponpik.com</li>
             <li>전화: 1588-0000</li>
           </ul>
 

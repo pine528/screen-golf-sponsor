@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Building2, Search, Filter, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, ShieldCheck, Clock, XCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { Users, Building2, Heart, Search, Filter, ChevronLeft, ChevronRight, ToggleLeft, ToggleRight, ShieldCheck, Clock, XCircle, AlertCircle, Trash2, Coins } from 'lucide-react';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 
-type Tab = 'athletes' | 'brands';
+type Tab = 'athletes' | 'brands' | 'fans';
 type KycStatus = '' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
 type ActiveStatus = '' | 'true' | 'false';
 
@@ -49,6 +49,18 @@ export default function AdminEntities() {
         to: dateTo || undefined,
       }),
     enabled: activeTab === 'brands',
+  });
+
+  // Fans query
+  const { data: fansData, isLoading: fansLoading } = useQuery({
+    queryKey: ['adminFans', page, pageSize, search, isActive],
+    queryFn: () =>
+      api.getAdminFans({
+        page,
+        pageSize,
+        email: search || undefined,
+      }),
+    enabled: activeTab === 'fans',
   });
 
   // Toggle active mutations
@@ -111,11 +123,23 @@ export default function AdminEntities() {
     setPage(1);
   };
 
-  const data = activeTab === 'athletes' ? athletesData?.data : brandsData?.data;
-  const isLoading = activeTab === 'athletes' ? athletesLoading : brandsLoading;
-  const items = activeTab === 'athletes' ? data?.athletes : data?.brands;
+  const data = activeTab === 'athletes'
+    ? athletesData?.data
+    : activeTab === 'brands'
+      ? brandsData?.data
+      : fansData;
+  const isLoading = activeTab === 'athletes'
+    ? athletesLoading
+    : activeTab === 'brands'
+      ? brandsLoading
+      : fansLoading;
+  const items = activeTab === 'athletes'
+    ? data?.athletes
+    : activeTab === 'brands'
+      ? data?.brands
+      : data?.data;
   const pagination = data?.pagination;
-  const summary = data?.summary;
+  const summary = activeTab === 'fans' ? null : data?.summary;
 
   const getKycStatusBadge = (status: string) => {
     switch (status) {
@@ -163,7 +187,7 @@ export default function AdminEntities() {
         {summary && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="card p-4">
-              <p className="text-sm text-slate-600">총 {activeTab === 'athletes' ? '선수' : '브랜드'}</p>
+              <p className="text-sm text-slate-600">총 {activeTab === 'athletes' ? '선수' : activeTab === 'brands' ? '브랜드' : '팬'}</p>
               <p className="text-2xl font-bold text-slate-900">{summary.total}</p>
             </div>
             <div className="card p-4">
@@ -206,6 +230,17 @@ export default function AdminEntities() {
               <Building2 className="w-4 h-4" />
               브랜드
             </button>
+            <button
+              onClick={() => handleTabChange('fans')}
+              className={`flex items-center gap-2 px-1 py-4 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'fans'
+                  ? 'border-emerald-500 text-emerald-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Heart className="w-4 h-4" />
+              팬
+            </button>
           </nav>
         </div>
 
@@ -220,7 +255,7 @@ export default function AdminEntities() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={activeTab === 'athletes' ? '이름, 실명, 이메일...' : '회사명, 담당자, 이메일...'}
+                  placeholder={activeTab === 'athletes' ? '이름, 실명, 이메일...' : activeTab === 'brands' ? '회사명, 담당자, 이메일...' : '닉네임, 이메일...'}
                   className="input pl-10 w-full"
                 />
               </div>
@@ -295,7 +330,7 @@ export default function AdminEntities() {
           ) : items?.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500">
               <Users className="w-12 h-12 mb-4 text-slate-300" />
-              <p>등록된 {activeTab === 'athletes' ? '선수' : '브랜드'}가 없습니다</p>
+              <p>등록된 {activeTab === 'athletes' ? '선수' : activeTab === 'brands' ? '브랜드' : '팬'}이 없습니다</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -326,7 +361,7 @@ export default function AdminEntities() {
                           상태
                         </th>
                       </>
-                    ) : (
+                    ) : activeTab === 'brands' ? (
                       <>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                           브랜드
@@ -342,6 +377,24 @@ export default function AdminEntities() {
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                           KYC
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          가입일
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          상태
+                        </th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          팬
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          이메일
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                          포인트
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                           가입일
@@ -424,38 +477,97 @@ export default function AdminEntities() {
                           </td>
                         </tr>
                       ))
-                    : items?.map((brand: any) => (
-                        <tr key={brand.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-4">
-                            <div>
-                              <p className="font-medium text-slate-900">{brand.name}</p>
-                              {brand.contactName && (
-                                <p className="text-sm text-slate-500">담당: {brand.contactName}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{brand.user?.email}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{brand.category || '-'}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">
-                            {brand._count?.bids || 0} / {brand._count?.contracts || 0} /{' '}
-                            {brand._count?.campaigns || 0}
-                          </td>
-                          <td className="px-6 py-4">{getKycStatusBadge(brand.kycStatus)}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">
-                            {new Date(brand.createdAt).toLocaleDateString('ko-KR')}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => toggleBrandMutation.mutate(brand.id)}
-                                disabled={toggleBrandMutation.isPending}
-                                className={`flex items-center gap-1 text-sm font-medium transition-colors ${
-                                  brand.user?.isActive
-                                    ? 'text-emerald-600 hover:text-emerald-700'
-                                    : 'text-slate-400 hover:text-slate-500'
+                    : activeTab === 'brands'
+                      ? items?.map((brand: any) => (
+                          <tr key={brand.id} className="hover:bg-slate-50">
+                            <td className="px-6 py-4">
+                              <div>
+                                <p className="font-medium text-slate-900">{brand.name}</p>
+                                {brand.contactName && (
+                                  <p className="text-sm text-slate-500">담당: {brand.contactName}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{brand.user?.email}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{brand.category || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">
+                              {brand._count?.bids || 0} / {brand._count?.contracts || 0} /{' '}
+                              {brand._count?.campaigns || 0}
+                            </td>
+                            <td className="px-6 py-4">{getKycStatusBadge(brand.kycStatus)}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">
+                              {new Date(brand.createdAt).toLocaleDateString('ko-KR')}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => toggleBrandMutation.mutate(brand.id)}
+                                  disabled={toggleBrandMutation.isPending}
+                                  className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                                    brand.user?.isActive
+                                      ? 'text-emerald-600 hover:text-emerald-700'
+                                      : 'text-slate-400 hover:text-slate-500'
+                                  }`}
+                                >
+                                  {brand.user?.isActive ? (
+                                    <>
+                                      <ToggleRight className="w-5 h-5" />
+                                      활성
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ToggleLeft className="w-5 h-5" />
+                                      비활성
+                                    </>
+                                  )}
+                                </button>
+                                {brand._count?.contracts === 0 && brand._count?.bids === 0 && (
+                                  <button
+                                    onClick={() => handleDeleteBrand(brand)}
+                                    disabled={deleteBrandMutation.isPending}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                    title="삭제"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      : items?.map((fan: any) => (
+                          <tr key={fan.id} className="hover:bg-slate-50">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center">
+                                  <Heart className="w-5 h-5 text-pink-500" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-slate-900">{fan.fan?.nickname || '(닉네임 없음)'}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{fan.email}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1 text-amber-600">
+                                <Coins className="w-4 h-4" />
+                                <span className="font-medium">
+                                  {Number(fan.pointWallet?.balance || 0).toLocaleString()}P
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600">
+                              {new Date(fan.createdAt).toLocaleDateString('ko-KR')}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`flex items-center gap-1 text-sm font-medium ${
+                                  fan.isActive
+                                    ? 'text-emerald-600'
+                                    : 'text-slate-400'
                                 }`}
                               >
-                                {brand.user?.isActive ? (
+                                {fan.isActive ? (
                                   <>
                                     <ToggleRight className="w-5 h-5" />
                                     활성
@@ -466,21 +578,10 @@ export default function AdminEntities() {
                                     비활성
                                   </>
                                 )}
-                              </button>
-                              {brand._count?.contracts === 0 && brand._count?.bids === 0 && (
-                                <button
-                                  onClick={() => handleDeleteBrand(brand)}
-                                  disabled={deleteBrandMutation.isPending}
-                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                                  title="삭제"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
                 </tbody>
               </table>
             </div>

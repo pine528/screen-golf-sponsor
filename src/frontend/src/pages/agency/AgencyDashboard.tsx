@@ -64,9 +64,9 @@ export function AgencyDashboard() {
         api.get('/agencies/stats'),
         api.get('/agencies/pending-signatures'),
       ]);
-      setAgency(agencyRes.data.data);
-      setStats(statsRes.data.data);
-      setPendingSignatures(signaturesRes.data.data || []);
+      setAgency(agencyRes.data);
+      setStats(statsRes.data);
+      setPendingSignatures(signaturesRes.data || []);
     } catch (err: any) {
       setError(err.response?.data?.error?.message || '데이터를 불러오는데 실패했습니다');
     } finally {

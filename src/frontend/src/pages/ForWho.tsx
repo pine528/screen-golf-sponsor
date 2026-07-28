@@ -80,20 +80,8 @@ export function ForWho() {
     '팀 및 단체 스폰서십',
   ];
 
-  const testimonials = [
-    {
-      role: 'brand',
-      name: '김태윤',
-      company: '골프웨어 브랜드 마케팅팀장',
-      content: '기존에는 스폰서십 계약이 복잡하고 시간이 많이 걸렸는데, SponsorGolf 덕분에 원하는 선수에게 빠르게 접근할 수 있게 되었습니다.',
-    },
-    {
-      role: 'athlete',
-      name: '이수현',
-      company: 'GTOUR 프로선수',
-      content: '슬롯만 등록해두면 자동으로 경매가 진행되어 편리합니다. 정산도 빠르고 투명해서 신뢰가 갑니다.',
-    },
-  ];
+  // SPONPIK 론칭 docx 2-1 — 하드코딩 제거. 실 후기 시스템 도입 전까지 비공개.
+  const testimonials: Array<{ role: string; name: string; company: string; content: string }> = [];
 
   return (
     <div className="min-h-screen bg-white">
@@ -105,7 +93,7 @@ export function ForWho() {
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                 <Hexagon className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
-              <span className="text-xl font-bold text-slate-900">SponsorGolf</span>
+              <span className="text-xl font-bold text-slate-900">SPONPIK</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
@@ -290,46 +278,48 @@ export function ForWho() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-24 px-6 bg-slate-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">사용자 후기</h2>
-            <p className="text-slate-600">실제 이용자들의 경험을 들어보세요</p>
-          </div>
+      {/* Testimonials (docx 2-1: 하드코딩 제거 — 실 후기 시스템 도입 전까지 비공개) */}
+      {testimonials.length > 0 && (
+        <section className="py-24 px-6 bg-slate-50">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-slate-900 mb-4">사용자 후기</h2>
+              <p className="text-slate-600">실제 이용자들의 경험을 들어보세요</p>
+            </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            {testimonials.map((testimonial, i) => (
-              <div
-                key={i}
-                className={`card p-8 ${testimonial.role === 'brand' ? 'border-sky-200' : 'border-emerald-200'}`}
-              >
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(5)].map((_, j) => (
-                    <Star key={j} className="w-5 h-5 text-amber-400 fill-amber-400" />
-                  ))}
-                </div>
-                <p className="text-slate-700 leading-relaxed mb-6">"{testimonial.content}"</p>
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    testimonial.role === 'brand' ? 'bg-sky-100' : 'bg-emerald-100'
-                  }`}>
-                    {testimonial.role === 'brand' ? (
-                      <Building2 className="w-6 h-6 text-sky-600" />
-                    ) : (
-                      <Trophy className="w-6 h-6 text-emerald-600" />
-                    )}
+            <div className="grid md:grid-cols-2 gap-8">
+              {testimonials.map((testimonial, i) => (
+                <div
+                  key={i}
+                  className={`card p-8 ${testimonial.role === 'brand' ? 'border-sky-200' : 'border-emerald-200'}`}
+                >
+                  <div className="flex items-center gap-1 mb-4">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-5 h-5 text-amber-400 fill-amber-400" />
+                    ))}
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">{testimonial.name}</p>
-                    <p className="text-sm text-slate-500">{testimonial.company}</p>
+                  <p className="text-slate-700 leading-relaxed mb-6">"{testimonial.content}"</p>
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      testimonial.role === 'brand' ? 'bg-sky-100' : 'bg-emerald-100'
+                    }`}>
+                      {testimonial.role === 'brand' ? (
+                        <Building2 className="w-6 h-6 text-sky-600" />
+                      ) : (
+                        <Trophy className="w-6 h-6 text-emerald-600" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">{testimonial.name}</p>
+                      <p className="text-sm text-slate-500">{testimonial.company}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* CTA Section */}
       <section className="py-24 px-6">
@@ -372,9 +362,9 @@ export function ForWho() {
               <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
                 <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
               </div>
-              <span className="font-semibold text-slate-900">SponsorGolf</span>
+              <span className="font-semibold text-slate-900">SPONPIK</span>
             </div>
-            <p className="text-sm text-slate-500">&copy; 2026 SponsorGolf. All rights reserved.</p>
+            <p className="text-sm text-slate-500">&copy; 2026 SPONPIK. All rights reserved.</p>
           </div>
         </div>
       </footer>

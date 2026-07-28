@@ -152,8 +152,8 @@ export function getStatusLabel(status: string): string {
 
 export function getBodyPartLabel(bodyPart: string): string {
   const labels: Record<string, string> = {
-    SHIRT_CHEST_LEFT: '상의 가슴 좌측',
-    SHIRT_CHEST_RIGHT: '상의 가슴 우측',
+    SHIRT_CHEST_LEFT: '상의 좌측',
+    SHIRT_CHEST_RIGHT: '상의 우측',
     SHIRT_SLEEVE_LEFT: '상의 소매 좌측',
     SHIRT_SLEEVE_RIGHT: '상의 소매 우측',
     CAP_SIDE_LEFT: '모자 측면',

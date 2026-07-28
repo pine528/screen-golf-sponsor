@@ -9,3 +9,5 @@ export { default as FinanceWithdrawals } from './FinanceWithdrawals';
 export { default as FinanceWithdrawalDetail } from './FinanceWithdrawalDetail';
 export { default as FinanceWithdrawalBatches } from './FinanceWithdrawalBatches';
 export { default as FinanceWithdrawalBatchDetail } from './FinanceWithdrawalBatchDetail';
+export { default as FinanceTopups } from './FinanceTopups';
+export { default as FinancePointTopups } from './FinancePointTopups';

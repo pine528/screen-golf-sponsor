@@ -144,7 +144,7 @@ export function HowItWorks() {
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                 <Hexagon className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
-              <span className="text-xl font-bold text-slate-900">SponsorGolf</span>
+              <span className="text-xl font-bold text-slate-900">SPONPIK</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
@@ -362,9 +362,9 @@ export function HowItWorks() {
               <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
                 <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
               </div>
-              <span className="font-semibold text-slate-900">SponsorGolf</span>
+              <span className="font-semibold text-slate-900">SPONPIK</span>
             </div>
-            <p className="text-sm text-slate-500">&copy; 2026 SponsorGolf. All rights reserved.</p>
+            <p className="text-sm text-slate-500">&copy; 2026 SPONPIK. All rights reserved.</p>
           </div>
         </div>
       </footer>

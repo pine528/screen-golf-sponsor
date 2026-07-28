@@ -296,7 +296,7 @@ export default function FinanceEscrowDetail() {
           <div>
             <div className="text-sm text-gray-500">계약 ID</div>
             <Link
-              to={`/contracts?highlight=${escrow.contractId}`}
+              to={`/contracts/${escrow.contractId}`}
               className="font-mono text-sm text-blue-600 hover:underline"
             >
               {escrow.contractId.slice(0, 12)}...

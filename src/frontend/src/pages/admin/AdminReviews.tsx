@@ -18,6 +18,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { cn } from '../../utils';
+import { getEventMonthLabel } from '../../utils/eventMonth';
 
 type ReviewType = 'asset' | 'verification';
 
@@ -516,7 +517,7 @@ function ReviewDetailModal({ review, onClose, onApprove, onReject, notes, setNot
               <div className="p-3 bg-slate-50 rounded-xl">
                 <p className="text-xs text-slate-500 mb-1">이벤트</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {review.contract?.auction?.slotInstance?.event?.name || 'N/A'}
+                  {getEventMonthLabel(review.contract?.auction?.slotInstance?.event) || 'N/A'}
                 </p>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl">

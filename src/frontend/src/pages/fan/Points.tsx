@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Coins, TrendingUp, TrendingDown, Calendar, Filter } from 'lucide-react';
+import { Coins, TrendingUp, TrendingDown, Calendar, Filter, CreditCard } from 'lucide-react';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
-
 const REASON_LABELS: Record<string, string> = {
   ADMIN_GRANT: '관리자 지급',
   VOTE_ENTRY_FEE: '투표 참여 수수료',
@@ -15,18 +13,10 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 export default function Points() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [selectedReason, setSelectedReason] = useState<string>('');
   const pageSize = 20;
-
-  // FAN이 아닌 사용자는 대시보드로 리다이렉트
-  useEffect(() => {
-    if (user && user.role !== 'FAN') {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, navigate]);
 
   // 포인트 잔액 조회
   const { data: balanceData } = useQuery({
@@ -71,9 +61,18 @@ export default function Points() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* 포인트 잔액 카드 */}
       <div className="card p-8 bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
-        <div className="flex items-center gap-3 mb-4">
-          <Coins className="w-8 h-8" />
-          <h2 className="text-2xl font-bold">내 포인트</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Coins className="w-8 h-8" />
+            <h2 className="text-2xl font-bold">내 포인트</h2>
+          </div>
+          <button
+            onClick={() => navigate('/points/topup')}
+            className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+          >
+            <CreditCard className="w-5 h-5" />
+            <span className="font-medium">충전하기</span>
+          </button>
         </div>
         <div className="text-5xl font-bold mb-2">{formatNumber(balance)}P</div>
         <div className="text-emerald-100 text-sm">

@@ -80,6 +80,41 @@ async function main() {
   }
   console.log(`2) AthleteSlot: ${athletes.length}명 / ${asCnt}건`);
 
+  // 2b) 엑셀 sponsorSlots가 없어도 이미 슬롯 인스턴스가 열려 있으면 AthleteSlot을 만들어 준다
+  //     (엑셀 미제출 선수도 통합 구매화면 인벤토리에 노출되도록)
+  const openInstances = await prisma.slotInstance.findMany({
+    where: { isActive: true },
+    select: { athleteId: true, slotTemplateId: true, reservePrice: true, directBuyPrice: true },
+  });
+  let as2Cnt = 0;
+  const seen = new Set<string>();
+  for (const si of openInstances) {
+    const key = `${si.athleteId}:${si.slotTemplateId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const exists = await prisma.athleteSlot.findUnique({
+      where: { athleteId_slotTemplateId: { athleteId: si.athleteId, slotTemplateId: si.slotTemplateId } },
+      select: { id: true },
+    });
+    if (exists) continue;
+    const tpl = tpls.find((t) => t.id === si.slotTemplateId);
+    if (!tpl) continue;
+    if (apply) {
+      await prisma.athleteSlot.create({
+        data: {
+          athleteId: si.athleteId,
+          slotTemplateId: si.slotTemplateId,
+          basePrice: Number(si.directBuyPrice ?? si.reservePrice ?? tpl.defaultReservePrice),
+          baseGrade: tpl.grade as any,
+          saleEnabled: true,
+          approvalRequired: false,
+        },
+      });
+    }
+    as2Cnt++;
+  }
+  console.log(`2b) 슬롯 인스턴스 기반 보충 AthleteSlot: ${as2Cnt}건`);
+
   // 3) SlotInventory ← 9월 SlotInstance
   const instances = await prisma.slotInstance.findMany({
     where: { isActive: true },

@@ -16,45 +16,15 @@ import {
 } from 'lucide-react';
 import { cn } from '../../utils';
 
-interface VoteEvent {
-  id: string;
-  title: string;
-  description?: string;
-  questionType: 'PREDICTION' | 'QUIZ' | 'POLL';
-  question: string;
-  pointsPerCorrect: number;
-  status: string;
-  endAt: string;
-  _count?: {
-    votes: number;
-  };
-}
-
-interface FanVoteEvent {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  endsAt: string;
-  entryFee: number;
-  prizePool: number;
-  _count?: {
-    entries: number;
-  };
-}
-
-// 두 타입을 통합한 표시용 인터페이스
+// 리워드풀 기반 투표 표시용 인터페이스
 interface DisplayVote {
   id: string;
   title: string;
   description?: string;
-  type: 'admin' | 'fan';
-  questionType?: 'PREDICTION' | 'QUIZ' | 'POLL';
-  pointsPerCorrect?: number;
-  entryFee?: number;
-  prizePool?: number;
+  type: 'vote';
   endAt: string;
   participantCount: number;
+  rewardBudgetEp?: string;
 }
 
 interface AthleteRanking {
@@ -66,83 +36,43 @@ interface AthleteRanking {
 }
 
 export default function FanHome() {
-  // 관리자 투표 조회
-  const { data: adminVotes, isLoading: loadingAdminVotes } = useQuery({
-    queryKey: ['activeVoteEvents'],
+  // 활성 투표 조회 (리워드풀 기반)
+  const { data: votesData, isLoading: loadingVotes } = useQuery({
+    queryKey: ['activeVotes'],
     queryFn: async () => {
-      const res = await api.getActiveVoteEvents();
-      return (res.data || []) as VoteEvent[];
+      const res = await api.getVotes({ status: 'OPEN' });
+      return res.data || [];
     },
   });
 
-  // 팬 투표 조회
-  const { data: fanVotes, isLoading: loadingFanVotes } = useQuery({
-    queryKey: ['activeFanVotes'],
-    queryFn: async () => {
-      const res = await api.getActiveFanVotes();
-      return (res.data || []) as FanVoteEvent[];
-    },
-  });
+  // 투표 목록 변환
+  const activeVotes: DisplayVote[] = (votesData || []).map((v: any) => ({
+    id: v.id,
+    title: v.title,
+    description: v.description,
+    type: 'vote' as const,
+    endAt: v.closeAt,
+    participantCount: v._count?.participations ?? 0,
+    rewardBudgetEp: v.rewardBudgetEp,
+  })).sort((a: any, b: any) => new Date(a.endAt).getTime() - new Date(b.endAt).getTime());
 
-  // 두 투표 타입 통합
-  const activeVotes: DisplayVote[] = [
-    ...(adminVotes || []).map((v) => ({
-      id: v.id,
-      title: v.title,
-      description: v.description,
-      type: 'admin' as const,
-      questionType: v.questionType,
-      pointsPerCorrect: v.pointsPerCorrect,
-      endAt: v.endAt,
-      participantCount: v._count?.votes ?? 0,
-    })),
-    ...(fanVotes || []).map((v) => ({
-      id: v.id,
-      title: v.title,
-      description: v.description,
-      type: 'fan' as const,
-      entryFee: v.entryFee,
-      prizePool: v.prizePool,
-      endAt: v.endsAt,
-      participantCount: v._count?.entries ?? 0,
-    })),
-  ].sort((a, b) => new Date(a.endAt).getTime() - new Date(b.endAt).getTime());
-
-  const loadingVotes = loadingAdminVotes || loadingFanVotes;
-
+  // 포인트 잔액 조회
   const { data: pointsData, isLoading: loadingPoints } = useQuery({
-    queryKey: ['myPoints'],
+    queryKey: ['myPointBalance'],
     queryFn: async () => {
-      const res = await api.getMyVotePoints();
+      const res = await api.getMyPointBalance();
       return res.data;
     },
   });
 
+  // 포인트 랭킹 조회
   const { data: rankings, isLoading: loadingRankings } = useQuery({
-    queryKey: ['athleteRanking', 5],
+    queryKey: ['pointRanking', 5],
     queryFn: async () => {
-      const res = await api.getAthleteRanking({ limit: 5 });
+      const res = await api.getPointRanking(5);
       return (res.data || []) as AthleteRanking[];
     },
   });
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'PREDICTION': return 'bg-violet-100 text-violet-700';
-      case 'QUIZ': return 'bg-amber-100 text-amber-700';
-      case 'POLL': return 'bg-sky-100 text-sky-700';
-      default: return 'bg-slate-100 text-slate-700';
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'PREDICTION': return '예측';
-      case 'QUIZ': return '퀴즈';
-      case 'POLL': return '투표';
-      default: return type;
-    }
-  };
 
   const getTimeRemaining = (endAt: string) => {
     const end = new Date(endAt);
@@ -237,33 +167,18 @@ export default function FanHome() {
                 {activeVotes.slice(0, 3).map((vote) => (
                   <Link
                     key={vote.id}
-                    to={vote.type === 'admin' ? `/votes/${vote.id}` : `/fan-votes/${vote.id}`}
+                    to={`/votes/${vote.id}`}
                     className="block p-4 hover:bg-slate-50 transition-colors group"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        {vote.type === 'admin' && vote.questionType ? (
-                          <>
-                            <span className={cn('badge text-xs', getTypeColor(vote.questionType))}>
-                              {getTypeLabel(vote.questionType)}
-                            </span>
-                            {(vote.pointsPerCorrect ?? 0) > 0 && (
-                              <span className="text-xs font-medium text-emerald-600">
-                                +{vote.pointsPerCorrect}P
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <span className="badge text-xs bg-pink-100 text-pink-700">
-                              팬 투표
-                            </span>
-                            {(vote.prizePool ?? 0) > 0 && (
-                              <span className="text-xs font-medium text-pink-600">
-                                🏆{vote.prizePool?.toLocaleString()}P
-                              </span>
-                            )}
-                          </>
+                        <span className="badge text-xs bg-emerald-100 text-emerald-700">
+                          무료 투표
+                        </span>
+                        {vote.rewardBudgetEp && Number(vote.rewardBudgetEp) > 0 && (
+                          <span className="text-xs font-medium text-emerald-600">
+                            🏆{Number(vote.rewardBudgetEp).toLocaleString()} EP
+                          </span>
                         )}
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
@@ -280,11 +195,6 @@ export default function FanHome() {
                         <Clock className="w-3 h-3" />
                         {getTimeRemaining(vote.endAt)}
                       </span>
-                      {vote.type === 'fan' && (vote.entryFee ?? 0) > 0 && (
-                        <span className="text-pink-600 font-medium">
-                          참가 {vote.entryFee}P
-                        </span>
-                      )}
                     </div>
                   </Link>
                 ))}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '../components/Layout';
 import { api } from '../services/api';
@@ -19,8 +20,10 @@ import {
   Building2,
 } from 'lucide-react';
 import { cn } from '../utils';
+import { getEventMonthLabel } from '../utils/eventMonth';
 
 export function Settlements() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [periodFilter, setPeriodFilter] = useState<string>('all');
@@ -36,8 +39,14 @@ export function Settlements() {
     queryFn: () => api.getMySettlementStats(),
   });
 
+  const { data: monthlyData } = useQuery({
+    queryKey: ['my-monthly-settlements'],
+    queryFn: () => api.getMonthlySettlements(),
+  });
+
   const settlements = settlementsData?.data || [];
   const stats = statsData?.data || {};
+  const monthlySettlements = monthlyData?.data || [];
 
   const filteredSettlements = settlements
     .filter((settlement: any) => {
@@ -48,8 +57,8 @@ export function Settlements() {
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         return (
-          settlement.contract?.slotInstance?.slotTemplate?.name?.toLowerCase().includes(searchLower) ||
-          settlement.contract?.brand?.companyName?.toLowerCase().includes(searchLower)
+          settlement.contract?.auction?.slotInstance?.slotTemplate?.name?.toLowerCase().includes(searchLower) ||
+          settlement.contract?.brand?.name?.toLowerCase().includes(searchLower)
         );
       }
       return true;
@@ -73,14 +82,14 @@ export function Settlements() {
   const statusStyles: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-700 border-amber-200',
     PROCESSING: 'bg-sky-100 text-sky-700 border-sky-200',
-    COMPLETED: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    PAID: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     FAILED: 'bg-red-100 text-red-700 border-red-200',
   };
 
   const statusLabels: Record<string, string> = {
     PENDING: '대기중',
     PROCESSING: '처리중',
-    COMPLETED: '완료',
+    PAID: '완료',
     FAILED: '실패',
   };
 
@@ -124,7 +133,7 @@ export function Settlements() {
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm text-slate-600">총 정산액</p>
                 <p className="text-base sm:text-2xl font-bold text-slate-900 truncate">
-                  {formatCurrency(stats.totalSettled || 0)}
+                  {formatCurrency(stats.totalPaid || 0)}
                 </p>
               </div>
             </div>
@@ -150,7 +159,7 @@ export function Settlements() {
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm text-slate-600">이번 달</p>
                 <p className="text-base sm:text-2xl font-bold text-slate-900 truncate">
-                  {formatCurrency(stats.thisMonthAmount || 0)}
+                  {formatCurrency(stats.thisMonth || 0)}
                 </p>
               </div>
             </div>
@@ -162,7 +171,7 @@ export function Settlements() {
               </div>
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm text-slate-600">정산 건수</p>
-                <p className="text-base sm:text-2xl font-bold text-slate-900">{stats.totalCount || settlements.length}</p>
+                <p className="text-base sm:text-2xl font-bold text-slate-900">{stats.settlementCount || settlements.length}</p>
               </div>
             </div>
           </div>
@@ -182,7 +191,10 @@ export function Settlements() {
                 </p>
               </div>
             </div>
-            <button className="text-xs sm:text-sm text-emerald-600 hover:text-emerald-700 font-medium self-end sm:self-auto">
+            <button
+              onClick={() => navigate('/athlete/withdrawals')}
+              className="text-xs sm:text-sm text-emerald-600 hover:text-emerald-700 font-medium self-end sm:self-auto"
+            >
               계좌 변경
             </button>
           </div>
@@ -224,7 +236,7 @@ export function Settlements() {
                 <option value="all">전체 상태</option>
                 <option value="PENDING">대기중</option>
                 <option value="PROCESSING">처리중</option>
-                <option value="COMPLETED">완료</option>
+                <option value="PAID">완료</option>
               </select>
               <select
                 value={periodFilter}
@@ -264,10 +276,10 @@ export function Settlements() {
                     <div className="flex items-start gap-3 sm:gap-4">
                       <div className={cn(
                         'w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0',
-                        settlement.status === 'COMPLETED' ? 'bg-emerald-100' :
+                        settlement.status === 'PAID' ? 'bg-emerald-100' :
                         settlement.status === 'PENDING' ? 'bg-amber-100' : 'bg-sky-100'
                       )}>
-                        {settlement.status === 'COMPLETED' ? (
+                        {settlement.status === 'PAID' ? (
                           <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                         ) : (
                           <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
@@ -276,7 +288,7 @@ export function Settlements() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h3 className="font-semibold text-slate-900 text-sm sm:text-base">
-                            {settlement.contract?.slotInstance?.slotTemplate?.name || '슬롯'}
+                            {settlement.contract?.auction?.slotInstance?.slotTemplate?.name || '슬롯'}
                           </h3>
                           <span className={cn('badge text-xs', statusStyles[settlement.status])}>
                             {statusLabels[settlement.status]}
@@ -285,34 +297,34 @@ export function Settlements() {
                         <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-slate-600">
                           <div className="flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="truncate">{settlement.contract?.brand?.companyName || '브랜드'}</span>
+                            <span className="truncate">{settlement.contract?.brand?.name || '브랜드'}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="truncate">{settlement.contract?.slotInstance?.event?.name || '이벤트'}</span>
+                            <span className="truncate">{getEventMonthLabel(settlement.contract?.auction?.slotInstance?.event) || '이벤트'}</span>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm">
                           <span className="text-slate-500">
-                            계약금: {formatCurrency(settlement.contract?.finalPrice || 0)}
+                            계약금: {formatCurrency(settlement.contract?.priceFinal || 0)}
                           </span>
                           <span className="text-slate-500">
-                            수수료: {formatCurrency(settlement.feeAmount || 0)}
+                            수수료: {formatCurrency(settlement.platformFee || 0)}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="text-left sm:text-right pl-13 sm:pl-0 flex-shrink-0">
                       <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">
-                        {settlement.status === 'COMPLETED' ? '정산 완료' : '정산 예정'}
+                        {settlement.status === 'PAID' ? '정산 완료' : '정산 예정'}
                       </p>
                       <p className="text-lg sm:text-xl font-bold text-emerald-600">
-                        {formatCurrency(settlement.netAmount || 0)}
+                        {formatCurrency(settlement.payoutAmount || 0)}
                       </p>
                       <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">
-                        {settlement.status === 'COMPLETED'
-                          ? formatDate(settlement.completedAt)
-                          : `예정: ${formatDate(settlement.expectedDate)}`}
+                        {settlement.status === 'PAID'
+                          ? formatDate(settlement.paidAt)
+                          : `예정: ${formatDate(settlement.createdAt)}`}
                       </p>
                     </div>
                   </div>
@@ -349,39 +361,41 @@ export function Settlements() {
         <div className="card p-4 sm:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-3 sm:mb-4">월별 정산 현황</h2>
           <div className="space-y-2 sm:space-y-4">
-            {[
-              { month: '2024년 1월', amount: 2500000, count: 5, status: 'completed' },
-              { month: '2024년 2월', amount: 3200000, count: 7, status: 'completed' },
-              { month: '2024년 3월', amount: 1800000, count: 4, status: 'pending' },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                <div className="flex items-center gap-2 sm:gap-4">
-                  <div className={cn(
-                    'w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0',
-                    item.status === 'completed' ? 'bg-emerald-100' : 'bg-amber-100'
-                  )}>
-                    {item.status === 'completed' ? (
-                      <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
-                    ) : (
-                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-900 text-sm sm:text-base">{item.month}</p>
-                    <p className="text-xs sm:text-sm text-slate-500">{item.count}건 정산</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-slate-900 text-sm sm:text-base">{formatCurrency(item.amount)}</p>
-                  <p className={cn(
-                    'text-[10px] sm:text-xs',
-                    item.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'
-                  )}>
-                    {item.status === 'completed' ? '정산 완료' : '정산 예정'}
-                  </p>
-                </div>
+            {monthlySettlements.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                월별 정산 내역이 없습니다
               </div>
-            ))}
+            ) : (
+              monthlySettlements.map((item: any, index: number) => (
+                <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
+                  <div className="flex items-center gap-2 sm:gap-4">
+                    <div className={cn(
+                      'w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                      item.status === 'completed' ? 'bg-emerald-100' : 'bg-amber-100'
+                    )}>
+                      {item.status === 'completed' ? (
+                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
+                      ) : (
+                        <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm sm:text-base">{item.month}</p>
+                      <p className="text-xs sm:text-sm text-slate-500">{item.count}건 정산</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-slate-900 text-sm sm:text-base">{formatCurrency(item.amount)}</p>
+                    <p className={cn(
+                      'text-[10px] sm:text-xs',
+                      item.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'
+                    )}>
+                      {item.status === 'completed' ? '정산 완료' : '정산 예정'}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

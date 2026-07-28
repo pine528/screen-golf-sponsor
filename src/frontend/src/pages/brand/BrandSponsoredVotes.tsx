@@ -229,10 +229,10 @@ export default function BrandSponsoredVotes() {
     queryFn: () => api.getSponsorStats(),
   });
 
-  // 후원 가능한 투표 (활성 투표 중 아직 후원 안 한 것)
+  // 활성 투표 조회 (리워드풀 기반)
   const { data: activeVotesData } = useQuery({
-    queryKey: ['activeFanVotes'],
-    queryFn: () => api.getActiveFanVotes(),
+    queryKey: ['activeVotes'],
+    queryFn: () => api.getVotes({ status: 'OPEN' }),
   });
 
   const sponsoredVotes: SponsoredVote[] = sponsoredVotesData?.data?.events || [];

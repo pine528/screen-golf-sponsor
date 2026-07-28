@@ -65,6 +65,12 @@ export default function AthleteWithdrawals() {
   });
   const [statusFilter, setStatusFilter] = useState<string>('');
 
+  // 내 프로필 (은행 정보 가져오기)
+  const { data: profileData } = useQuery({
+    queryKey: ['my-athlete'],
+    queryFn: () => api.getMyAthlete(),
+  });
+
   // 출금 가능 잔액 조회
   const { data: balanceData, isLoading: loadingBalance } = useQuery({
     queryKey: ['withdrawalBalance'],
@@ -153,7 +159,19 @@ export default function AthleteWithdrawals() {
         <div className="bg-white rounded-lg border p-4">
           {!showForm ? (
             <button
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                // 프로필에서 등록된 계좌 정보 자동 입력
+                const profile = profileData?.data;
+                const bankInfo = profile?.bankAccount || {};
+                setForm({
+                  amount: '',
+                  bankName: bankInfo.bankName || '',
+                  bankAccountNumber: bankInfo.accountNumber || '',
+                  accountHolder: bankInfo.accountHolder || '',
+                  reason: '',
+                });
+                setShowForm(true);
+              }}
               className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
             >
               <Send className="w-5 h-5" />
@@ -263,7 +281,16 @@ export default function AthleteWithdrawals() {
               {createMutation.isError && (
                 <div className="p-3 bg-red-50 text-red-600 rounded-lg flex items-center gap-2">
                   <AlertCircle className="w-5 h-5" />
-                  {(createMutation.error as any)?.response?.data?.error?.message || '출금 요청에 실패했습니다'}
+                  {(() => {
+                    const err = createMutation.error as any;
+                    const data = err?.response?.data;
+                    // 통일된 에러 형식: { error: { message: '...' } }
+                    if (data?.error?.message) return data.error.message;
+                    // 구형 에러 형식: { error: '...' }
+                    if (typeof data?.error === 'string') return data.error;
+                    // 기타
+                    return '출금 요청에 실패했습니다';
+                  })()}
                 </div>
               )}
             </form>

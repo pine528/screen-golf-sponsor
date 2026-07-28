@@ -33,8 +33,8 @@ export function AdminSettings() {
 
   // General Settings (local state for UI that's not yet connected to backend)
   const [generalSettings, setGeneralSettings] = useState({
-    platformName: 'SponsorGolf',
-    supportEmail: 'support@sponsorgolf.com',
+    platformName: 'SPONPIK',
+    supportEmail: 'support@sponpik.com',
     maintenanceMode: false,
     allowNewRegistrations: true,
   });

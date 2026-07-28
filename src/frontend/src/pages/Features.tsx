@@ -30,11 +30,11 @@ function AuctionIllustration() {
 
       {/* Main content */}
       <div className="relative w-full max-w-xs">
-        {/* Price chart */}
+        {/* Price chart (docx 2-1: 마케팅 일러스트, "예시" 명시) */}
         <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-500">실시간 입찰</span>
-            <span className="text-xs text-emerald-600 font-bold">LIVE</span>
+            <span className="text-xs font-medium text-slate-500">입찰 추이</span>
+            <span className="text-xs text-slate-400 font-bold">예시</span>
           </div>
           <div className="flex items-end gap-1 h-16">
             {[40, 55, 45, 60, 50, 70, 65, 80, 75, 90, 85, 100].map((h, i) => (
@@ -47,7 +47,7 @@ function AuctionIllustration() {
           </div>
         </div>
 
-        {/* Bid card */}
+        {/* Bid card — '예시' 라벨 (docx 2-1) */}
         <div className="bg-white rounded-xl shadow-lg p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
@@ -55,10 +55,10 @@ function AuctionIllustration() {
             </div>
             <div className="flex-1">
               <p className="text-xs text-slate-500">현재 최고가</p>
-              <p className="text-lg font-bold text-slate-900">₩450,000</p>
+              <p className="text-lg font-bold text-slate-400">예: ₩XXX</p>
             </div>
             <div className="text-right">
-              <span className="text-xs text-emerald-600 font-medium">+12%</span>
+              <span className="text-xs text-slate-400 font-medium">예시</span>
             </div>
           </div>
         </div>
@@ -169,13 +169,13 @@ function AnalyticsIllustration() {
       <div className="absolute top-8 right-8 w-20 h-20 bg-amber-200/50 rounded-full blur-xl" />
       <div className="absolute bottom-4 left-4 w-16 h-16 bg-orange-200/50 rounded-full blur-xl" />
 
-      {/* Main content - Dashboard */}
+      {/* Main content - Dashboard (docx 2-1: 마케팅 일러스트, "예시" 명시) */}
       <div className="relative w-full max-w-xs">
         {/* Main chart card */}
         <div className="bg-white rounded-xl shadow-lg p-4 mb-3">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium text-slate-500">노출 분석</span>
-            <span className="text-xs text-amber-600 font-bold">+24%</span>
+            <span className="text-xs text-slate-400 font-bold">예시</span>
           </div>
           {/* Area chart simulation */}
           <svg viewBox="0 0 200 60" className="w-full h-12">
@@ -198,27 +198,27 @@ function AnalyticsIllustration() {
           </svg>
         </div>
 
-        {/* Stats row */}
+        {/* Stats row — '예시' 라벨 명시 (docx 2-1) */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white rounded-xl shadow-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <Eye className="w-4 h-4 text-amber-500" />
               <span className="text-xs text-slate-500">노출수</span>
             </div>
-            <p className="text-sm font-bold text-slate-900">125,430</p>
+            <p className="text-sm font-bold text-slate-400">예: 노출 누적</p>
           </div>
           <div className="bg-white rounded-xl shadow-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <PieChart className="w-4 h-4 text-amber-500" />
               <span className="text-xs text-slate-500">ROI</span>
             </div>
-            <p className="text-sm font-bold text-slate-900">342%</p>
+            <p className="text-sm font-bold text-slate-400">예: ROAS</p>
           </div>
         </div>
 
-        {/* Floating badge */}
-        <div className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-lg">
-          실시간
+        {/* Floating badge — 마케팅 페이지 illustration 임을 명시 */}
+        <div className="absolute -top-2 -right-2 bg-slate-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-lg">
+          예시 화면
         </div>
       </div>
     </div>
@@ -307,7 +307,7 @@ export function Features() {
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
                 <Hexagon className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
-              <span className="text-xl font-bold text-slate-900">SponsorGolf</span>
+              <span className="text-xl font-bold text-slate-900">SPONPIK</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
@@ -335,7 +335,7 @@ export function Features() {
             FEATURES
           </span>
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
-            <span className="gradient-text">SponsorGolf</span>의 핵심 기능
+            <span className="gradient-text">SPONPIK</span>의 핵심 기능
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
             스크린골프 스폰서십 시장을 혁신하는 강력한 기능들을 만나보세요
@@ -445,9 +445,9 @@ export function Features() {
               <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center">
                 <Hexagon className="w-4 h-4 text-white" strokeWidth={2.5} />
               </div>
-              <span className="font-semibold text-slate-900">SponsorGolf</span>
+              <span className="font-semibold text-slate-900">SPONPIK</span>
             </div>
-            <p className="text-sm text-slate-500">&copy; 2026 SponsorGolf. All rights reserved.</p>
+            <p className="text-sm text-slate-500">&copy; 2026 SPONPIK. All rights reserved.</p>
           </div>
         </div>
       </footer>

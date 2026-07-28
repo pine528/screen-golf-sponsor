@@ -77,16 +77,16 @@ export default function FanDashboard() {
     enabled: isAuthenticated,
   });
 
-  // B) 진행중 투표
+  // B) 진행중 투표 (리워드풀 기반)
   const { data: activeVotesData, isLoading: loadingActiveVotes } = useQuery({
-    queryKey: ['activeFanVotes'],
-    queryFn: () => api.getActiveFanVotes(),
+    queryKey: ['activeVotes'],
+    queryFn: () => api.getVotes({ status: 'OPEN' }),
   });
 
-  // C) 최근 종료 투표
+  // C) 최근 종료 투표 (리워드풀 기반)
   const { data: endedVotesData, isLoading: loadingEndedVotes } = useQuery({
-    queryKey: ['endedFanVotes', 10],
-    queryFn: () => api.getEndedFanVotes(10),
+    queryKey: ['endedVotes', 10],
+    queryFn: () => api.getVotes({ status: 'CLOSED', pageSize: 10 }),
   });
 
   // D) 포인트 TOP 10
@@ -202,7 +202,7 @@ export default function FanDashboard() {
         {isAuthenticated && (
           <div className="grid grid-cols-4 gap-3">
             <Link
-              to="/fan-votes/my"
+              to="/votes/my-created"
               className="card p-3 text-center hover:border-emerald-500/30 transition-all group"
             >
               <FileText className="w-5 h-5 text-violet-500 mx-auto mb-1" />
@@ -223,7 +223,7 @@ export default function FanDashboard() {
               <span className="text-xs font-medium text-slate-700 group-hover:text-emerald-600">내 주문</span>
             </Link>
             <Link
-              to="/fan-votes/create"
+              to="/votes/create"
               className="card p-3 text-center hover:border-emerald-500/30 transition-all group"
             >
               <Plus className="w-5 h-5 text-sky-500 mx-auto mb-1" />
@@ -343,7 +343,7 @@ export default function FanDashboard() {
                 {endedVotes.slice(0, 5).map((vote) => (
                   <Link
                     key={vote.id}
-                    to={`/fan-votes/${vote.id}/result`}
+                    to={`/votes/${vote.id}`}
                     className="block p-4 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-center justify-between gap-3">

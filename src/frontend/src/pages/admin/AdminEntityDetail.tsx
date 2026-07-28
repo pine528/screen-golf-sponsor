@@ -13,6 +13,7 @@ import {
   AlertCircle,
   FileText,
   Briefcase,
+  Trophy,
   CreditCard,
   Mail,
   Phone,
@@ -80,6 +81,54 @@ export default function AdminEntityDetail() {
       queryClient.invalidateQueries({ queryKey: isAthlete ? ['adminAthletes'] : ['adminBrands'] });
     },
   });
+
+  // SPONPIK docx 4 — 관리자 빠른 편집 (구조화 필드)
+  const [editForm, setEditForm] = useState<any>(null);
+  const editAthleteMutation = useMutation({
+    mutationFn: (patch: any) => api.updateAthleteAdmin(id!, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminEntity', type, id] });
+      setEditForm(null);
+    },
+    onError: (e: any) => {
+      alert(e?.response?.data?.error?.message || '저장 실패');
+    },
+  });
+
+  // 관리자 — 임의 선수 프로필 사진 업로드
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const uploadAthleteImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const uploadResp = await api.uploadFile(file, 'profile');
+      const url = uploadResp?.data?.fileUrl;
+      if (!url) throw new Error('업로드 응답에 URL이 없습니다');
+      await api.updateAthleteAdmin(id!, { profileImageUrl: url });
+      return url;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminEntity', type, id] });
+    },
+    onError: (e: any) => {
+      alert(e?.response?.data?.error?.message || e?.message || '이미지 업로드에 실패했습니다');
+    },
+    onSettled: () => setUploadingImage(false),
+  });
+
+  const handleAthleteImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드 가능합니다 (JPG/PNG/WebP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('이미지 크기는 5MB 이하로 업로드해주세요');
+      return;
+    }
+    setUploadingImage(true);
+    uploadAthleteImageMutation.mutate(file);
+    e.target.value = '';
+  };
 
   const entity = data?.data;
 
@@ -231,17 +280,37 @@ export default function AdminEntityDetail() {
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
               {isAthlete ? (
-                entity.profileImageUrl ? (
-                  <img
-                    src={entity.profileImageUrl}
-                    alt={entity.name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center">
-                    <Users className="w-8 h-8 text-slate-400" />
+                <label
+                  className={`relative group ${uploadingImage ? 'cursor-wait' : 'cursor-pointer'}`}
+                  title="프로필 사진 변경 (JPG/PNG/WebP, 5MB 이하)"
+                >
+                  {entity.profileImageUrl ? (
+                    <img
+                      src={entity.profileImageUrl}
+                      alt={entity.name}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center">
+                      <Users className="w-8 h-8 text-slate-400" />
+                    </div>
+                  )}
+                  {/* 호버 오버레이 + 카메라 아이콘 */}
+                  <div className={`absolute inset-0 rounded-full bg-black/50 flex items-center justify-center transition-opacity ${uploadingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {uploadingImage ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-white text-xs font-bold">📷 변경</span>
+                    )}
                   </div>
-                )
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAthleteImageChange}
+                    disabled={uploadingImage}
+                  />
+                </label>
               ) : (
                 <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                   <Building2 className="w-8 h-8 text-white" />
@@ -489,6 +558,67 @@ export default function AdminEntityDetail() {
                             <span className="text-slate-900">{entity.tour}</span>
                           </div>
                         )}
+                        {/* SPONPIK docx 4 권장 데이터 항목 (구조화 필드) */}
+                        {entity.sportType && (
+                          <div className="flex items-center gap-3 text-sm">
+                            <Briefcase className="w-4 h-4 text-slate-400" />
+                            <span className="text-slate-600">종목:</span>
+                            <span className="text-slate-900">
+                              {entity.sportType === 'GOLF' ? '🏌️ 골프' : entity.sportType === 'SCREEN_GOLF' ? '⛳ 스크린골프' : entity.sportType}
+                              {entity.sport?.name && ` (${entity.sport.name})`}
+                            </span>
+                          </div>
+                        )}
+                        {entity.affiliation && (
+                          <div className="flex items-center gap-3 text-sm">
+                            <Building2 className="w-4 h-4 text-slate-400" />
+                            <span className="text-slate-600">소속:</span>
+                            <span className="text-slate-900">{entity.affiliation}</span>
+                          </div>
+                        )}
+                        {/* 선수 프로필 구조화 — 학력/수상/경력 */}
+                        {entity.education && (
+                          <div className="flex items-start gap-3 text-sm">
+                            <FileText className="w-4 h-4 text-slate-400 mt-0.5" />
+                            <span className="text-slate-600">학력:</span>
+                            <span className="text-slate-900 flex-1">{entity.education}</span>
+                          </div>
+                        )}
+                        {entity.awards && (
+                          <div className="flex items-start gap-3 text-sm">
+                            <Trophy className="w-4 h-4 text-slate-400 mt-0.5" />
+                            <span className="text-slate-600">수상:</span>
+                            <span className="text-slate-900 flex-1">{entity.awards}</span>
+                          </div>
+                        )}
+                        {entity.career && (
+                          <div className="flex items-start gap-3 text-sm">
+                            <Briefcase className="w-4 h-4 text-slate-400 mt-0.5" />
+                            <span className="text-slate-600">경력:</span>
+                            <span className="text-slate-900 flex-1">{entity.career}</span>
+                          </div>
+                        )}
+                        {(entity.height || entity.region || entity.debutYear) && (
+                          <div className="flex items-start gap-3 text-sm">
+                            <FileText className="w-4 h-4 text-slate-400 mt-0.5" />
+                            <span className="text-slate-600">상세:</span>
+                            <span className="text-slate-900 flex-1 inline-flex flex-wrap items-center gap-x-2">
+                              {entity.height && <span>📏 {entity.height}cm</span>}
+                              {entity.region && <span>📍 {entity.region}</span>}
+                              {entity.debutYear && <span>🎯 {entity.debutYear}년 데뷔</span>}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded ${
+                            entity.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'
+                          }`}>
+                            {entity.isActive ? '🟢 운영 활성' : '⚪ 운영 비활성'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            (공개 페이지 노출 {entity.isActive ? '대상' : '제외'})
+                          </span>
+                        </div>
                         {entity.bio && (
                           <div className="flex items-start gap-3 text-sm">
                             <FileText className="w-4 h-4 text-slate-400 mt-0.5" />
@@ -510,6 +640,158 @@ export default function AdminEntityDetail() {
                             <span className="text-slate-900">{entity.blockedCategories.join(', ')}</span>
                           </div>
                         )}
+
+                        {/* SPONPIK docx 4 — 관리자 빠른 편집 패널 (관리자 우선 정책) */}
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-bold text-slate-900">⚙️ 관리자 빠른 편집</h4>
+                            {editForm == null ? (
+                              <button
+                                onClick={() => setEditForm({
+                                  height: entity.height ?? '',
+                                  region: entity.region ?? '',
+                                  debutYear: entity.debutYear ?? '',
+                                  affiliation: entity.affiliation ?? '',
+                                  education: entity.education ?? '',
+                                  awards: entity.awards ?? '',
+                                  career: entity.career ?? '',
+                                  sportType: entity.sportType ?? '',
+                                  isActive: entity.isActive ?? true,
+                                })}
+                                className="text-xs font-bold px-3 py-1 bg-emerald-500 text-white rounded hover:bg-emerald-600"
+                              >
+                                편집 시작
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => editAthleteMutation.mutate({
+                                    height: editForm.height === '' ? null : Number(editForm.height),
+                                    region: editForm.region || null,
+                                    debutYear: editForm.debutYear === '' ? null : Number(editForm.debutYear),
+                                    affiliation: editForm.affiliation || null,
+                                    education: editForm.education || null,
+                                    awards: editForm.awards || null,
+                                    career: editForm.career || null,
+                                    sportType: editForm.sportType || null,
+                                    isActive: editForm.isActive,
+                                  })}
+                                  disabled={editAthleteMutation.isPending}
+                                  className="text-xs font-bold px-3 py-1 bg-emerald-500 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
+                                >
+                                  {editAthleteMutation.isPending ? '저장 중...' : '저장'}
+                                </button>
+                                <button
+                                  onClick={() => setEditForm(null)}
+                                  className="text-xs font-bold px-3 py-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          {editForm != null && (
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">신장 (cm)</label>
+                                <input
+                                  type="number"
+                                  value={editForm.height}
+                                  onChange={(e) => setEditForm({ ...editForm, height: e.target.value === '' ? '' : Number(e.target.value) })}
+                                  className="w-full text-xs border rounded px-2 py-1"
+                                  placeholder="예: 170"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">데뷔 연도</label>
+                                <input
+                                  type="number"
+                                  value={editForm.debutYear}
+                                  onChange={(e) => setEditForm({ ...editForm, debutYear: e.target.value === '' ? '' : Number(e.target.value) })}
+                                  className="w-full text-xs border rounded px-2 py-1"
+                                  placeholder="예: 2018"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">거주 지역</label>
+                                <input
+                                  type="text"
+                                  value={editForm.region}
+                                  onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                                  className="w-full text-xs border rounded px-2 py-1"
+                                  placeholder="예: 경기도 성남시"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">소속</label>
+                                <input
+                                  type="text"
+                                  value={editForm.affiliation}
+                                  onChange={(e) => setEditForm({ ...editForm, affiliation: e.target.value })}
+                                  className="w-full text-xs border rounded px-2 py-1"
+                                  placeholder="예: SBSGOLF"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">종목</label>
+                                <select
+                                  value={editForm.sportType}
+                                  onChange={(e) => setEditForm({ ...editForm, sportType: e.target.value })}
+                                  className="w-full text-xs border rounded px-2 py-1 bg-white"
+                                >
+                                  <option value="">선택</option>
+                                  <option value="GOLF">🏌️ 골프</option>
+                                  <option value="SCREEN_GOLF">⛳ 스크린골프</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-0.5">운영 활성</label>
+                                <button
+                                  onClick={() => setEditForm({ ...editForm, isActive: !editForm.isActive })}
+                                  className={`w-full text-xs font-bold px-2 py-1 rounded ${
+                                    editForm.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'
+                                  }`}
+                                >
+                                  {editForm.isActive ? '🟢 활성' : '⚪ 비활성'}
+                                </button>
+                              </div>
+                              {/* 선수 프로필 구조화 — 학력/수상/경력 (각 항목 ' · ' 로 구분 입력) */}
+                              <div className="col-span-2">
+                                <label className="block text-[10px] text-slate-500 mb-0.5">학력</label>
+                                <textarea
+                                  value={editForm.education}
+                                  onChange={(e) => setEditForm({ ...editForm, education: e.target.value })}
+                                  rows={2}
+                                  className="w-full text-xs border rounded px-2 py-1 resize-y"
+                                  placeholder="예: 공주대 교육대학원 석사 · 중등 2급 정교사(체육) · 대전체육고 골프부 출신"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[10px] text-slate-500 mb-0.5">수상</label>
+                                <textarea
+                                  value={editForm.awards}
+                                  onChange={(e) => setEditForm({ ...editForm, awards: e.target.value })}
+                                  rows={2}
+                                  className="w-full text-xs border rounded px-2 py-1 resize-y"
+                                  placeholder="예: 대전광역시장배 준우승 · KPGA 프론티어투어 4위"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[10px] text-slate-500 mb-0.5">경력</label>
+                                <textarea
+                                  value={editForm.career}
+                                  onChange={(e) => setEditForm({ ...editForm, career: e.target.value })}
+                                  rows={2}
+                                  className="w-full text-xs border rounded px-2 py-1 resize-y"
+                                  placeholder="예: 전 GDR아카데미 대전스마트시티점 프로"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 선수 경기결과 승인 (선수 자가등록 검수) */}
+                        <AdminAthleteEventResults athleteId={id!} />
                       </>
                     ) : (
                       <>
@@ -958,33 +1240,15 @@ export default function AdminEntityDetail() {
         <div className="card p-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">빠른 링크</h2>
           <div className="flex flex-wrap gap-3">
-            <Link
-              to={`/admin/contracts?${isAthlete ? 'athleteId' : 'brandId'}=${id}`}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-            >
-              <CreditCard className="w-4 h-4" />
-              계약 목록
-              <ExternalLink className="w-3 h-3" />
-            </Link>
             {isAthlete && (
-              <>
-                <Link
-                  to={`/admin/slots?athleteId=${id}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-                >
-                  <Briefcase className="w-4 h-4" />
-                  슬롯 목록
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
-                <Link
-                  to={`/admin/finance/withdrawals?athleteId=${id}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-                >
-                  <Banknote className="w-4 h-4" />
-                  출금 목록
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
-              </>
+              <Link
+                to={`/admin/finance/withdrawals?athleteId=${id}`}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <Banknote className="w-4 h-4" />
+                출금 목록
+                <ExternalLink className="w-3 h-3" />
+              </Link>
             )}
             {!isAthlete && (
               <Link
@@ -1008,5 +1272,62 @@ export default function AdminEntityDetail() {
         </div>
       </div>
     </Layout>
+  );
+}
+
+/** 관리자: 선수 경기결과 목록 + 자가등록(PENDING) 승인/반려 */
+function AdminAthleteEventResults({ athleteId }: { athleteId: string }) {
+  const qc = useQueryClient();
+  const { data: resp, isLoading } = useQuery({
+    queryKey: ['admin-athlete-results', athleteId],
+    queryFn: () => api.getAthleteEventResults(athleteId),
+    enabled: !!athleteId,
+  });
+  const results: any[] = resp?.data || [];
+  const pending = results.filter((r) => r.status === 'PENDING');
+
+  const approveMut = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'APPROVED' | 'REJECTED' }) => api.approveAthleteEventResult(id, status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-athlete-results', athleteId] }),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.deleteAthleteEventResult(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-athlete-results', athleteId] }),
+  });
+
+  if (isLoading || results.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-200">
+      <h4 className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+        🏆 경기결과
+        {pending.length > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">승인 대기 {pending.length}</span>}
+      </h4>
+      <div className="space-y-1.5">
+        {results.map((r) => (
+          <div key={r.id} className={`flex items-center justify-between gap-2 py-1.5 px-2 rounded text-sm border ${r.status === 'PENDING' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold truncate">{r.eventName}</div>
+              <div className="text-[10px] text-slate-400">
+                {r.eventDate ? new Date(r.eventDate).toLocaleDateString('ko-KR') : '-'}
+                {r.tour ? ` · ${r.tour}` : ''}{r.rank != null ? ` · ${r.rank}위` : ''}
+                {r.source === 'ATHLETE_SELF' ? ' · 선수 입력' : ''}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {r.status === 'PENDING' ? (
+                <>
+                  <button onClick={() => approveMut.mutate({ id: r.id, status: 'APPROVED' })} disabled={approveMut.isPending} className="text-[10px] font-bold px-2 py-1 bg-emerald-500 text-white rounded hover:bg-emerald-600">승인</button>
+                  <button onClick={() => approveMut.mutate({ id: r.id, status: 'REJECTED' })} disabled={approveMut.isPending} className="text-[10px] font-bold px-2 py-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300">반려</button>
+                </>
+              ) : (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${r.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{r.status === 'REJECTED' ? '반려' : '공개'}</span>
+              )}
+              <button onClick={() => deleteMut.mutate(r.id)} className="text-[10px] text-rose-500 hover:text-rose-700 font-bold">삭제</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

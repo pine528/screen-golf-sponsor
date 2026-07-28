@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../../components/Layout';
 import { api } from '../../services/api';
 import {
@@ -11,7 +12,7 @@ import {
   Users,
   AlertTriangle,
   Eye,
-  Pause,
+  XCircle,
   Play,
   RefreshCw,
   ChevronLeft,
@@ -22,9 +23,11 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../../utils';
+import { getEventMonthLabel } from '../../utils/eventMonth';
 
 export function AdminAuctions() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
@@ -86,6 +89,32 @@ export function AdminAuctions() {
     },
     onError: (error: any) => {
       setCreateError(error.response?.data?.error?.message || '경매 등록에 실패했습니다.');
+    },
+  });
+
+  // 경매 시작 mutation
+  const startAuctionMutation = useMutation({
+    mutationFn: (id: string) => api.startAuction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-auctions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-auction-monitoring'] });
+      alert('경매가 시작되었습니다.');
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.error?.message || '경매 시작에 실패했습니다.');
+    },
+  });
+
+  // 경매 취소 mutation
+  const cancelAuctionMutation = useMutation({
+    mutationFn: (id: string) => api.cancelAuction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-auctions'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-auction-monitoring'] });
+      alert('경매가 취소되었습니다.');
+    },
+    onError: (error: any) => {
+      alert(error.response?.data?.error?.message || '경매 취소에 실패했습니다.');
     },
   });
 
@@ -320,7 +349,7 @@ export function AdminAuctions() {
                               {auction.slotInstance?.slotTemplate?.name || '슬롯'}
                             </p>
                             <p className="text-sm text-slate-500">
-                              {auction.slotInstance?.event?.name || '이벤트'}
+                              {getEventMonthLabel(auction.slotInstance?.event) || '이벤트'}
                             </p>
                           </div>
                         </div>
@@ -372,23 +401,36 @@ export function AdminAuctions() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => navigate(`/auctions/${auction.id}`)}
                             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                             title="상세 보기"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {auction.status === 'LIVE' && (
+                          {(auction.status === 'LIVE' || auction.status === 'SCHEDULED') && (
                             <button
-                              className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                              title="일시중지"
+                              onClick={() => {
+                                if (confirm('정말 이 경매를 취소하시겠습니까?')) {
+                                  cancelAuctionMutation.mutate(auction.id);
+                                }
+                              }}
+                              disabled={cancelAuctionMutation.isPending}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="경매 취소"
                             >
-                              <Pause className="w-4 h-4" />
+                              <XCircle className="w-4 h-4" />
                             </button>
                           )}
                           {auction.status === 'SCHEDULED' && (
                             <button
+                              onClick={() => {
+                                if (confirm('이 경매를 지금 시작하시겠습니까?')) {
+                                  startAuctionMutation.mutate(auction.id);
+                                }
+                              }}
+                              disabled={startAuctionMutation.isPending}
                               className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title="시작"
+                              title="경매 시작"
                             >
                               <Play className="w-4 h-4" />
                             </button>
@@ -468,7 +510,7 @@ export function AdminAuctions() {
                   <option value="">슬롯을 선택하세요</option>
                   {availableSlots.map((slot: any) => (
                     <option key={slot.id} value={slot.id}>
-                      {slot.slotTemplate?.name} - {slot.athlete?.name} ({slot.event?.name})
+                      {slot.slotTemplate?.name} - {slot.athlete?.name} ({getEventMonthLabel(slot.event)})
                       {slot.reservePrice && ` / 시작가: ${formatCurrency(slot.reservePrice)}`}
                     </option>
                   ))}

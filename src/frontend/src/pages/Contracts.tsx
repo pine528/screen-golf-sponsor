@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../utils';
+import { getEventMonthLabel } from '../utils/eventMonth';
 
 export function Contracts() {
   const { user } = useAuth();
@@ -45,6 +46,12 @@ export function Contracts() {
       queryClient.invalidateQueries({ queryKey: ['my-contracts'] });
       setShowModal(false);
       setSelectedContract(null);
+      alert('계약 서명이 완료되었습니다!');
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error?.message || '서명에 실패했습니다. 다시 시도해주세요.';
+      alert(message);
+      console.error('Contract sign error:', error);
     },
   });
 
@@ -252,7 +259,7 @@ export function Contracts() {
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="truncate">{contract.auction?.slotInstance?.event?.name}</span>
+                            <span className="truncate">{getEventMonthLabel(contract.auction?.slotInstance?.event)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -284,7 +291,10 @@ export function Contracts() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:flex-shrink-0">
-                      {contract.status === 'PENDING_SIGNATURE' && (
+                      {/* 서명 버튼: 본인이 아직 서명 안 했을 때만 표시 */}
+                      {contract.status === 'PENDING_SIGNATURE' &&
+                       ((user?.role === 'BRAND' && !contract.brandSignedAt) ||
+                        (user?.role === 'ATHLETE' && !contract.athleteSignedAt)) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -408,7 +418,6 @@ function ContractDetailModal({
 }: ContractDetailModalProps) {
   const [activeTab, setActiveTab] = useState('details');
   const [assetFile, setAssetFile] = useState<File | null>(null);
-  const [assetType, setAssetType] = useState('IMAGE');
   const [isUploading, setIsUploading] = useState(false);
 
   // 선수 노출 인증용 상태
@@ -434,7 +443,7 @@ function ContractDetailModal({
       await api.uploadAsset(contract.id, {
         fileUrl,
         fileName: assetFile.name,
-        fileType: assetType,
+        fileType: 'IMAGE',
       });
 
       alert('에셋이 제출되었습니다!');
@@ -459,7 +468,9 @@ function ContractDetailModal({
     try {
       // 1. 파일들 업로드
       const uploadResult = await api.uploadFiles(verificationFiles, 'verification');
-      const photoUrls = uploadResult.data?.urls || uploadResult.data?.map((f: any) => f.url || f.fileUrl) || [];
+      const photoUrls = uploadResult.data?.urls
+        || uploadResult.data?.files?.map((f: any) => f.fileUrl || f.url)
+        || (Array.isArray(uploadResult.data) ? uploadResult.data.map((f: any) => f.fileUrl || f.url) : []);
 
       if (photoUrls.length === 0) {
         throw new Error('파일 업로드 실패');
@@ -527,7 +538,7 @@ function ContractDetailModal({
               <h2 className="text-xl font-bold text-slate-900">
                 {contract.auction?.slotInstance?.slotTemplate?.name || '계약 상세'}
               </h2>
-              <p className="text-slate-600">{contract.auction?.slotInstance?.event?.name}</p>
+              <p className="text-slate-600">{getEventMonthLabel(contract.auction?.slotInstance?.event)}</p>
             </div>
             <span className={cn('badge', statusStyles[contract.status] || 'bg-slate-100')}>
               {statusLabels[contract.status] || contract.status}
@@ -656,8 +667,10 @@ function ContractDetailModal({
                 </div>
               </div>
 
-              {/* Actions */}
-              {contract.status === 'PENDING_SIGNATURE' && (
+              {/* Actions - 서명 버튼: 본인이 아직 서명 안 했을 때만 표시 */}
+              {contract.status === 'PENDING_SIGNATURE' &&
+               ((userRole === 'BRAND' && !contract.brandSignedAt) ||
+                (userRole === 'ATHLETE' && !contract.athleteSignedAt)) && (
                 <div className="pt-4 border-t border-slate-200">
                   <button
                     onClick={onSign}
@@ -684,30 +697,18 @@ function ContractDetailModal({
                   <div className="p-4 bg-sky-50 rounded-xl border border-sky-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Upload className="w-5 h-5 text-sky-600" />
-                      <span className="font-medium text-sky-900">에셋 제출이 필요합니다</span>
+                      <span className="font-medium text-sky-900">로고 이미지 제출이 필요합니다</span>
                     </div>
-                    <p className="text-sm text-sky-700">광고 이미지 또는 비디오를 업로드해주세요</p>
+                    <p className="text-sm text-sky-700">선수에게 부착할 브랜드 로고/문구 이미지를 업로드해주세요</p>
                   </div>
 
                   <div>
-                    <label className="label">에셋 타입</label>
-                    <select
-                      value={assetType}
-                      onChange={(e) => setAssetType(e.target.value)}
-                      className="input"
-                    >
-                      <option value="IMAGE">이미지</option>
-                      <option value="VIDEO">비디오</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="label">파일 업로드</label>
+                    <label className="label">로고 이미지 업로드</label>
                     <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-emerald-400 transition-colors">
                       <input
                         type="file"
                         onChange={(e) => setAssetFile(e.target.files?.[0] || null)}
-                        accept={assetType === 'IMAGE' ? 'image/*' : 'video/*'}
+                        accept="image/png,image/jpeg,image/svg+xml"
                         className="hidden"
                         id="asset-upload"
                       />
@@ -717,17 +718,18 @@ function ContractDetailModal({
                           {assetFile ? assetFile.name : '클릭하여 파일을 선택하세요'}
                         </p>
                         <p className="text-sm text-slate-400 mt-1">
-                          {assetType === 'IMAGE' ? 'PNG, JPG (최대 10MB)' : 'MP4 (최대 50MB)'}
+                          PNG, JPG, SVG (최대 10MB)
                         </p>
                       </label>
                     </div>
                   </div>
 
                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-                    <h4 className="font-medium text-amber-900 mb-2">에셋 가이드라인</h4>
+                    <h4 className="font-medium text-amber-900 mb-2">로고 가이드라인</h4>
                     <ul className="text-sm text-amber-700 space-y-1">
-                      <li>• 이미지: 최소 1920x1080 해상도</li>
-                      <li>• 비디오: 최대 30초</li>
+                      <li>• 고해상도 이미지 권장 (300dpi 이상)</li>
+                      <li>• 투명 배경 PNG 또는 벡터(SVG) 권장</li>
+                      <li>• 슬롯 규격에 맞는 크기로 제작</li>
                       <li>• 부적절한 콘텐츠 금지</li>
                       <li>• 경쟁 브랜드 로고 포함 불가</li>
                     </ul>

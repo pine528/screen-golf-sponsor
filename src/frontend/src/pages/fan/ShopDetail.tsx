@@ -66,6 +66,10 @@ export default function ShopDetail() {
       queryClient.invalidateQueries({ queryKey: ['shopItem', id] });
       queryClient.invalidateQueries({ queryKey: ['pointBalance'] });
     },
+    onError: (error: any) => {
+      const message = error.response?.data?.error?.message || '교환에 실패했습니다.';
+      alert(message);
+    },
   });
 
   const formatNumber = (num: string | number) => {

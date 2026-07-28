@@ -14,7 +14,6 @@ import {
   CheckCircle,
   XCircle,
   Timer,
-  DollarSign,
   MapPin,
   Ruler,
   FileText,
@@ -23,6 +22,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
+import { SlotVisualization } from '../components/SlotVisualization';
 import { useAuth } from '../hooks/useAuth';
 import { useAuctionSocket } from '../hooks/useSocket';
 import { api } from '../services/api';
@@ -34,6 +34,8 @@ import {
   getBodyPartLabel,
   cn,
 } from '../utils';
+import { getEventMonthLabel } from '../utils/eventMonth';
+import LegalNotice from '../components/LegalNotice';
 
 export function AuctionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -46,9 +48,10 @@ export function AuctionDetail() {
   const [newBidAlert, setNewBidAlert] = useState<string | null>(null);
 
   // Real-time socket connection
-  const handleBidPlaced = useCallback((socketData: { brandName: string; currentPrice: number }) => {
+  const handleBidPlaced = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['auction', id] });
-    setNewBidAlert(`${socketData.brandName}님이 ${formatCurrency(socketData.currentPrice)}에 입찰했습니다!`);
+    // 새 입찰 알림 표시
+    setNewBidAlert('새로운 입찰이 접수되었습니다!');
     setTimeout(() => setNewBidAlert(null), 3000);
   }, [id, queryClient]);
 
@@ -99,6 +102,36 @@ export function AuctionDetail() {
       return;
     }
 
+    // docx 3-3 요구사항 — 클라이언트 사전 검증
+    const cur = Number(auctionData?.currentPrice || slot?.reservePrice || 0);
+    const inc = Number(auctionData?.minBidIncrement || 500_000);
+    const minNext = cur + inc;
+
+    // 1) 마감 여부
+    if (auctionData?.status !== 'LIVE') {
+      setBidError('진행 중인 경매가 아닙니다');
+      return;
+    }
+    if (auctionData?.endAt && new Date(auctionData.endAt).getTime() <= Date.now()) {
+      setBidError('경매가 종료되었습니다');
+      return;
+    }
+    // 2) 비활성 슬롯 여부
+    if (slot && slot.isActive === false) {
+      setBidError('비활성 상태인 슬롯입니다');
+      return;
+    }
+    // 3) 현재가보다 높은지 여부
+    if (amount <= cur) {
+      setBidError(`현재가(₩${cur.toLocaleString()})보다 높은 금액을 입력하세요`);
+      return;
+    }
+    // 4) 최소 입찰단위
+    if (amount < minNext) {
+      setBidError(`최소 ₩${minNext.toLocaleString()} 이상 입력하세요 (현재가 + 최소 단위)`);
+      return;
+    }
+
     placeBidMutation.mutate({ auctionId: id!, maxBid: amount });
   };
 
@@ -134,6 +167,7 @@ export function AuctionDetail() {
   const athlete = slot?.athlete;
   const event = slot?.event;
   const bids = auctionData.bids || [];
+  const isPublicAuction = auctionData.isFeatured === true;
 
   const getStatusInfo = () => {
     switch (auctionData.status) {
@@ -191,6 +225,16 @@ export function AuctionDetail() {
                 <StatusIcon className="w-3 h-3" />
                 {statusInfo.label}
               </span>
+              <span
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium',
+                  isPublicAuction
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-slate-100 text-slate-700'
+                )}
+              >
+                {isPublicAuction ? '공개 경매' : '비공개 경매'}
+              </span>
               {/* Real-time indicators */}
               <div className="flex items-center gap-2 ml-auto">
                 <span className={cn(
@@ -209,7 +253,7 @@ export function AuctionDetail() {
               </div>
             </div>
             <p className="text-slate-600 mt-1 text-sm sm:text-base">
-              {athlete?.name} · {event?.name}
+              {athlete?.name} · {getEventMonthLabel(event)}
             </p>
           </div>
         </div>
@@ -221,12 +265,12 @@ export function AuctionDetail() {
             <div className="card p-4 sm:p-6">
               <div className="grid grid-cols-2 gap-4 sm:gap-6">
                 <div>
-                  <p className="text-xs sm:text-sm text-slate-600 mb-1">현재가</p>
+                  <p className="text-xs sm:text-sm text-slate-600 mb-1">시작가</p>
                   <p className="text-2xl sm:text-3xl font-bold text-emerald-600">
-                    {formatCurrency(auctionData.currentPrice)}
+                    {formatCurrency(auctionData.currentPrice || slot?.reservePrice || 0)}
                   </p>
                   <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                    시작가: {formatCurrency(slot?.reservePrice || 0)}
+                    {isPublicAuction ? '공개 입찰' : '비공개 입찰'}
                   </p>
                 </div>
                 <div className="text-right">
@@ -267,7 +311,8 @@ export function AuctionDetail() {
               {user?.role === 'BRAND' && auctionData.status === 'LIVE' && (
                 <button
                   onClick={() => {
-                    setBidAmount(String(auctionData.currentPrice + auctionData.minBidIncrement));
+                    // 시작가를 초기값으로 설정
+                    setBidAmount(String(auctionData.currentPrice || slot?.reservePrice || 0));
                     setBidError(null);
                     setShowBidModal(true);
                   }}
@@ -307,6 +352,17 @@ export function AuctionDetail() {
                 <Ruler className="w-5 h-5 text-emerald-600" />
                 슬롯 규격
               </h2>
+
+              {/* 부착 위치 시각화 */}
+              <div className="mb-6 p-4 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+                <p className="text-sm font-medium text-slate-700 mb-3 text-center">부착 위치 미리보기</p>
+                <SlotVisualization
+                  bodyPart={template?.bodyPart}
+                  brandName="LOGO"
+                  className="mx-auto"
+                />
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="p-3 bg-slate-50 rounded-lg">
                   <p className="text-xs text-slate-500">부착 위치</p>
@@ -353,64 +409,132 @@ export function AuctionDetail() {
               )}
             </div>
 
-            {/* Bid History */}
-            <div className="card overflow-hidden">
-              <div className="p-4 sm:p-6 border-b border-slate-200">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-emerald-600" />
-                  입찰 내역
+            {/* SPONPIK 론칭 docx 3-3 — 호가 리스트 (5단계) + 빠른 증액 버튼 */}
+            {auctionData.status === 'LIVE' && user?.role === 'BRAND' && (
+              <div className="card p-4 sm:p-6">
+                <h2 className="text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <Gavel className="w-5 h-5 text-emerald-600" />
+                  호가 리스트 · 빠른 입찰
                 </h2>
-              </div>
-              {bids.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">
-                  아직 입찰이 없습니다
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-200 max-h-80 overflow-y-auto">
-                  {bids.map((bid: any, index: number) => (
-                    <div
-                      key={bid.id}
-                      className={cn(
-                        'p-4 flex items-center justify-between',
-                        index === 0 && 'bg-emerald-50'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium',
-                            index === 0 ? 'bg-emerald-500' : 'bg-slate-400'
-                          )}
+                {(() => {
+                  const cur = Number(auctionData.currentPrice || slot?.reservePrice || 0);
+                  const inc = Number(auctionData.minBidIncrement || 500_000);
+                  const tiers = Array.from({ length: 5 }, (_, i) => ({
+                    step: i + 1,
+                    amount: cur + inc * (i + 1),
+                    delta: inc * (i + 1),
+                  }));
+                  const totalSum = tiers.reduce((s, t) => s + t.amount, 0);
+                  return (
+                    <>
+                      <div className="grid grid-cols-5 gap-1.5 mb-3">
+                        {tiers.map((t) => (
+                          <button
+                            key={t.step}
+                            onClick={() => {
+                              // docx 3-3 입찰 검증 (호가 단계 클릭)
+                              if (auctionData.status !== 'LIVE') return setBidError('진행 중인 경매가 아닙니다');
+                              if (auctionData.endAt && new Date(auctionData.endAt).getTime() <= Date.now()) return setBidError('경매가 종료되었습니다');
+                              if (slot && slot.isActive === false) return setBidError('비활성 상태인 슬롯입니다');
+                              setBidError(null);
+                              placeBidMutation.mutate({ auctionId: id!, maxBid: t.amount });
+                            }}
+                            disabled={placeBidMutation.isPending || auctionData.status !== 'LIVE'}
+                            className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-1.5 py-2 text-center disabled:opacity-50 transition-colors"
+                            title={`${t.step}단계: ₩${t.amount.toLocaleString()}`}
+                          >
+                            <div className="text-[9px] font-bold text-emerald-700">{t.step}단계</div>
+                            <div className="text-[11px] font-extrabold text-slate-900 truncate">₩{t.amount.toLocaleString()}</div>
+                            <div className="text-[8px] text-slate-500">+₩{t.delta.toLocaleString()}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-3">
+                        <span>5단계 누적: <span className="font-bold text-emerald-700">₩{totalSum.toLocaleString()}</span></span>
+                        <span>최소 단위: ₩{inc.toLocaleString()}</span>
+                      </div>
+                      {/* 직접 입력 (UX docx) */}
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          placeholder={`최소 ${(cur + inc).toLocaleString()} 이상`}
+                          className="input flex-1 text-sm"
+                        />
+                        <button
+                          onClick={handleBid}
+                          disabled={!bidAmount || placeBidMutation.isPending}
+                          className="btn btn-primary text-sm whitespace-nowrap"
                         >
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {bid.brand?.name || '익명 브랜드'}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {formatDateTime(bid.createdAt)}
-                          </p>
-                        </div>
+                          직접 입찰
+                        </button>
                       </div>
-                      <div className="text-right">
-                        <p className={cn(
-                          'font-semibold',
-                          index === 0 ? 'text-emerald-600' : 'text-slate-700'
-                        )}>
-                          {formatCurrency(bid.currentProxy)}
-                        </p>
-                        {bid.isWinning && (
-                          <span className="text-xs text-emerald-600 font-medium">
-                            최고 입찰
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      {bidError && (
+                        <div className="text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded mt-2">{bidError}</div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* 입찰 현황 표시 + 최근 입찰 내역 (docx 3-4) */}
+            <div className="card p-4 sm:p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+                입찰 현황
+              </h2>
+              <div className="p-4 bg-slate-50 rounded-lg text-center mb-4">
+                <p className="text-sm text-slate-600 mb-2">
+                  {isPublicAuction ? '공개 경매' : '비공개 경매'}
+                </p>
+                <p className="text-3xl font-bold text-emerald-600">{bids.length}</p>
+                <p className="text-sm text-slate-500 mt-1">개의 입찰이 접수되었습니다</p>
+              </div>
+
+              {/* 최근 입찰 내역 (docx 3-4 — 닉네임/입찰가/시간 최신순) */}
+              {isPublicAuction && bids.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-bold text-slate-700 mb-2">최근 입찰 내역</h3>
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                    {[...bids]
+                      .sort((a: any, b: any) => +new Date(b.createdAt) - +new Date(a.createdAt))
+                      .slice(0, 10)
+                      .map((b: any, i: number) => (
+                        <div
+                          key={b.id}
+                          className={`flex items-center justify-between py-2 px-3 rounded-lg text-sm ${
+                            i === 0 ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {i === 0 && <span className="text-[9px] font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded">최고</span>}
+                            <span className="font-semibold truncate">
+                              {b.brand?.name ? b.brand.name.charAt(0) + '*'.repeat(Math.max(1, b.brand.name.length - 1)) : '익명'}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-emerald-600">₩{Number(b.currentProxy || b.maxBid || 0).toLocaleString()}</div>
+                            <div className="text-[9px] text-slate-400">
+                              {b.createdAt ? new Date(b.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
+              ) : !isPublicAuction ? (
+                <p className="text-xs text-slate-400 text-center">
+                  비공개 경매는 다른 입찰자의 입찰 금액을 확인할 수 없습니다
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 text-center">아직 입찰 내역이 없습니다</p>
               )}
             </div>
+
+            {/* 권리관계 고정 안내문 (개편 LEG-04/05) */}
+            <LegalNotice className="mt-4" />
           </div>
 
           {/* Sidebar */}
@@ -455,7 +579,7 @@ export function AuctionDetail() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-slate-500">대회명</p>
-                  <p className="font-medium text-slate-900">{event?.name}</p>
+                  <p className="font-medium text-slate-900">{getEventMonthLabel(event)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">투어</p>
@@ -495,7 +619,7 @@ export function AuctionDetail() {
                 {/* 경매 종료 후 계약 보러가기 버튼 */}
                 {auctionData.status === 'ENDED' && auctionData.contract?.id && (
                   <Link
-                    to={`/contracts?highlight=${auctionData.contract.id}`}
+                    to={`/contracts/${auctionData.contract.id}`}
                     className="btn btn-primary w-full text-sm flex items-center justify-center gap-2"
                   >
                     <FileText className="w-4 h-4" />
@@ -531,29 +655,28 @@ export function AuctionDetail() {
               <div className="mb-4 p-4 bg-slate-50 rounded-lg">
                 <p className="font-medium text-slate-900">{template?.name}</p>
                 <p className="text-sm text-slate-600">
-                  {athlete?.name} · {event?.name}
+                  {athlete?.name} · {getEventMonthLabel(event)}
                 </p>
               </div>
 
               <div className="mb-4 p-4 bg-emerald-50 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">현재가</span>
+                  <span className="text-slate-600">시작가</span>
                   <span className="font-semibold text-emerald-700">
-                    {formatCurrency(auctionData.currentPrice)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">최소 증분</span>
-                  <span className="font-medium text-slate-900">
-                    {formatCurrency(auctionData.minBidIncrement)}
+                    {formatCurrency(auctionData.currentPrice || slot?.reservePrice || 0)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">최소 입찰가</span>
                   <span className="font-semibold text-emerald-700">
-                    {formatCurrency(auctionData.currentPrice + auctionData.minBidIncrement)}
+                    {formatCurrency(auctionData.currentPrice || slot?.reservePrice || 0)}
                   </span>
                 </div>
+                <p className="text-xs text-slate-500 pt-2 border-t border-emerald-200">
+                  {isPublicAuction
+                    ? '공개 경매: 입찰 내역이 공개됩니다'
+                    : '비공개 경매: 다른 입찰자의 금액을 알 수 없습니다'}
+                </p>
               </div>
 
               {bidError && (
@@ -566,7 +689,7 @@ export function AuctionDetail() {
               <div className="mb-6">
                 <label className="label">최대 입찰가</label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-400 leading-none">₩</span>
                   <input
                     type="number"
                     className="input pl-10"
@@ -577,7 +700,9 @@ export function AuctionDetail() {
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
                   <Info className="w-3 h-3 inline mr-1" />
-                  프록시 입찰: 다른 입찰자가 있으면 최대 입찰가까지 자동으로 경쟁합니다
+                  {isPublicAuction
+                    ? '공개 입찰: 경매 종료 시 최고 입찰자가 낙찰됩니다'
+                    : '비공개 입찰: 경매 종료 시 최고 입찰자가 낙찰됩니다'}
                 </p>
               </div>
 

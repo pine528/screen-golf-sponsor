@@ -242,7 +242,7 @@ export default function AthletePendingSignatures() {
                     </button>
                   )}
                   <button
-                    onClick={() => navigate(`/athlete/contracts/${contract.id}`)}
+                    onClick={() => navigate(`/contracts/${contract.id}`)}
                     className={cn(
                       'btn btn-secondary',
                       contract.isExpired ? 'flex-1' : ''

@@ -130,12 +130,24 @@ export default function BrandCheckout() {
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">결제 오류</h2>
             <p className="text-slate-600 mb-6">{error}</p>
-            <button
-              onClick={() => navigate('/brand/wallet')}
-              className="btn btn-primary"
-            >
-              지갑으로 돌아가기
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  paymentInitiated.current = false;
+                  setError('');
+                  window.location.reload();
+                }}
+                className="btn btn-secondary"
+              >
+                다시 시도
+              </button>
+              <button
+                onClick={() => navigate('/brand/wallet')}
+                className="btn btn-primary"
+              >
+                지갑으로 돌아가기
+              </button>
+            </div>
           </div>
         </div>
       </Layout>

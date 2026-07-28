@@ -2932,3 +2932,18 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
   - 교훈: 슬롯 템플릿을 추가할 때는 반드시 `prisma/seed.ts`의 slotTemplates 목록에도 함께 추가할 것
 - 고아 인벤토리(삭제된 slotInstance 참조) 96건 정리 — `prisma/repair-orphan-inventory.ts` (계약·판매완료 행은 보존)
 - 영향: `prisma/schema.prisma`, `prisma/migrations/20260728_phase1_inventory/`, `prisma/backfill-phase1-inventory.ts`, `prisma/cleanup-duplicate-sep-event.ts`, `src/services/inventory.service.ts`, `slot.service.ts`, `contract.service.ts`, `src/routes/athlete.routes.ts`
+
+## [2026-07-29] 전면 개편 Phase 2 — 선수 상세 통합 구매화면 (WF-04/05)
+- 데스크톱 3열 구성: 좌 선수정보 요약(섹션 앵커) / 중 슬롯 인벤토리(착장 도식) / 우 후원상품 구성 패널
+- `SlotDiagram`: 표준 착장 실루엣 SVG + slotTemplate.displayX/Y(%) 좌표 마커, 상태별 색상(구매가능/경매중/예약중/판매완료) + 범례
+- `SlotDetailDrawer`(WF-05): 페이지 이탈 없이 권장크기·계약기간·거래방식·가격·등급·제한사항·대체 슬롯 확인 후 즉시 선택
+- 구매 패널 5단계(기간 → 상품유형 → 슬롯 → 추가활동 → 가격) — 선택 결과가 패널·모바일 하단바에 실시간 반영
+- CTA 표준화(§2.4): 경매=입찰하기(경매 상세 이동) / 직접구매=바로 구매(계약 생성) / 협의=파트너십 제안(카카오 상담)
+- 모바일 1열 + 하단 고정 구매바(슬롯·기간·금액·CTA), 페이지 하단 pb-24로 가림 방지
+- 가격 표시: 우선순위표 §14 가격정책(부가세·플랫폼 이용료) 미확정 상태이므로 **표시 금액 = 실제 결제 금액**으로 고정,
+  추가활동은 협의 항목으로 금액 미포함 (§15 "가격과 실제 결제금액이 다르게 계산되는 경우" 중단기준 준수)
+- 재고 없는 기간(30일/6개월/12개월)은 §24 빈화면 — [다른 기간 보기] [장기 파트너십 제안]
+- 기존 경매 호가창은 하단 '슬롯별 경매 현황' 섹션으로 유지
+- 백필 보강: 엑셀 sponsorSlots가 없어도 열려 있는 슬롯 인스턴스로부터 AthleteSlot 생성 (운영은 이미 347건 전량 매핑되어 변화 없음)
+- 검증: 양쪽 tsc 통과 / 로컬 브라우저 — 3열(220·508·320px), 마커 좌표 정확, 슬롯 선택→패널·하단바 반영, 경매 슬롯 CTA '입찰하기', 기간 변경 빈화면, 드로어 개폐, 모바일 375px 가로 오버플로 0
+- 영향: `src/components/purchase/{UnifiedPurchase,SlotDiagram,SlotDetailDrawer}.tsx`, `src/pages/PublicAthleteDetail.tsx`, `src/services/api.ts`, `prisma/backfill-phase1-inventory.ts`

@@ -34,7 +34,7 @@ export function AgencyAthletes() {
     try {
       setLoading(true);
       const res = await api.get('/agencies/athletes');
-      setAthletes(res.data.data || []);
+      setAthletes(res.data || []);
     } catch (err: any) {
       setError(err.response?.data?.error?.message || '데이터를 불러오는데 실패했습니다');
     } finally {

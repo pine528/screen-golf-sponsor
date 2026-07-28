@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowRight, AlertCircle, Vote } from 'lucide-react';
 import { api } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 const loginSchema = z.object({
   email: z.string().email('유효한 이메일을 입력하세요'),
@@ -15,6 +16,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function FanLogin() {
   const navigate = useNavigate();
+  const { checkAuth } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -32,7 +34,10 @@ export default function FanLogin() {
       if (result.success && result.data) {
         localStorage.setItem('accessToken', result.data.accessToken);
         localStorage.setItem('refreshToken', result.data.refreshToken);
+        await checkAuth(); // 인증 상태 갱신
         navigate('/fan');
+      } else {
+        setError(result.error?.message || '로그인에 실패했습니다');
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || '로그인에 실패했습니다');

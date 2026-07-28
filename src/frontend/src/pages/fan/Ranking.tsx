@@ -29,9 +29,9 @@ export default function Ranking() {
   const [limit, setLimit] = useState(20);
 
   const { data: rankings, isLoading } = useQuery({
-    queryKey: ['athleteRanking', limit],
+    queryKey: ['pointRanking', limit],
     queryFn: async () => {
-      const res = await api.getAthleteRanking({ limit });
+      const res = await api.getPointRanking(limit);
       return (res.data || []) as AthleteRanking[];
     },
   });

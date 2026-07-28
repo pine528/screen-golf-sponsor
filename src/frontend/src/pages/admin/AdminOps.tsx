@@ -22,6 +22,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { cn, formatCurrency } from '../../utils';
+import { getEventMonthLabel } from '../../utils/eventMonth';
 
 type SearchType = 'contract' | 'auction';
 
@@ -265,7 +266,7 @@ export default function AdminOps() {
                 <Calendar className="w-4 h-4 text-slate-400" />
                 <div>
                   <p className="text-sm text-slate-500">이벤트</p>
-                  <p className="font-medium">{contract.auction?.slotInstance?.event?.name}</p>
+                  <p className="font-medium">{getEventMonthLabel(contract.auction?.slotInstance?.event)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -358,7 +359,7 @@ export default function AdminOps() {
                 <Calendar className="w-4 h-4 text-slate-400" />
                 <div>
                   <p className="text-sm text-slate-500">이벤트</p>
-                  <p className="font-medium">{auction.slotInstance?.event?.name}</p>
+                  <p className="font-medium">{getEventMonthLabel(auction.slotInstance?.event)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

@@ -409,8 +409,8 @@ export default function BrandWallet() {
             <div className="space-y-3">
               {recentTransactions.map((tx: any) => {
                 const config = txTypeConfig[tx.type] || { label: tx.type, isCredit: false };
-                const amount = Number(tx.amount);
-                const isPositive = amount > 0;
+                const amount = Math.abs(Number(tx.amount));  // 절대값 사용
+                const isPositive = config.isCredit;  // isCredit 설정 기반으로 +/- 결정
 
                 return (
                   <div

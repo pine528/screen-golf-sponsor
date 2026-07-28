@@ -81,7 +81,7 @@ export default function Guide() {
         </div>
 
         <p className="text-lg text-slate-600 mb-12">
-          SponsorGolf 플랫폼 이용 방법을 안내해 드립니다.
+          SPONPIK 플랫폼 이용 방법을 안내해 드립니다.
         </p>
 
         <div className="space-y-8">

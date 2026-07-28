@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../../utils';
+import { getEventMonthLabel } from '../../utils/eventMonth';
 
 export function AdminEvents() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,14 +58,14 @@ export function AdminEvents() {
 
   const statusStyles: Record<string, string> = {
     UPCOMING: 'bg-sky-100 text-sky-700 border-sky-200',
-    ONGOING: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    LIVE: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     COMPLETED: 'bg-slate-100 text-slate-700 border-slate-200',
     CANCELLED: 'bg-red-100 text-red-700 border-red-200',
   };
 
   const statusLabels: Record<string, string> = {
     UPCOMING: '예정',
-    ONGOING: '진행중',
+    LIVE: '진행중',
     COMPLETED: '완료',
     CANCELLED: '취소',
   };
@@ -123,7 +124,7 @@ export function AdminEvents() {
               >
                 <option value="all">전체 상태</option>
                 <option value="UPCOMING">예정</option>
-                <option value="ONGOING">진행중</option>
+                <option value="LIVE">진행중</option>
                 <option value="COMPLETED">완료</option>
                 <option value="CANCELLED">취소</option>
               </select>
@@ -177,7 +178,10 @@ export function AdminEvents() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {filteredEvents.map((event: any) => (
+                  {filteredEvents.map((event: any) => {
+                    const d = event.dateStart || event.startDate;
+                    const monthLabel = d ? `${new Date(d).getMonth() + 1}월` : '';
+                    return (
                     <tr key={event.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -185,8 +189,8 @@ export function AdminEvents() {
                             <Calendar className="w-5 h-5 text-emerald-600" />
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900">{event.name}</p>
-                            <p className="text-sm text-slate-500">{event.type || '일반 대회'}</p>
+                            <p className="font-medium text-slate-900">{monthLabel} 대회</p>
+                            <p className="text-sm text-slate-500">{getEventMonthLabel(event)}</p>
                           </div>
                         </div>
                       </td>
@@ -249,7 +253,8 @@ export function AdminEvents() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -319,6 +324,19 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
     return date.toISOString().split('T')[0];
   };
 
+  // SPONPIK 종목 카테고리 목록 조회 (활성만)
+  const { data: sportsResp } = useQuery({
+    queryKey: ['sports-active'],
+    queryFn: async () => {
+      const r = await fetch('/api/sports', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      const j = await r.json();
+      return j?.data || [];
+    },
+  });
+  const sports: any[] = sportsResp || [];
+
   const [formData, setFormData] = useState({
     name: event?.name || '',
     tour: event?.tour || 'KPGA',
@@ -327,6 +345,13 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
     endDate: event?.endDate?.split('T')[0] || event?.dateEnd?.split('T')[0] || getDefaultEndDate(),
     description: event?.description || '',
     broadcastEpisode: event?.broadcastEpisode || '',
+    // SPONPIK 4. 권장 데이터 항목 (대회)
+    category: event?.category || '',
+    qualifyingDate: event?.qualifyingDate?.split('T')[0] || '',
+    displayOrder: event?.displayOrder ?? 0,
+    isActive: event?.isActive !== false,
+    activeDays: event?.activeDays ?? '',
+    sportId: event?.sportId || event?.sport?.id || '',
   });
   const [error, setError] = useState('');
 
@@ -363,7 +388,7 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
     }
 
     // 날짜를 ISO datetime 형식으로 변환
-    const payload = {
+    const payload: any = {
       name: formData.name,
       tour: formData.tour,
       venue: formData.venue || undefined,
@@ -371,6 +396,13 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
       dateEnd: endDate.toISOString(),
       description: formData.description || undefined,
       broadcastEpisode: formData.broadcastEpisode || undefined,
+      // SPONPIK 4. 권장 데이터 항목
+      category: formData.category || null,
+      qualifyingDate: formData.qualifyingDate ? new Date(formData.qualifyingDate).toISOString() : null,
+      displayOrder: Number(formData.displayOrder) || 0,
+      isActive: !!formData.isActive,
+      activeDays: formData.activeDays === '' ? null : Number(formData.activeDays),
+      sportId: formData.sportId || null,
     };
 
     if (event) {
@@ -477,6 +509,92 @@ function EventModal({ event, onClose, onSave }: EventModalProps) {
               placeholder="이벤트에 대한 상세 설명을 입력하세요"
             />
           </div>
+
+          {/* SPONPIK docx 4 권장 데이터 항목 (대회) */}
+          <div className="pt-4 border-t border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900 mb-3">📊 운영 정보 (docx 4)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label text-xs">카테고리</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="input"
+                >
+                  <option value="">(없음)</option>
+                  <option value="정규투어">정규투어</option>
+                  <option value="시드전">시드전</option>
+                  <option value="드림투어">드림투어</option>
+                  <option value="점프투어">점프투어</option>
+                  <option value="챔피언스투어">챔피언스투어</option>
+                  <option value="친선전">친선전</option>
+                  <option value="이벤트경기">이벤트경기</option>
+                  <option value="예선전">예선전</option>
+                </select>
+              </div>
+              <div>
+                <label className="label text-xs">예선 일자</label>
+                <input
+                  type="date"
+                  value={formData.qualifyingDate}
+                  onChange={(e) => setFormData({ ...formData, qualifyingDate: e.target.value })}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label text-xs">표시 순서 (낮을수록 상단)</label>
+                <input
+                  type="number"
+                  value={formData.displayOrder as any}
+                  onChange={(e) => setFormData({ ...formData, displayOrder: Number(e.target.value) })}
+                  className="input"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="label text-xs">활성 N일 (관리자 우선)</label>
+                <input
+                  type="number"
+                  value={formData.activeDays as any}
+                  onChange={(e) => setFormData({ ...formData, activeDays: e.target.value === '' ? '' : Number(e.target.value) })}
+                  className="input"
+                  min={1}
+                  max={60}
+                  placeholder="기본 14"
+                />
+              </div>
+              <div>
+                <label className="label text-xs">종목 (Sport)</label>
+                <select
+                  value={formData.sportId}
+                  onChange={(e) => setFormData({ ...formData, sportId: e.target.value })}
+                  className="input"
+                >
+                  <option value="">(없음)</option>
+                  {sports.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.code === 'GOLF' ? '🏌️' : s.code === 'SCREEN_GOLF' ? '⛳' : '🏅'} {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="inline-flex items-center gap-2 text-sm mt-6">
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  <span>운영 활성</span>
+                </label>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">
+              관리자 우선 정책: 활성 N일 미입력 시 시스템 기본 14일 적용
+            </p>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} disabled={isSubmitting} className="btn btn-secondary flex-1">
               취소

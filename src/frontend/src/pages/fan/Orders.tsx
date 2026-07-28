@@ -54,6 +54,10 @@ export default function Orders() {
       queryClient.invalidateQueries({ queryKey: ['myRedemptionOrders'] });
       queryClient.invalidateQueries({ queryKey: ['pointBalance'] });
     },
+    onError: (error: any) => {
+      const message = error.response?.data?.error?.message || '주문 취소에 실패했습니다.';
+      alert(message);
+    },
   });
 
   const orders = data?.data?.orders || [];

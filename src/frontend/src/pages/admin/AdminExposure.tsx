@@ -24,8 +24,8 @@ const exposureTypes = [
 ];
 
 const bodyParts = [
-  { value: 'SHIRT_CHEST_LEFT', label: '상의 가슴 좌측' },
-  { value: 'SHIRT_CHEST_RIGHT', label: '상의 가슴 우측' },
+  { value: 'SHIRT_CHEST_LEFT', label: '상의 좌측' },
+  { value: 'SHIRT_CHEST_RIGHT', label: '상의 우측' },
   { value: 'SHIRT_SLEEVE_LEFT', label: '상의 소매 좌측' },
   { value: 'SHIRT_SLEEVE_RIGHT', label: '상의 소매 우측' },
   { value: 'CAP_SIDE_LEFT', label: '모자 측면' },

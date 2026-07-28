@@ -72,7 +72,7 @@ export default function CampaignDetail() {
             <h2 className="text-lg font-semibold text-slate-900 mb-2">
               캠페인을 찾을 수 없습니다
             </h2>
-            <Link to="/brand/campaigns" className="btn btn-primary">
+            <Link to="/campaigns" className="btn btn-primary">
               캠페인 목록으로
             </Link>
           </div>
@@ -100,7 +100,7 @@ export default function CampaignDetail() {
         <div className="flex items-center justify-between">
           <div>
             <Link
-              to="/brand/campaigns"
+              to="/campaigns"
               className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2"
             >
               <ChevronLeft className="w-4 h-4" />

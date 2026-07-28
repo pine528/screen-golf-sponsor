@@ -89,8 +89,8 @@ export default function SeasonLeaderboard() {
             <h2 className="text-lg font-semibold text-slate-900 mb-2">
               리더보드를 불러올 수 없습니다
             </h2>
-            <Link to="/seasons" className="btn btn-primary">
-              시즌 목록으로
+            <Link to="/ranking" className="btn btn-primary">
+              랭킹으로
             </Link>
           </div>
         </div>
@@ -107,11 +107,11 @@ export default function SeasonLeaderboard() {
         {/* Header */}
         <div className="mb-6">
           <Link
-            to="/seasons"
+            to="/ranking"
             className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2"
           >
             <ChevronLeft className="w-4 h-4" />
-            시즌 목록
+            랭킹
           </Link>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">

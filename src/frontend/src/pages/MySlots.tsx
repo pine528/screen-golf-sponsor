@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Layout } from '../components/Layout';
 import { api } from '../services/api';
 import {
   Calendar,
   Search,
-  Clock,
   DollarSign,
   Eye,
   Gavel,
@@ -23,6 +22,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '../utils';
+import { getEventMonthLabel } from '../utils/eventMonth';
 
 export function MySlots() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,7 +35,7 @@ export function MySlots() {
   const queryClient = useQueryClient();
 
   // Get athlete profile to get athlete ID
-  const { data: athleteData } = useQuery({
+  const { data: athleteData, isLoading: athleteLoading } = useQuery({
     queryKey: ['my-athlete'],
     queryFn: () => api.getMyAthlete(),
   });
@@ -52,8 +52,8 @@ export function MySlots() {
   });
 
   const { data: slotsData, isLoading } = useQuery({
-    queryKey: ['my-athlete-slots', selectedEvent],
-    queryFn: () => api.getMyAthleteSlots(selectedEvent !== 'all' ? selectedEvent : undefined),
+    queryKey: ['my-athlete-slots'],
+    queryFn: () => api.getMyAthleteSlots(),
   });
 
   const { data: statsData } = useQuery({
@@ -67,12 +67,38 @@ export function MySlots() {
   const stats = statsData?.data || {};
   const templates = templatesData?.data || [];
 
+  // 월별 옵션 (7~12월 고정)
+  const monthOptions = [
+    { value: '2026-07', label: '7월' },
+    { value: '2026-08', label: '8월' },
+    { value: '2026-09', label: '9월' },
+    { value: '2026-10', label: '10월' },
+    { value: '2026-11', label: '11월' },
+    { value: '2026-12', label: '12월' },
+  ];
+
+  // 선택 월에 해당하는 이벤트 ID 목록
+  const selectedEventIds = useMemo(() => {
+    if (selectedEvent === 'all') return null;
+    return events
+      .filter((ev: any) => {
+        const d = ev.dateStart || ev.date_start;
+        if (!d) return false;
+        const dt = new Date(d);
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        return key === selectedEvent;
+      })
+      .map((ev: any) => ev.id);
+  }, [events, selectedEvent]);
+
   const filteredSlots = slots
     .filter((slot: any) => {
+      // 월별 필터
+      if (selectedEventIds && !selectedEventIds.includes(slot.event?.id)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'auction' && slot.auction?.status !== 'LIVE') return false;
-        if (statusFilter === 'contracted' && !slot.contract) return false;
-        if (statusFilter === 'available' && (slot.auction || slot.contract)) return false;
+        if (statusFilter === 'contracted' && !slot.auction?.contract) return false;
+        if (statusFilter === 'available' && (slot.auction || slot.auction?.contract)) return false;
       }
       return true;
     })
@@ -102,7 +128,8 @@ export function MySlots() {
   };
 
   const getSlotStatus = (slot: any) => {
-    if (slot.contract) {
+    const contract = slot.auction?.contract;
+    if (contract) {
       return { label: '계약됨', style: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
     }
     if (slot.auction?.status === 'LIVE') {
@@ -111,8 +138,17 @@ export function MySlots() {
     if (slot.auction?.status === 'SCHEDULED') {
       return { label: '경매 예정', style: 'bg-sky-100 text-sky-700 border-sky-200' };
     }
-    if (slot.enableDirectBuy || slot.enableAuction) {
+    // 바로 구매 활성화 + 가격 설정됨 = 판매중
+    if (slot.enableDirectBuy && slot.directBuyPrice) {
       return { label: '판매중', style: 'bg-violet-100 text-violet-700 border-violet-200' };
+    }
+    // 경매 활성화 + 최소입찰가 + 마감일 설정됨 = 판매중
+    if (slot.enableAuction && slot.auctionMinBid && slot.auctionEndAt) {
+      return { label: '판매중', style: 'bg-violet-100 text-violet-700 border-violet-200' };
+    }
+    // 플래그만 설정됨 = 설정중
+    if (slot.enableDirectBuy || slot.enableAuction) {
+      return { label: '설정중', style: 'bg-blue-100 text-blue-700 border-blue-200' };
     }
     return { label: '미등록', style: 'bg-slate-100 text-slate-700 border-slate-200' };
   };
@@ -120,7 +156,7 @@ export function MySlots() {
   const getSaleModeLabel = (slot: any) => {
     const modes = [];
     if (slot.enableAuction) modes.push('경매');
-    if (slot.enableDirectBuy) modes.push('즉시구매');
+    if (slot.enableDirectBuy) modes.push('바로 구매');
     return modes.length > 0 ? modes.join(' + ') : '미설정';
   };
 
@@ -134,10 +170,21 @@ export function MySlots() {
             <p className="text-sm sm:text-base text-slate-600 mt-1">내 광고 슬롯을 관리합니다</p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn btn-primary inline-flex items-center gap-2 text-sm"
+            onClick={() => {
+              if (!athlete) {
+                alert('선수 프로필을 먼저 등록해주세요');
+                return;
+              }
+              setShowCreateModal(true);
+            }}
+            disabled={athleteLoading}
+            className="btn btn-primary inline-flex items-center gap-2 text-sm disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
+            {athleteLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
             슬롯 추가
           </button>
         </div>
@@ -176,7 +223,7 @@ export function MySlots() {
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm text-slate-600">계약 완료</p>
                 <p className="text-base sm:text-2xl font-bold text-slate-900">
-                  {stats.contractedSlots || slots.filter((s: any) => s.contract).length}
+                  {stats.contractedSlots || slots.filter((s: any) => s.auction?.contract).length}
                 </p>
               </div>
             </div>
@@ -215,9 +262,9 @@ export function MySlots() {
                 onChange={(e) => setSelectedEvent(e.target.value)}
                 className="input flex-1 min-w-[140px] text-sm sm:text-base"
               >
-                <option value="all">전체 이벤트</option>
-                {events.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
+                <option value="all">전체 월</option>
+                {monthOptions.map((opt: { value: string; label: string }) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
               <select
@@ -262,12 +309,12 @@ export function MySlots() {
                         <div className={cn(
                           'w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0',
                           slot.auction?.status === 'LIVE' ? 'bg-amber-100' :
-                          slot.contract ? 'bg-emerald-100' : 'bg-slate-100'
+                          slot.auction?.contract ? 'bg-emerald-100' : 'bg-slate-100'
                         )}>
                           <Calendar className={cn(
                             'w-5 h-5 sm:w-6 sm:h-6',
                             slot.auction?.status === 'LIVE' ? 'text-amber-600' :
-                            slot.contract ? 'text-emerald-600' : 'text-slate-500'
+                            slot.auction?.contract ? 'text-emerald-600' : 'text-slate-500'
                           )} />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -275,31 +322,56 @@ export function MySlots() {
                             <h3 className="font-semibold text-slate-900 text-sm sm:text-base">
                               {slot.slotTemplate?.name}
                             </h3>
-                            <span className={cn('badge text-xs', status.style)}>
-                              {status.label}
-                            </span>
+                            {/* 경매중 + 바로 구매 둘 다 설정된 경우 각각 배지 표시 */}
+                            {slot.auction?.status === 'LIVE' && (
+                              <span className="badge bg-amber-100 text-amber-700 border-amber-200 text-xs">
+                                경매중
+                              </span>
+                            )}
+                            {slot.enableDirectBuy && slot.directBuyPrice && (
+                              <span className="badge bg-violet-100 text-violet-700 border-violet-200 text-xs">
+                                바로 구매
+                              </span>
+                            )}
+                            {/* 경매도 바로 구매도 아닌 경우 기존 상태 배지 */}
+                            {!(slot.auction?.status === 'LIVE') && !(slot.enableDirectBuy && slot.directBuyPrice) && (
+                              <span className={cn('badge text-xs', status.style)}>
+                                {status.label}
+                              </span>
+                            )}
                             {slot.auction?.status === 'LIVE' && (
                               <span className="badge bg-red-500 text-white border-red-500 animate-pulse text-xs">
                                 LIVE
+                              </span>
+                            )}
+                            {/* 공개/비공개 뱃지 */}
+                            {slot.auction && (
+                              <span className={cn(
+                                'badge text-xs',
+                                slot.auction.isFeatured
+                                  ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              )}>
+                                {slot.auction.isFeatured ? '공개' : '비공개'}
                               </span>
                             )}
                           </div>
                           <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-slate-600">
                             <div className="flex items-center gap-1">
                               <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                              <span className="truncate">{slot.slotTemplate?.position}</span>
+                              <span className="truncate">{slot.slotTemplate?.bodyPart || '-'}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                              <span>{slot.slotTemplate?.duration}초</span>
+                              <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <span>{formatCurrency(slot.reservePrice || slot.slotTemplate?.defaultReservePrice || 0)}</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                              <span className="truncate">{slot.event?.name}</span>
+                              <span className="truncate">{getEventMonthLabel(slot.event)}</span>
                             </div>
                           </div>
                           {/* Sale Mode Info */}
-                          {!slot.contract && !slot.auction && (
+                          {!slot.auction?.contract && !slot.auction && (
                             <div className="flex flex-wrap items-center gap-2 mt-2 text-xs sm:text-sm">
                               <span className="text-slate-500">판매방식:</span>
                               <span className={cn(
@@ -318,24 +390,31 @@ export function MySlots() {
                           {slot.auction && (
                             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2">
                               <span className="text-xs sm:text-sm text-slate-500">
-                                현재가: <strong className="text-emerald-600">
-                                  {formatCurrency(slot.auction.currentPrice || slot.auction.startingPrice || 0)}
+                                시작가: <strong className="text-emerald-600">
+                                  {formatCurrency(slot.auctionMinBid || slot.reservePrice || 0)}
                                 </strong>
                               </span>
+                              {slot.enableDirectBuy && slot.directBuyPrice && (
+                                <span className="text-xs sm:text-sm text-slate-500">
+                                  바로 구매: <strong className="text-violet-600">
+                                    {formatCurrency(Number(slot.directBuyPrice))}
+                                  </strong>
+                                </span>
+                              )}
                               <span className="text-xs sm:text-sm text-slate-500">
-                                입찰: {slot.auction.bidCount || 0}건
+                                입찰: {slot.auction._count?.bids || 0}건
                               </span>
                             </div>
                           )}
-                          {slot.contract && (
+                          {slot.auction?.contract && (
                             <div className="flex flex-wrap items-center gap-2 mt-2 text-xs sm:text-sm">
                               <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
                               <span className="text-slate-600">
-                                계약금: <strong>{formatCurrency(slot.contract.finalPrice || 0)}</strong>
+                                계약금: <strong>{formatCurrency(slot.auction.contract.priceFinal || 0)}</strong>
                               </span>
                               <span className="text-slate-400 hidden sm:inline">|</span>
                               <span className="text-slate-600 truncate">
-                                브랜드: {slot.contract.brand?.companyName}
+                                브랜드: {slot.auction.contract.brand?.name}
                               </span>
                             </div>
                           )}
@@ -431,24 +510,28 @@ interface SlotDetailModalProps {
 function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }: SlotDetailModalProps) {
   const [activeTab, setActiveTab] = useState('info');
 
-  // Sale mode state
-  const [enableAuction, setEnableAuction] = useState(slot.enableAuction ?? true);
-  const [enableDirectBuy, setEnableDirectBuy] = useState(slot.enableDirectBuy ?? false);
+  // Sale mode state — 판매 방식 3종 중 택1 (경매 / 바로 구매 / 스폰픽 협의)
+  const [saleMode, setSaleMode] = useState<'AUCTION' | 'DIRECT' | 'INQUIRY'>(
+    slot.saleMode || (slot.enableDirectBuy ? 'DIRECT' : slot.enableAuction ? 'AUCTION' : 'INQUIRY')
+  );
+  const enableAuction = saleMode === 'AUCTION';
+  const enableDirectBuy = saleMode === 'DIRECT';
   const [directBuyPrice, setDirectBuyPrice] = useState(slot.directBuyPrice ? String(slot.directBuyPrice) : '');
-  const [auctionMinBid, setAuctionMinBid] = useState(slot.auctionMinBid ? String(slot.auctionMinBid) : String(slot.reservePrice || '100000'));
+  const [auctionMinBid, setAuctionMinBid] = useState(slot.auctionMinBid ? String(Number(slot.auctionMinBid)) : String(Number(slot.reservePrice) || 100000));
   const [auctionEndAt, setAuctionEndAt] = useState(
     slot.auctionEndAt ? new Date(slot.auctionEndAt).toISOString().slice(0, 16) : ''
   );
+  const [isPublic, setIsPublic] = useState(slot.auction?.isFeatured ?? false);
   const [saleModeError, setSaleModeError] = useState('');
   const [saleModeSuccess, setSaleModeSuccess] = useState(false);
 
   const saleModeSubmitting = useMutation({
     mutationFn: () => api.updateSlotSaleMode(slot.id, {
-      enableAuction,
-      enableDirectBuy,
+      saleMode,
       directBuyPrice: enableDirectBuy && directBuyPrice ? Number(directBuyPrice) : null,
       auctionMinBid: enableAuction && auctionMinBid ? Number(auctionMinBid) : null,
       auctionEndAt: enableAuction && auctionEndAt ? auctionEndAt : null,
+      isPublic: enableAuction ? isPublic : undefined,
     }),
     onSuccess: () => {
       setSaleModeSuccess(true);
@@ -465,13 +548,8 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
   const handleSaleModeSubmit = () => {
     setSaleModeError('');
 
-    if (!enableAuction && !enableDirectBuy) {
-      setSaleModeError('최소 하나의 판매 방식을 선택해주세요');
-      return;
-    }
-
     if (enableDirectBuy && (!directBuyPrice || Number(directBuyPrice) <= 0)) {
-      setSaleModeError('즉시구매 가격을 입력해주세요');
+      setSaleModeError('바로 구매 가격을 입력해주세요');
       return;
     }
 
@@ -493,10 +571,10 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
     saleModeSubmitting.mutate();
   };
 
-  const canEditSaleMode = slot.status === 'OPEN' && !slot.contract && slot.auction?.status !== 'LIVE';
+  const canEditSaleMode = slot.status === 'OPEN' && !slot.auction?.contract && slot.auction?.status !== 'LIVE';
 
   const status = (() => {
-    if (slot.contract) {
+    if (slot.auction?.contract) {
       return { label: '계약됨', style: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
     }
     if (slot.auction?.status === 'LIVE') {
@@ -504,6 +582,18 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
     }
     if (slot.auction?.status === 'SCHEDULED') {
       return { label: '경매 예정', style: 'bg-sky-100 text-sky-700 border-sky-200' };
+    }
+    // 바로 구매 활성화 + 가격 설정됨 = 판매중
+    if (slot.enableDirectBuy && slot.directBuyPrice) {
+      return { label: '판매중', style: 'bg-violet-100 text-violet-700 border-violet-200' };
+    }
+    // 경매 활성화 + 최소입찰가 + 마감일 설정됨 = 판매중
+    if (slot.enableAuction && slot.auctionMinBid && slot.auctionEndAt) {
+      return { label: '판매중', style: 'bg-violet-100 text-violet-700 border-violet-200' };
+    }
+    // 플래그만 설정됨 = 설정중
+    if (slot.enableDirectBuy || slot.enableAuction) {
+      return { label: '설정중', style: 'bg-blue-100 text-blue-700 border-blue-200' };
     }
     return { label: '미등록', style: 'bg-slate-100 text-slate-700 border-slate-200' };
   })();
@@ -516,7 +606,7 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
           <div className="flex items-start sm:items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900">{slot.slotTemplate?.name}</h2>
-              <p className="text-sm sm:text-base text-slate-600 truncate">{slot.event?.name}</p>
+              <p className="text-sm sm:text-base text-slate-600 truncate">{getEventMonthLabel(slot.event)}</p>
             </div>
             <span className={cn('badge text-xs flex-shrink-0', status.style)}>{status.label}</span>
           </div>
@@ -556,46 +646,50 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                 <div className="grid grid-cols-2 gap-2 sm:gap-4">
                   <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
                     <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">위치</p>
-                    <p className="font-medium text-slate-900 text-sm sm:text-base">{slot.slotTemplate?.position}</p>
+                    <p className="font-medium text-slate-900 text-sm sm:text-base">{slot.slotTemplate?.bodyPart || '-'}</p>
                   </div>
                   <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">노출 시간</p>
-                    <p className="font-medium text-slate-900 text-sm sm:text-base">{slot.slotTemplate?.duration}초</p>
-                  </div>
-                  <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">예상 노출</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">최대 크기</p>
                     <p className="font-medium text-slate-900 text-sm sm:text-base">
-                      {slot.slotTemplate?.estimatedImpressions?.toLocaleString()}회
+                      {slot.slotTemplate?.sizeMaxWMm && slot.slotTemplate?.sizeMaxHMm
+                        ? `${slot.slotTemplate.sizeMaxWMm}×${slot.slotTemplate.sizeMaxHMm}mm`
+                        : '-'}
+                    </p>
+                  </div>
+                  <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">최소가</p>
+                    <p className="font-medium text-slate-900 text-sm sm:text-base">
+                      {slot.reservePrice ? formatCurrency(slot.reservePrice) : formatCurrency(slot.slotTemplate?.defaultReservePrice || 0)}
                     </p>
                   </div>
                   <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
                     <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">이벤트 기간</p>
                     <p className="font-medium text-slate-900 text-sm sm:text-base">
-                      {formatDate(slot.event?.startDate)} - {formatDate(slot.event?.endDate)}
+                      {formatDate(slot.event?.dateStart)} - {formatDate(slot.event?.dateEnd)}
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Contract Info */}
-              {slot.contract && (
+              {slot.auction?.contract && (
                 <div>
                   <h3 className="text-xs sm:text-sm font-semibold text-slate-900 mb-2 sm:mb-3">계약 정보</h3>
                   <div className="p-3 sm:p-4 bg-emerald-50 rounded-lg sm:rounded-xl border border-emerald-200">
                     <div className="flex items-center justify-between mb-2 sm:mb-3">
                       <span className="text-emerald-700 font-medium text-sm sm:text-base">계약 완료</span>
                       <span className="text-base sm:text-lg font-bold text-emerald-700">
-                        {formatCurrency(slot.contract.finalPrice || 0)}
+                        {formatCurrency(slot.auction.contract.priceFinal || 0)}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                       <div>
                         <p className="text-emerald-600">브랜드</p>
-                        <p className="font-medium text-emerald-900">{slot.contract.brand?.companyName}</p>
+                        <p className="font-medium text-emerald-900">{slot.auction.contract.brand?.name}</p>
                       </div>
                       <div>
                         <p className="text-emerald-600">계약 상태</p>
-                        <p className="font-medium text-emerald-900">{slot.contract.status}</p>
+                        <p className="font-medium text-emerald-900">{slot.auction.contract.status}</p>
                       </div>
                     </div>
                   </div>
@@ -611,7 +705,7 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                   <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 mx-auto mb-4" />
                   <h3 className="text-base sm:text-lg font-medium text-slate-900 mb-2">판매 설정을 수정할 수 없습니다</h3>
                   <p className="text-sm sm:text-base text-slate-600">
-                    {slot.contract ? '이미 계약된 슬롯입니다' :
+                    {slot.auction?.contract ? '이미 계약된 슬롯입니다' :
                      slot.auction?.status === 'LIVE' ? '경매 진행 중에는 수정할 수 없습니다' :
                      '슬롯 상태가 OPEN일 때만 수정 가능합니다'}
                   </p>
@@ -630,26 +724,49 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                     </div>
                   )}
 
-                  {/* Auction Toggle */}
-                  <div className="p-4 bg-slate-50 rounded-xl">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Gavel className="w-5 h-5 text-amber-600" />
-                        <span className="font-medium text-slate-900">경매</span>
-                      </div>
-                      <button
-                        onClick={() => setEnableAuction(!enableAuction)}
-                        className={cn(
-                          'flex items-center gap-1 text-sm font-medium transition-colors',
-                          enableAuction ? 'text-emerald-600' : 'text-slate-400'
-                        )}
-                      >
-                        {enableAuction ? (
-                          <><ToggleRight className="w-8 h-8" /> 활성</>
-                        ) : (
-                          <><ToggleLeft className="w-8 h-8" /> 비활성</>
-                        )}
-                      </button>
+                  {/* 판매 방식 선택 (택1) */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                    <div className="text-sm font-bold text-slate-900 mb-1">판매 방식 선택</div>
+                    <p className="text-xs text-slate-500 mb-3">슬롯마다 하나의 방식을 선택할 수 있습니다.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {([
+                        { key: 'AUCTION', label: '경매', desc: '브랜드 입찰로 낙찰', icon: '🔨' },
+                        { key: 'DIRECT', label: '직접 구매', desc: '고정가 즉시 판매', icon: '🛒' },
+                        { key: 'INQUIRY', label: '스폰픽 협의', desc: '슬롯만 오픈 후 상담 확정', icon: '💬' },
+                      ] as const).map((m) => (
+                        <button
+                          key={m.key}
+                          onClick={() => setSaleMode(m.key)}
+                          className={cn(
+                            'text-left p-3 rounded-xl border-2 transition-all',
+                            saleMode === m.key
+                              ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-emerald-300'
+                          )}
+                        >
+                          <div className="text-sm font-bold text-slate-900 mb-0.5">{m.icon} {m.label}</div>
+                          <div className="text-[11px] text-slate-500 leading-snug">{m.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 스폰픽 협의 안내 */}
+                  {saleMode === 'INQUIRY' && (
+                    <div className="p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                      <div className="text-sm font-bold text-sky-900 mb-1">💬 스폰픽 협의 방식</div>
+                      <p className="text-xs text-sky-800 leading-relaxed">
+                        후원 가능 슬롯만 공개되고 가격은 노출되지 않습니다. 브랜드가 상담을 신청하면
+                        스폰픽이 조건을 협의해 후원을 확정합니다.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Auction 설정 */}
+                  <div className={cn('p-4 bg-slate-50 rounded-xl', !enableAuction && 'hidden')}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Gavel className="w-5 h-5 text-amber-600" />
+                      <span className="font-medium text-slate-900">경매 설정</span>
                     </div>
                     {enableAuction && (
                       <div className="space-y-3 pt-3 border-t border-slate-200">
@@ -672,43 +789,50 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                             className="input w-full text-sm"
                           />
                         </div>
+                        {/* 공개/비공개 토글 */}
+                        <div className="flex items-center justify-between pt-2">
+                          <div className="flex items-center gap-2">
+                            <Eye className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm text-slate-700">공개 경매</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsPublic(!isPublic)}
+                            className={cn(
+                              'flex items-center gap-1 text-sm font-medium transition-colors',
+                              isPublic ? 'text-blue-600' : 'text-slate-400'
+                            )}
+                          >
+                            {isPublic ? (
+                              <><ToggleRight className="w-7 h-7" /> 공개</>
+                            ) : (
+                              <><ToggleLeft className="w-7 h-7" /> 비공개</>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          공개: 모든 브랜드에게 노출 | 비공개: 직접 공유 시에만 노출
+                        </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Direct Buy Toggle */}
-                  <div className="p-4 bg-slate-50 rounded-xl">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <ShoppingCart className="w-5 h-5 text-violet-600" />
-                        <span className="font-medium text-slate-900">즉시구매</span>
-                      </div>
-                      <button
-                        onClick={() => setEnableDirectBuy(!enableDirectBuy)}
-                        className={cn(
-                          'flex items-center gap-1 text-sm font-medium transition-colors',
-                          enableDirectBuy ? 'text-emerald-600' : 'text-slate-400'
-                        )}
-                      >
-                        {enableDirectBuy ? (
-                          <><ToggleRight className="w-8 h-8" /> 활성</>
-                        ) : (
-                          <><ToggleLeft className="w-8 h-8" /> 비활성</>
-                        )}
-                      </button>
+                  {/* 직접 구매 설정 */}
+                  <div className={cn('p-4 bg-slate-50 rounded-xl', !enableDirectBuy && 'hidden')}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShoppingCart className="w-5 h-5 text-violet-600" />
+                      <span className="font-medium text-slate-900">직접 구매 설정</span>
                     </div>
-                    {enableDirectBuy && (
-                      <div className="pt-3 border-t border-slate-200">
-                        <label className="block text-xs text-slate-600 mb-1">즉시구매 가격 (원)</label>
-                        <input
-                          type="number"
-                          value={directBuyPrice}
-                          onChange={(e) => setDirectBuyPrice(e.target.value)}
-                          className="input w-full text-sm"
-                          placeholder="500000"
-                        />
-                      </div>
-                    )}
+                    <div className="pt-3 border-t border-slate-200">
+                      <label className="block text-xs text-slate-600 mb-1">바로 구매 가격 (원)</label>
+                      <input
+                        type="number"
+                        value={directBuyPrice}
+                        onChange={(e) => setDirectBuyPrice(e.target.value)}
+                        className="input w-full text-sm"
+                        placeholder="500000"
+                      />
+                    </div>
                   </div>
 
                   {/* Save Button */}
@@ -721,7 +845,7 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                   </button>
 
                   <p className="text-xs text-slate-500 text-center">
-                    * 경매와 즉시구매를 동시에 활성화하면 브랜드는 원하는 방식으로 구매할 수 있습니다
+                    * 경매와 바로 구매를 동시에 활성화하면 브랜드는 원하는 방식으로 구매할 수 있습니다
                   </p>
                 </>
               )}
@@ -735,14 +859,14 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
                   {/* Auction Status */}
                   <div className="grid grid-cols-3 gap-2 sm:gap-4">
                     <div className="p-2.5 sm:p-4 bg-emerald-50 rounded-lg sm:rounded-xl border border-emerald-200">
-                      <p className="text-[10px] sm:text-xs text-emerald-600 mb-0.5 sm:mb-1">현재가</p>
+                      <p className="text-[10px] sm:text-xs text-emerald-600 mb-0.5 sm:mb-1">시작가</p>
                       <p className="text-sm sm:text-xl font-bold text-emerald-700">
-                        {formatCurrency(slot.auction.currentPrice || slot.auction.startingPrice || 0)}
+                        {formatCurrency(slot.auctionMinBid || slot.reservePrice || 0)}
                       </p>
                     </div>
                     <div className="p-2.5 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
                       <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">입찰 수</p>
-                      <p className="text-sm sm:text-xl font-bold text-slate-900">{slot.auction.bidCount || 0}건</p>
+                      <p className="text-sm sm:text-xl font-bold text-slate-900">{slot.auction._count?.bids || 0}건</p>
                     </div>
                     <div className="p-2.5 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
                       <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">마감</p>
@@ -811,29 +935,29 @@ function SlotDetailModal({ slot, onClose, formatCurrency, formatDate, onUpdate }
 
               <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">예상 노출수</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">슬롯 위치</p>
                   <p className="text-sm sm:text-xl font-bold text-slate-900">
-                    {slot.slotTemplate?.estimatedImpressions?.toLocaleString() || 'N/A'}
+                    {slot.slotTemplate?.bodyPart || '-'}
                   </p>
                 </div>
                 <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">실제 노출수</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">최대 크기</p>
                   <p className="text-sm sm:text-xl font-bold text-slate-900">
-                    {slot.actualImpressions?.toLocaleString() || '-'}
-                  </p>
-                </div>
-                <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">평균 시청자</p>
-                  <p className="text-sm sm:text-xl font-bold text-slate-900">
-                    {slot.averageViewers?.toLocaleString() || '-'}
-                  </p>
-                </div>
-                <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
-                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">노출 달성률</p>
-                  <p className="text-sm sm:text-xl font-bold text-slate-900">
-                    {slot.actualImpressions && slot.slotTemplate?.estimatedImpressions
-                      ? `${Math.round((slot.actualImpressions / slot.slotTemplate.estimatedImpressions) * 100)}%`
+                    {slot.slotTemplate?.sizeMaxWMm && slot.slotTemplate?.sizeMaxHMm
+                      ? `${slot.slotTemplate.sizeMaxWMm}×${slot.slotTemplate.sizeMaxHMm}mm`
                       : '-'}
+                  </p>
+                </div>
+                <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">최소가</p>
+                  <p className="text-sm sm:text-xl font-bold text-slate-900">
+                    {formatCurrency(slot.reservePrice || slot.slotTemplate?.defaultReservePrice || 0)}
+                  </p>
+                </div>
+                <div className="p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">이벤트 상태</p>
+                  <p className="text-sm sm:text-xl font-bold text-slate-900">
+                    {slot.event?.status || '-'}
                   </p>
                 </div>
               </div>
@@ -872,10 +996,26 @@ function CreateSlotModal({
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [error, setError] = useState('');
 
+  // 모든 이벤트의 슬롯을 가져와서 중복 체크 (페이지 필터와 무관하게)
+  const { data: allSlotsData } = useQuery({
+    queryKey: ['all-athlete-slots-for-create'],
+    queryFn: () => api.getMyAthleteSlots(), // eventId 없이 전체 조회
+    staleTime: 0, // 항상 최신 데이터 사용
+    refetchOnMount: 'always',
+  });
+  const allExistingSlots = allSlotsData?.data || existingSlots;
+
   const createSlotsMutation = useMutation({
     mutationFn: () => api.bulkCreateSlotInstances(selectedEventId, athleteId, selectedTemplateIds),
-    onSuccess: () => {
-      onCreated();
+    onSuccess: (response: any) => {
+      const result = response?.data;
+      if (result?.failed?.length > 0) {
+        const failedNames = result.failed.map((f: any) => f.templateName).join(', ');
+        setError(`일부 슬롯 생성 실패: ${failedNames} (이미 존재하거나 오류 발생)`);
+      }
+      if (result?.created?.length > 0) {
+        onCreated();
+      }
     },
     onError: (err: any) => {
       setError(err.response?.data?.error?.message || '슬롯 생성에 실패했습니다');
@@ -883,11 +1023,13 @@ function CreateSlotModal({
   });
 
   // Filter out templates that already have slots for this event
+  // slotTemplate.id 또는 slotTemplateId 둘 다 체크 (API 응답 형식에 따라)
   const availableTemplates = templates.filter((template: any) => {
     if (!selectedEventId) return true;
-    return !existingSlots.some(
+    return !allExistingSlots.some(
       (slot: any) =>
-        slot.eventId === selectedEventId && slot.slotTemplateId === template.id
+        (slot.eventId === selectedEventId || slot.event?.id === selectedEventId) &&
+        (slot.slotTemplateId === template.id || slot.slotTemplate?.id === template.id)
     );
   });
 
@@ -1034,7 +1176,8 @@ function CreateSlotModal({
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-slate-900 text-sm">{template.name}</p>
                         <p className="text-xs text-slate-500">
-                          {template.bodyPart} · {template.code}
+                          {template.code}
+                          {(template as any).category && ` · ${(template as any).category}`}
                         </p>
                       </div>
                       <div className="text-right">

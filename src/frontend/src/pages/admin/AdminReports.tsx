@@ -36,8 +36,8 @@ export default function AdminReports() {
   });
 
   const { data: athleteRankingData } = useQuery({
-    queryKey: ['athleteRanking'],
-    queryFn: () => api.getAthleteRanking({ limit: 10 }),
+    queryKey: ['pointRanking'],
+    queryFn: () => api.getPointRanking(10),
   });
 
   const dashboard = dashboardData?.data;
