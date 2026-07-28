@@ -6,6 +6,7 @@ import { createAuditLog } from '../middleware/audit';
 import { emailService } from './email.service';
 import { socketService } from './socket.service';
 import { contractService } from './contract.service';
+import { notificationService } from './notification.service';
 
 export class AuctionService {
   async create(data: {
@@ -348,6 +349,18 @@ export class AuctionService {
       }
     });
 
+    // ★ 개편 Phase 4 (AUC-13): 인벤토리 상태 동기화 — 낙찰 HELD(서명 대기) / 유찰 AVAILABLE
+    try {
+      const { inventoryService } = await import('./inventory.service');
+      await inventoryService.syncByInstance(
+        auction.slotInstanceId,
+        hasValidBid ? 'HELD' : 'AVAILABLE',
+        { reservedUntil: null }
+      );
+    } catch (e) {
+      console.error(`[Auction] 인벤토리 동기화 실패 (auction ${id}):`, e);
+    }
+
     // Send socket notification
     socketService.emitAuctionStatusChanged(
       id,
@@ -502,6 +515,39 @@ export class AuctionService {
   }
 
   // Scheduler job: End expired auctions
+  /**
+   * 개편 Phase 4 (AUC-15) — 종료 임박 알림 (24시간 전 / 1시간 전)
+   * 이미 같은 시점 알림을 보냈으면 건너뛴다(재시작·중복 실행 방어).
+   */
+  async processEndingSoonNotifications() {
+    const now = Date.now();
+    let sent = 0;
+
+    for (const hours of [24, 1]) {
+      const from = new Date(now + hours * 3600_000);
+      const to = new Date(now + hours * 3600_000 + 10 * 60_000); // 10분 윈도우
+      const auctions = await prisma.auction.findMany({
+        where: { status: 'LIVE', endAt: { gt: from, lte: to } },
+        select: { id: true },
+      });
+
+      for (const a of auctions) {
+        const already = await prisma.notification.findFirst({
+          where: {
+            type: 'AUCTION_ENDING_SOON',
+            payload: { path: ['entityId'], equals: a.id },
+            AND: [{ payload: { path: ['hoursLeft'], equals: hours } }],
+          },
+          select: { id: true },
+        });
+        if (already) continue;
+        sent += await notificationService.notifyAuctionEndingSoon(a.id, hours);
+      }
+    }
+    if (sent > 0) console.log(`[Auction] 종료 임박 알림 ${sent}건 발송`);
+    return sent;
+  }
+
   async processExpiredAuctions() {
     const now = new Date();
 

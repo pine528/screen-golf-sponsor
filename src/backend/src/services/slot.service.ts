@@ -88,6 +88,23 @@ export class SlotTemplateService {
   }
 }
 
+/**
+ * 개편 Phase 4 (AUC-12, 핸드오프 §12.5) — 즉시구매 병행조건
+ *  - 첫 유효입찰 이전: 즉시구매 가능
+ *  - 첫 유효입찰 이후: 즉시구매 종료 (관리자가 병행 유지로 설정한 경우만 예외)
+ */
+async function assertBuyNowStillOpen(slotInstanceId: string) {
+  const auction = await prisma.auction.findUnique({
+    where: { slotInstanceId },
+    select: { id: true, status: true, allowBuyNowAfterBid: true, _count: { select: { bids: true } } },
+  });
+  if (!auction) return;
+  if (!['LIVE', 'SCHEDULED'].includes(auction.status)) return;
+  if (auction._count.bids > 0 && !auction.allowBuyNowAfterBid) {
+    throw new ConflictError('입찰이 시작되어 바로 구매가 종료되었습니다. 입찰로 참여해 주세요.');
+  }
+}
+
 export class SlotInstanceService {
   async create(data: {
     eventId: string;
@@ -548,6 +565,10 @@ export class SlotInstanceService {
     if (slot.event && (slot.event as any).isActive === false) throw new BadRequestError('비활성 상태인 대회입니다');
     if (!['OPEN', 'IN_AUCTION'].includes(slot.status)) throw new ConflictError('현재 구매할 수 없는 슬롯입니다');
     if (!slot.enableDirectBuy) throw new BadRequestError('바로 구매가 열려 있지 않은 슬롯입니다');
+
+    // ★ 개편 Phase 4 (AUC-12, §12.5): 첫 유효입찰 이후에는 즉시구매를 종료한다
+    //    (관리자가 allowBuyNowAfterBid로 병행 유지를 설정한 경우는 예외)
+    await assertBuyNowStillOpen(slotId);
 
     const buyPrice = slot.directBuyPrice || slot.reservePrice;
     if (!buyPrice || Number(buyPrice) <= 0) throw new BadRequestError('판매 가격이 설정되지 않은 슬롯입니다');

@@ -45,6 +45,8 @@ export function AuctionDetail() {
   const [bidAmount, setBidAmount] = useState('');
   const [bidError, setBidError] = useState<string | null>(null);
   const [showBidModal, setShowBidModal] = useState(false);
+  // 개편 Phase 4 (§12.2) — 계약조건 확인 체크박스
+  const [bidAgreed, setBidAgreed] = useState(false);
   const [newBidAlert, setNewBidAlert] = useState<string | null>(null);
 
   // Real-time socket connection
@@ -165,6 +167,10 @@ export function AuctionDetail() {
   const slot = auctionData.slotInstance;
   const template = slot?.slotTemplate;
   const athlete = slot?.athlete;
+  // 개편 Phase 4 (§12.2) — 다음 최소 입찰가 · 입찰 단위
+  const minIncrement = Number(auctionData.minBidIncrement || 500_000);
+  const nextMinBid = Number(auctionData.currentPrice || slot?.reservePrice || 0) + minIncrement;
+  const bidCount = Array.isArray(auctionData.bids) ? auctionData.bids.length : (auctionData.bidCount ?? 0);
   const event = slot?.event;
   const bids = auctionData.bids || [];
   const isPublicAuction = auctionData.isFeatured === true;
@@ -667,10 +673,14 @@ export function AuctionDetail() {
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">최소 입찰가</span>
+                  <span className="text-slate-600">다음 최소 입찰가</span>
                   <span className="font-semibold text-emerald-700">
-                    {formatCurrency(auctionData.currentPrice || slot?.reservePrice || 0)}
+                    {formatCurrency(nextMinBid)}
                   </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">입찰 수</span>
+                  <span className="font-semibold text-emerald-700">{bidCount}회</span>
                 </div>
                 <p className="text-xs text-slate-500 pt-2 border-t border-emerald-200">
                   {isPublicAuction
@@ -704,6 +714,30 @@ export function AuctionDetail() {
                     ? '공개 입찰: 경매 종료 시 최고 입찰자가 낙찰됩니다'
                     : '비공개 입찰: 경매 종료 시 최고 입찰자가 낙찰됩니다'}
                 </p>
+
+                {/* 자동입찰 안내 (핸드오프 §12.2/12.3) */}
+                <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-xs font-bold text-slate-800 mb-1">자동입찰로 진행됩니다</div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed break-keep">
+                    입력하신 금액은 <b>최대 한도</b>입니다. 실제로는 다른 입찰자를 이기는 데 필요한 만큼만
+                    {' '}{formatCurrency(minIncrement)} 단위로 자동 입찰되며, 한도는 다른 참여자에게 공개되지 않습니다.
+                    한도를 넘어서면 알림을 보내드립니다.
+                  </p>
+                </div>
+
+                {/* 마감 임박 연장 · 취소 제한 안내 */}
+                <p className="mt-2 text-[11px] text-slate-500 break-keep">
+                  종료 {Math.round((auctionData.softCloseSec ?? 120) / 60)}분 이내 입찰이 들어오면 종료시간이 자동 연장됩니다.
+                  입찰은 철회할 수 없으며, 낙찰 시 계약이 생성됩니다.
+                </p>
+
+                {/* 계약조건 확인 (§12.2) */}
+                <label className="flex items-start gap-2 mt-3 cursor-pointer">
+                  <input type="checkbox" checked={bidAgreed} onChange={(e) => setBidAgreed(e.target.checked)} className="mt-0.5 w-4 h-4 accent-slate-900" />
+                  <span className="text-[11px] text-slate-600 break-keep">
+                    계약조건과 권리관계 안내를 확인했으며, 낙찰 시 계약 체결에 동의합니다.
+                  </span>
+                </label>
               </div>
 
               <div className="flex gap-3">
@@ -718,8 +752,8 @@ export function AuctionDetail() {
                 </button>
                 <button
                   onClick={handleBid}
-                  disabled={placeBidMutation.isPending}
-                  className="btn btn-primary flex-1 flex items-center justify-center gap-2"
+                  disabled={placeBidMutation.isPending || !bidAgreed}
+                  className="btn btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {placeBidMutation.isPending ? (
                     <>

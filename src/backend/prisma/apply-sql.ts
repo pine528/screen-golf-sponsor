@@ -7,13 +7,38 @@ import * as fs from 'fs';
 
 const prisma = new PrismaClient();
 
+/**
+ * 세미콜론으로 문장을 나누되 달러 인용($$ ... $$) 블록 안의 세미콜론은 무시한다.
+ * (DO $$ BEGIN ... END $$ 블록이 중간에서 잘리는 것을 방지)
+ */
+function splitStatements(sql: string): string[] {
+  const out: string[] = [];
+  let buf = '';
+  let inDollar = false;
+  for (let i = 0; i < sql.length; i++) {
+    if (sql[i] === '$' && sql[i + 1] === '$') {
+      inDollar = !inDollar;
+      buf += '$$';
+      i++;
+      continue;
+    }
+    if (sql[i] === ';' && !inDollar) {
+      out.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += sql[i];
+  }
+  if (buf.trim()) out.push(buf);
+  return out;
+}
+
 async function main() {
   const file = process.argv[2];
   if (!file) throw new Error('사용법: npx ts-node prisma/apply-sql.ts <migration.sql>');
   const sql = fs.readFileSync(file, 'utf8');
   // 세미콜론 단위 실행 (DO $$ ... $$ 블록은 하나로 유지)
-  const statements = sql
-    .split(/;\s*$/m)
+  const statements = splitStatements(sql)
     // 앞머리 주석 줄만 제거한다 (문장 전체를 버리면 실제 DDL이 누락됨)
     .map((s) =>
       s

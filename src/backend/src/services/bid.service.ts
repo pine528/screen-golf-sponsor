@@ -6,6 +6,7 @@ import { auctionService } from './auction.service';
 import { socketService } from './socket.service';
 import { conflictService } from './conflict.service';
 import { phase2UnlockService } from './phase2Unlock.service';
+import { notificationService } from './notification.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export class BidService {
@@ -153,6 +154,8 @@ export class BidService {
 
     // Process the bid
     let bidResult: BidResult;
+    // 개편 Phase 4 (AUC-15): 트랜잭션 밖에서 알림을 보내기 위한 정보
+    let outbidInfo: { brandId: string; capExceeded: boolean } | null = null;
 
     await prisma.$transaction(async (tx) => {
       // ★ Phase 9-2: 이전 최고 입찰자 찾기 (현재 isWinning=true && 다른 브랜드)
@@ -217,6 +220,15 @@ export class BidService {
       // ★ Phase 9-2: frozenAmount 처리
       const isNewWinner = winningBidId === bid.id;
       const maxBidDecimal = new Decimal(maxBid);
+
+      // 개편 Phase 4 (AUC-15): 추월당한 이전 최고입찰자 기록
+      // capExceeded = 자동입찰 상한(maxBid)까지 올렸는데도 밀린 경우 → 상한 초과 안내
+      if (isNewWinner && previousWinner && previousWinner.brandId !== brandId) {
+        outbidInfo = {
+          brandId: previousWinner.brandId,
+          capExceeded: previousWinner.autoBid && newCurrentPrice >= previousWinner.maxBid,
+        };
+      }
 
       if (isNewWinner) {
         // 새 최고 입찰자가 된 경우
@@ -380,6 +392,23 @@ export class BidService {
       );
     }
 
+    // 개편 Phase 4 (AUC-15): 최고입찰자 변경 / 자동입찰 상한 초과 알림
+    if (outbidInfo) {
+      const info = outbidInfo as { brandId: string; capExceeded: boolean };
+      try {
+        await notificationService.notifyOutbid(auctionId, info.brandId, bidResult!.effectiveCurrentPrice);
+        if (info.capExceeded) {
+          await notificationService.notifyAutoBidCapExceeded(
+            auctionId,
+            info.brandId,
+            bidResult!.effectiveCurrentPrice
+          );
+        }
+      } catch (e) {
+        console.error('[Bid] 추월 알림 발송 실패:', e);
+      }
+    }
+
     return bidResult!;
   }
 
@@ -403,11 +432,18 @@ export class BidService {
     }
 
     if (bids.length === 1) {
-      // Single bidder - current price is their max bid amount
-      return {
-        newCurrentPrice: bids[0].maxBid,
-        winningBidId: bids[0].id,
-      };
+      // 단독 입찰자는 '이기는 데 필요한 최소 금액'만 지불한다 (핸드오프 §12.3).
+      // 최대입찰가는 경쟁이 붙을 때만 단계적으로 소진되며 외부에 공개되지 않는다.
+      // (기존에는 곧바로 최대입찰가 전액이 현재가가 되어 첫 입찰자가 상한을 다 내고,
+      //  현재가만 보면 상한이 그대로 드러났다 — 2026-07-29 수정)
+      const only = bids[0];
+      const minRequired = only.currentProxy > 0 ? only.currentProxy : only.maxBid;
+      const newCurrentPrice = Math.min(only.maxBid, minRequired);
+
+      if (only.currentProxy !== newCurrentPrice) {
+        await tx.bid.update({ where: { id: only.id }, data: { currentProxy: newCurrentPrice } });
+      }
+      return { newCurrentPrice, winningBidId: only.id };
     }
 
     const highestBid = bids[0];

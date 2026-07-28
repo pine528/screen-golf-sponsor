@@ -2968,3 +2968,24 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - 미착수(외부 의존): BUY-07~10 전자서명·PG 결제 연동(외부 솔루션 계약 필요) — 현재는 기존 지갑·에스크로 경로 사용
 - 영향: `src/services/inventory.service.ts`, `slot.service.ts`, `src/routes/slot.routes.ts`, `src/index.ts`,
   `prisma/schema.prisma`, `prisma/migrations/20260729_slot_hold/`, `src/frontend/src/pages/SlotCheckout.tsx`, `App.tsx`, `api.ts`
+
+## [2026-07-29] 전면 개편 Phase 4 — 경매 엔진 (AUC-12/13/15 + 자동입찰 결함 수정)
+- 🔴 **자동입찰 과금 결함 수정 (§12.3)**: 단독 입찰 시 `processAutoBidCompetition`이 현재가를 곧바로
+  입찰자의 최대입찰가로 올려, 첫 입찰자가 상한 전액을 지불하고 현재가만 봐도 상한이 노출됐다.
+  이제 단독 입찰자는 '이기는 데 필요한 최소 금액'(시작가)만 지불하며, 상한은 경쟁이 붙을 때만 단계적으로 소진된다.
+- **AUC-12 (§12.5) 즉시구매 병행조건**: 첫 유효입찰 이후 바로 구매 종료. 관리자 예외용 `Auction.allowBuyNowAfterBid` 추가.
+  예약(hold)·구매 양쪽이 쓰는 `assertDirectBuyEligible`에 통합되어 예약 단계에서 이미 차단된다.
+- **AUC-15 알림**: 최고입찰자 변경(추월) 알림이 정의만 되어 있고 호출되지 않던 것을 실제 발송 연결.
+  자동입찰 상한 초과 알림 신규 추가. 경매 종료 24시간/1시간 전 알림 cron(5분 주기, 중복 발송 방지).
+- **AUC-13**: 경매 종료 시 SlotInventory 동기화 (낙찰 → HELD, 유찰 → AVAILABLE)
+- **§12.5**: 6·12개월 상품 경매 금지를 DB CHECK 제약으로 고정 (상품 API가 생겨도 우회 불가)
+- **프론트 입찰 모달(§12.2)**: 다음 최소 입찰가·입찰 수 표시, 자동입찰 설명(입력값=최대 한도, 한도 비공개),
+  마감 임박 자동연장·철회 불가 안내, 계약조건 동의 체크 전 입찰 불가
+- 기존 구현 확인: 자동입찰 경쟁 로직·서버시간 기준 종료(cron)·소프트클로즈 연장·실시간 소켓은 이미 동작 중
+- 검증(서비스 레벨): 단독입찰 시 시작가 유지 / B 600만 입찰 → 610만으로 A 자동방어 / B 900만 → 810만으로 역전 /
+  첫 입찰 전 즉시구매 가능 → 입찰 후 차단 → 관리자 예외 시 허용 / 추월·상한초과 알림 발송 / 마감 1분 전 입찰 +120초 연장
+  브라우저: 다음 최소 입찰가 ₩8,200,000, 입찰 수 2회, 동의 전 버튼 비활성 → 동의 후 활성
+- 🔧 `apply-sql.ts`: 달러 인용($$) 블록 안의 세미콜론에서 문장이 잘리던 버그 수정
+- 영향: `src/services/bid.service.ts`, `auction.service.ts`, `notification.service.ts`, `slot.service.ts`,
+  `src/index.ts`, `prisma/schema.prisma`, `prisma/migrations/20260729_auction_buynow_flag/`,
+  `src/frontend/src/pages/AuctionDetail.tsx`

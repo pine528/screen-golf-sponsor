@@ -8,6 +8,9 @@ interface NotificationPayload {
   actionUrl?: string;
   entityType?: string;
   entityId?: string;
+  /** 알림 종류별 부가 정보 (예: 경매 종료 임박 시간, 추월 사유) */
+  hoursLeft?: number;
+  reason?: string;
 }
 
 interface CreateNotificationData {
@@ -223,6 +226,59 @@ export class NotificationService {
         entityId: auctionId,
       },
     });
+  }
+
+  /**
+   * 개편 Phase 4 (AUC-15) — 자동입찰 상한 초과 안내
+   * 설정한 최대입찰가까지 자동으로 올렸는데도 추월당한 경우에만 보낸다.
+   */
+  async notifyAutoBidCapExceeded(auctionId: string, brandId: string, newAmount: number) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, include: { user: true } });
+    if (!brand) return;
+    const auction = await prisma.auction.findUnique({
+      where: { id: auctionId },
+      include: { slotInstance: { include: { event: true, athlete: true } } },
+    });
+    if (!auction) return;
+
+    await this.create({
+      userId: brand.userId,
+      type: 'BID_OUTBID',
+      title: '자동입찰 상한 초과',
+      message: `${auction.slotInstance.athlete.name} 경매에서 설정하신 최대입찰가를 넘어섰습니다. 계속 참여하시려면 최대입찰가를 올려주세요. 현재가: ${newAmount.toLocaleString()}원`,
+      payload: { link: `/auctions/${auctionId}`, entityType: 'AUCTION', entityId: auctionId, reason: 'AUTO_BID_CAP_EXCEEDED' },
+    });
+  }
+
+  /**
+   * 개편 Phase 4 (AUC-15) — 경매 종료 임박 안내 (24시간 전 / 1시간 전)
+   * 입찰 참여 브랜드 전원에게 발송한다.
+   */
+  async notifyAuctionEndingSoon(auctionId: string, hoursLeft: number) {
+    const auction = await prisma.auction.findUnique({
+      where: { id: auctionId },
+      include: {
+        slotInstance: { include: { event: true, athlete: true, slotTemplate: true } },
+        bids: { select: { brandId: true } },
+      },
+    });
+    if (!auction) return 0;
+
+    const brandIds = [...new Set(auction.bids.map((b) => b.brandId))];
+    if (brandIds.length === 0) return 0;
+    const brands = await prisma.brand.findMany({ where: { id: { in: brandIds } }, select: { userId: true } });
+
+    const label = hoursLeft >= 24 ? '24시간' : '1시간';
+    for (const b of brands) {
+      await this.create({
+        userId: b.userId,
+        type: 'AUCTION_ENDING_SOON',
+        title: `경매 종료 ${label} 전`,
+        message: `${auction.slotInstance.athlete.name} · ${auction.slotInstance.slotTemplate.name} 경매가 ${label} 후 종료됩니다. 현재가: ${auction.currentPrice.toLocaleString()}원`,
+        payload: { link: `/auctions/${auctionId}`, entityType: 'AUCTION', entityId: auctionId, hoursLeft },
+      });
+    }
+    return brands.length;
   }
 
   /**
