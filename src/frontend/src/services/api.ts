@@ -3102,6 +3102,29 @@ class ApiService {
     return r.data;
   }
 
+  // 개편 Phase 3 — 슬롯 임시예약(HELD 15분) + 주문확인 견적
+  async holdSlot(slotInstanceId: string) {
+    const r = await this.client.post<ApiResponse<{ inventoryId: string; reservedUntil: string; expiresInSec: number }>>(
+      `/slots/instances/${slotInstanceId}/hold`
+    );
+    return r.data;
+  }
+
+  async getSlotHold(slotInstanceId: string) {
+    const r = await this.client.get<ApiResponse<any>>(`/slots/instances/${slotInstanceId}/hold`);
+    return r.data;
+  }
+
+  async releaseSlotHold(slotInstanceId: string) {
+    const r = await this.client.delete<ApiResponse<any>>(`/slots/instances/${slotInstanceId}/hold`);
+    return r.data;
+  }
+
+  async getSlotQuote(slotInstanceId: string) {
+    const r = await this.client.get<ApiResponse<any>>(`/slots/instances/${slotInstanceId}/quote`);
+    return r.data;
+  }
+
   // 개편 Phase 1/2 — 선수 기간별 슬롯 인벤토리 (통합 구매화면 데이터 소스)
   async getAthleteInventory(id: string, params?: { start?: string; end?: string }) {
     const r = await this.client.get<ApiResponse<{ slots: any[] }>>(`/athletes/public/${id}/inventory`, { params });

@@ -2947,3 +2947,24 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - 백필 보강: 엑셀 sponsorSlots가 없어도 열려 있는 슬롯 인스턴스로부터 AthleteSlot 생성 (운영은 이미 347건 전량 매핑되어 변화 없음)
 - 검증: 양쪽 tsc 통과 / 로컬 브라우저 — 3열(220·508·320px), 마커 좌표 정확, 슬롯 선택→패널·하단바 반영, 경매 슬롯 CTA '입찰하기', 기간 변경 빈화면, 드로어 개폐, 모바일 375px 가로 오버플로 0
 - 영향: `src/components/purchase/{UnifiedPurchase,SlotDiagram,SlotDetailDrawer}.tsx`, `src/pages/PublicAthleteDetail.tsx`, `src/services/api.ts`, `prisma/backfill-phase1-inventory.ts`
+
+## [2026-07-29] 전면 개편 Phase 3 — 직접구매 임시예약·주문확인 (BUY-01~06)
+- **임시예약(§13.2)**: 브랜드가 구매를 시작하면 슬롯을 15분간 HELD로 점유. `SlotInventory.heldByBrandId` 추가
+  - `inventory.service`: hold(연장 포함) / release / getHold / assertPurchasableBy / expireHolds
+  - 다른 브랜드의 유효한 예약이 있으면 예약·바로구매 모두 차단 (§25 '슬롯 선점' 오류)
+  - 매분 cron으로 만료 예약 자동 해제 (계약이 걸린 행은 제외)
+- **구매 가능조건(BUY-01, §13.1)**: `assertDirectBuyEligible`로 예약과 구매가 동일 검증을 공유
+  (슬롯 활성·선수 활성/KYC·대회 활성·판매상태·직접구매 활성·가격·업종충돌·대회규칙)
+- **주문확인 화면(BUY-04, §13.3)**: `/checkout/slots/:slotId` — 선수/기간/슬롯/제공항목/추가활동/초상·콘텐츠 사용권/
+  대체이행/금액/결제방법/계약당사자/환불기준 + 면책문구 + 동의 체크 후 계약 생성
+- **예약 타이머(BUY-03)**: mm:ss 카운트다운, 만료·예약불가 상태를 구분해 표시하고 [다시 예약] 제공
+- **견적 API(BUY-05/06)**: `GET /slots/instances/:id/quote` — 가격정책(§14) 확정 전이므로 플랫폼 이용료·부가세를
+  '포함'으로 표기해 표시 금액 = 실제 결제 금액 유지 (§15 중단기준)
+- 통합 구매화면의 '바로 구매'는 이제 즉시 계약이 아니라 예약 → 주문확인 경로로 연결
+- 검증: 서비스 레벨 8개 시나리오 통과(예약/타브랜드 차단/구매검증 차단/연장/해제/만료 sweep/만료 후 재예약),
+  브라우저 — 카운트다운 14:52 동작, DB HELD 기록 확인, 동의 후 CTA 활성화, 취소 시 AVAILABLE 복귀
+- 🔧 `prisma/apply-sql.ts` 헬퍼 추가(psql 없이 마이그레이션 적용). 초기 버전이 `--` 주석으로 시작하는 문장을
+  통째로 건너뛰어 ALTER TABLE이 누락되던 버그를 발견·수정
+- 미착수(외부 의존): BUY-07~10 전자서명·PG 결제 연동(외부 솔루션 계약 필요) — 현재는 기존 지갑·에스크로 경로 사용
+- 영향: `src/services/inventory.service.ts`, `slot.service.ts`, `src/routes/slot.routes.ts`, `src/index.ts`,
+  `prisma/schema.prisma`, `prisma/migrations/20260729_slot_hold/`, `src/frontend/src/pages/SlotCheckout.tsx`, `App.tsx`, `api.ts`

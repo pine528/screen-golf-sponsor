@@ -185,7 +185,6 @@ export default function PublicAthleteDetail() {
         isAuthenticated={isAuthenticated}
         userRole={user?.role}
         onLogin={() => navigate('/login')}
-        onPurchased={() => queryClient.invalidateQueries({ queryKey: ['public-athlete', id] })}
       />
 
       <section data-section="slots" className="max-w-6xl mx-auto px-5 sm:px-8 py-8">

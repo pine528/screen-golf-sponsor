@@ -103,6 +103,7 @@ import MiniStoreCheckout from './pages/store/MiniStoreCheckout';
 import { ShortLinkRedirect } from './pages/ShortLinkRedirect';
 import PublicAthletes from './pages/PublicAthletes';
 import PublicAthleteDetail from './pages/PublicAthleteDetail';
+import SlotCheckout from './pages/SlotCheckout';
 import AdminAthleteEventResults from './pages/admin/AdminAthleteEventResults';
 import AdminMediaExposure from './pages/admin/AdminMediaExposure';
 import AdminTournamentActivation from './pages/admin/AdminTournamentActivation';
@@ -250,6 +251,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Contracts />
+          </ProtectedRoute>
+        }
+      />
+      {/* 개편 Phase 3 (BUY-04) — 직접구매 주문확인 */}
+      <Route
+        path="/checkout/slots/:slotId"
+        element={
+          <ProtectedRoute>
+            <SlotCheckout />
           </ProtectedRoute>
         }
       />

@@ -56,7 +56,6 @@ export default function UnifiedPurchase({
   isAuthenticated,
   userRole,
   onLogin,
-  onPurchased,
 }: {
   athlete: any;
   slotInstances: any[];
@@ -65,7 +64,6 @@ export default function UnifiedPurchase({
   isAuthenticated: boolean;
   userRole?: string;
   onLogin: () => void;
-  onPurchased?: () => void;
 }) {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodKey>('SINGLE_EVENT');
@@ -122,16 +120,17 @@ export default function UnifiedPurchase({
     [periodSlots, drawerId]
   );
 
+  /**
+   * 개편 Phase 3 (§13.2): 바로 구매는 즉시 계약이 아니라 15분 임시예약 후 주문확인 화면으로 간다.
+   */
   const buyNowMut = useMutation({
-    mutationFn: (instanceId: string) => api.buySlotNow(instanceId),
-    onSuccess: (res: any) => {
-      onPurchased?.();
-      const contractId = res?.data?.id;
-      if (contractId) navigate(`/contracts/${contractId}`);
+    mutationFn: (instanceId: string) => api.holdSlot(instanceId),
+    onSuccess: (_res, instanceId) => {
+      navigate(`/checkout/slots/${instanceId}`);
     },
     onError: (e: any) => {
       const err = e?.response?.data?.error;
-      setError((typeof err === 'object' ? err?.message : err) || '바로 구매에 실패했습니다');
+      setError((typeof err === 'object' ? err?.message : err) || '슬롯 예약에 실패했습니다');
     },
   });
 
@@ -153,12 +152,8 @@ export default function UnifiedPurchase({
       setError('구매 가능한 슬롯 정보를 찾을 수 없습니다.');
       return;
     }
-    if (addons.length > 0) {
-      // 추가활동은 가격 정책 확정 전이라 자동 결제에 포함하지 않는다 (§14 가격정책 미확정)
-      if (!confirm('추가활동(SNS·매장 등)은 별도 협의 항목입니다.\n슬롯만 먼저 구매하고 추가활동은 상담으로 진행할까요?')) return;
-    } else if (!confirm(`${krw(selected.price)}에 바로 구매하시겠습니까?\n구매 시 계약이 생성되며 선수 서명 후 확정됩니다.`)) {
-      return;
-    }
+    // 추가활동은 가격 정책 확정 전이라 자동 결제에 포함하지 않는다 (§14 가격정책 미확정)
+    if (addons.length > 0 && !confirm('추가활동(SNS·매장 등)은 별도 협의 항목입니다.\n슬롯만 먼저 진행하고 추가활동은 상담으로 이어갈까요?')) return;
     buyNowMut.mutate(selected.instance.id);
   };
 

@@ -3337,6 +3337,7 @@ model SlotInventory {
   endDate           DateTime            @map("end_date")
   status            SlotInventoryStatus @default(AVAILABLE)
   reservedUntil     DateTime?           @map("reserved_until") // HELD 만료 시각
+  heldByBrandId     String?             @map("held_by_brand_id") // 임시예약 점유 브랜드 (§13.2)
   contractId        String?             @map("contract_id")
   auctionId         String?             @map("auction_id")
   productId         String?             @map("product_id")
