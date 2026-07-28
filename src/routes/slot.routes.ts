@@ -195,4 +195,70 @@ router.post(
   }
 );
 
+/**
+ * 개편 Phase 3 (BUY-02, §13.2) — 슬롯 임시예약 15분
+ * @route POST /slots/instances/:id/hold
+ */
+router.post(
+  '/instances/:id/hold',
+  authenticate,
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await brandService.findByUserId(req.user!.id);
+      const { inventoryService } = await import('../services/inventory.service');
+      await slotInstanceService.assertDirectBuyEligible(req.params.id, brand.id);
+      const hold = await inventoryService.hold(req.params.id, brand.id);
+      res.json({ success: true, data: hold, error: null });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** @route GET /slots/instances/:id/hold — 현재 내 예약 상태(타이머 UI) */
+router.get(
+  '/instances/:id/hold',
+  authenticate,
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await brandService.findByUserId(req.user!.id);
+      const { inventoryService } = await import('../services/inventory.service');
+      res.json({ success: true, data: await inventoryService.getHold(req.params.id, brand.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** @route DELETE /slots/instances/:id/hold — 예약 해제(주문 취소) */
+router.delete(
+  '/instances/:id/hold',
+  authenticate,
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await brandService.findByUserId(req.user!.id);
+      const { inventoryService } = await import('../services/inventory.service');
+      res.json({ success: true, data: await inventoryService.release(req.params.id, brand.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * 개편 Phase 3 (BUY-05/06) — 주문확인용 견적
+ * 가격정책(부가세·플랫폼 이용료) 확정 전이므로 표시 금액 = 실제 결제 금액을 보장한다.
+ * @route GET /slots/instances/:id/quote
+ */
+router.get('/instances/:id/quote', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await slotInstanceService.getQuote(req.params.id), error: null });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

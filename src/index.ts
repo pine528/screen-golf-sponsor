@@ -167,6 +167,16 @@ cron.schedule('* * * * *', async () => {
   }
 }, cronOptions);
 
+// 개편 Phase 3 (BUY-02, §13.2) — 만료된 슬롯 임시예약(HELD 15분) 해제
+cron.schedule('* * * * *', async () => {
+  try {
+    const { inventoryService } = await import('./services/inventory.service');
+    await inventoryService.expireHolds();
+  } catch (error) {
+    console.error('[Cron] Slot hold expiry error:', error);
+  }
+}, cronOptions);
+
 // Process expired contract deadlines every hour
 cron.schedule('0 * * * *', async () => {
   try {

@@ -532,6 +532,83 @@ export class SlotInstanceService {
    * - 브랜드가 즉시구매 시 계약 생성 (브랜드 선서명)
    * - 선수 서명 후 에스크로 HOLD (기존 sign() 흐름 활용)
    */
+  /**
+   * 개편 Phase 3 (BUY-01, §13.1) — 직접구매 가능조건 검증
+   * 임시예약(hold)과 실제 구매(processBuyNow)가 동일한 조건을 쓰도록 공유한다.
+   */
+  async assertDirectBuyEligible(slotId: string, brandId: string) {
+    const slot = await prisma.slotInstance.findUnique({
+      where: { id: slotId },
+      include: { event: true, athlete: true, slotTemplate: true },
+    });
+    if (!slot) throw new NotFoundError('Slot not found');
+    if (!slot.isActive) throw new BadRequestError('비활성 상태인 슬롯입니다');
+    if (!slot.athlete.isActive) throw new BadRequestError('비활성 상태인 선수입니다');
+    if (slot.athlete.kycStatus !== 'APPROVED') throw new BadRequestError('KYC 미승인 선수의 슬롯입니다');
+    if (slot.event && (slot.event as any).isActive === false) throw new BadRequestError('비활성 상태인 대회입니다');
+    if (!['OPEN', 'IN_AUCTION'].includes(slot.status)) throw new ConflictError('현재 구매할 수 없는 슬롯입니다');
+    if (!slot.enableDirectBuy) throw new BadRequestError('바로 구매가 열려 있지 않은 슬롯입니다');
+
+    const buyPrice = slot.directBuyPrice || slot.reservePrice;
+    if (!buyPrice || Number(buyPrice) <= 0) throw new BadRequestError('판매 가격이 설정되지 않은 슬롯입니다');
+
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+    if (!brand) throw new NotFoundError('Brand not found');
+
+    // 업종 충돌 + 대회 규칙 (예약 단계에서도 미리 차단해 헛걸음을 막는다)
+    await conflictService.checkCategoryConflict({
+      eventId: slot.eventId,
+      athleteId: slot.athleteId,
+      brandId,
+      brandCategory: brand.category,
+      excludeSlotId: slotId,
+    });
+    const rules = await phase2UnlockService.validateTournamentRulesForBid(slot.eventId, slot.athleteId, brandId, brand.category);
+    if (!rules.valid) throw new BadRequestError(rules.errors.join(' '));
+
+    return { slot, brand, buyPrice };
+  }
+
+  /**
+   * 개편 Phase 3 (BUY-05/06) — 주문확인 견적
+   * 가격정책(부가세·플랫폼 이용료 포함 여부)이 확정되기 전까지 표시 금액은
+   * 실제 결제 금액과 동일해야 한다 (우선순위표 §15 개발중단 기준).
+   */
+  async getQuote(slotId: string) {
+    const slot = await prisma.slotInstance.findUnique({
+      where: { id: slotId },
+      include: {
+        event: { select: { name: true, dateStart: true, dateEnd: true } },
+        athlete: { select: { id: true, name: true, profileImageUrl: true, tourQualification: true } },
+        slotTemplate: { select: { code: true, name: true, nameKr: true, grade: true, recommendedWMm: true, recommendedHMm: true, material: true, forbiddenNotes: true } },
+      },
+    });
+    if (!slot) throw new NotFoundError('Slot not found');
+
+    const base = Number(slot.directBuyPrice || slot.reservePrice || 0);
+    return {
+      slot: {
+        id: slot.id,
+        status: slot.status,
+        enableDirectBuy: slot.enableDirectBuy,
+        template: slot.slotTemplate,
+      },
+      athlete: slot.athlete,
+      event: slot.event,
+      price: {
+        basePrice: base,
+        // 정책 확정 전: 플랫폼 이용료·부가세는 표시가에 포함된 것으로 간주하고 별도 가산하지 않는다
+        platformFee: 0,
+        platformFeeIncluded: true,
+        vat: 0,
+        vatIncluded: true,
+        total: base,
+        policyPending: true,
+        note: '부가세·플랫폼 이용료 정책 확정 전으로, 표시 금액이 실제 결제 금액입니다.',
+      },
+    };
+  }
+
   async processBuyNow(slotId: string, brandId: string, brandUserId: string) {
     // 트랜잭션 외부에서 먼저 기본 검증 수행
     const slot = await prisma.slotInstance.findUnique({
@@ -637,6 +714,12 @@ export class SlotInstanceService {
     });
     if (existingContract) {
       throw new ConflictError('Slot already has an active contract');
+    }
+
+    // ★ 개편 Phase 3 (BUY-01): 다른 브랜드가 임시예약(HELD) 중이면 차단
+    {
+      const { inventoryService } = await import('./inventory.service');
+      await inventoryService.assertPurchasableBy(slotId, brandId);
     }
 
     // ★ 개편 Phase 1 (§19.1): 신규 인벤토리 기준 기간 겹침 중복판매 차단
