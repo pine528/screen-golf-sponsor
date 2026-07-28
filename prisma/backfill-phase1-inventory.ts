@@ -10,16 +10,8 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// 표준 착장 도식 좌표 (%)
-const COORDS: Record<string, [number, number]> = {
-  CAP_BRIM_TOP: [50, 3], CAP_FRONT: [50, 8], CAP_SIDE_L: [37, 9], CAP_SIDE_R: [63, 9], CAP_BACK: [50, 13],
-  COLLAR_L: [44, 21], COLLAR_R: [56, 21],
-  SHOULDER_LINE_L: [31, 24], SHOULDER_LINE_R: [69, 24],
-  BACK_SHOULDER_L: [36, 27], BACK_SHOULDER_R: [64, 27],
-  CHEST_L: [41, 33], CHEST_R: [59, 33],
-  SLEEVE_L: [21, 36], SLEEVE_R: [79, 36],
-  PANTS_HIP_SIDE_FACING: [62, 55], PANTS_THIGH_SIDE_FACING: [62, 66],
-};
+// 표준 착장 도식 좌표 (%) — 실루엣과 짝을 이루므로 단일 소스에서 가져온다
+import { SLOT_DISPLAY_COORDS as COORDS } from './slot-display-coords';
 
 // 엑셀 슬롯 라벨 → 템플릿 코드 (open-sep-event-slots와 동일)
 const LABEL_TO_CODES: Record<string, string[]> = {
