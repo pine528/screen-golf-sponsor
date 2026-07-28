@@ -106,6 +106,7 @@ import PublicAthleteDetail from './pages/PublicAthleteDetail';
 import SlotCheckout from './pages/SlotCheckout';
 import ProposalNew from './pages/ProposalNew';
 import Proposals from './pages/Proposals';
+import Deliverables from './pages/Deliverables';
 import AdminAthleteEventResults from './pages/admin/AdminAthleteEventResults';
 import AdminMediaExposure from './pages/admin/AdminMediaExposure';
 import AdminTournamentActivation from './pages/admin/AdminTournamentActivation';
@@ -269,6 +270,8 @@ function App() {
       <Route path="/proposals/new" element={<ProtectedRoute><ProposalNew /></ProtectedRoute>} />
       <Route path="/proposals/:id" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
       <Route path="/proposals" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
+      {/* 개편 Phase 6 — 이행·증빙 (선수 제출 / 브랜드 현황 / 관리자 검수) */}
+      <Route path="/deliverables" element={<ProtectedRoute><Deliverables /></ProtectedRoute>} />
       <Route
         path="/profile"
         element={

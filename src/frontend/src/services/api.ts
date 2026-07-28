@@ -3102,6 +3102,42 @@ class ApiService {
     return r.data;
   }
 
+  // 개편 Phase 6 — 이행·증빙
+  async listDeliverables(proposalId?: string) {
+    const r = await this.client.get<ApiResponse<any[]>>('/deliverables', { params: proposalId ? { proposalId } : undefined });
+    return r.data;
+  }
+
+  async getDeliverableSummary(proposalId?: string) {
+    const r = await this.client.get<ApiResponse<any>>('/deliverables/summary', { params: proposalId ? { proposalId } : undefined });
+    return r.data;
+  }
+
+  async listPendingDeliverableReviews() {
+    const r = await this.client.get<ApiResponse<any[]>>('/deliverables/pending-review');
+    return r.data;
+  }
+
+  async submitDeliverableEvidence(id: string, data: { fileUrl: string; fileType?: string; linkUrl?: string; capturedAt?: string; note?: string }) {
+    const r = await this.client.post<ApiResponse<any>>(`/deliverables/${id}/evidence`, data);
+    return r.data;
+  }
+
+  async reviewDeliverableEvidence(evidenceId: string, approve: boolean, note?: string) {
+    const r = await this.client.post<ApiResponse<any>>(`/deliverables/evidence/${evidenceId}/review`, { approve, note });
+    return r.data;
+  }
+
+  async requestDeliverableSubstitution(id: string, type: string, note?: string) {
+    const r = await this.client.post<ApiResponse<any>>(`/deliverables/${id}/substitution`, { type, note });
+    return r.data;
+  }
+
+  async reviewDeliverableSubstitution(id: string, approve: boolean, note?: string) {
+    const r = await this.client.post<ApiResponse<any>>(`/deliverables/${id}/substitution/review`, { approve, note });
+    return r.data;
+  }
+
   // 개편 Phase 5 — 장기 파트너십 제안
   async listProposals(status?: string) {
     const r = await this.client.get<ApiResponse<any[]>>('/proposals', { params: status ? { status } : undefined });

@@ -167,6 +167,16 @@ cron.schedule('* * * * *', async () => {
   }
 }, cronOptions);
 
+// 개편 Phase 6 (OPS-03) — 이행 기한이 지난 항목 알림 (매일 오전 10시)
+cron.schedule('0 10 * * *', async () => {
+  try {
+    const { deliverableService } = await import('./services/deliverable.service');
+    await deliverableService.notifyOverdue();
+  } catch (error) {
+    console.error('[Cron] Deliverable overdue notification error:', error);
+  }
+}, cronOptions);
+
 // 개편 Phase 5 (PROP-07) — 검토 기한이 지난 장기 제안 만료 처리
 cron.schedule('0 * * * *', async () => {
   try {

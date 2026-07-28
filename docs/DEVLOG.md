@@ -3012,3 +3012,27 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
   분할결제(PROP-09)는 결제정책 확정 필요
 - 영향: `prisma/schema.prisma`, `prisma/migrations/20260729_proposal/`, `src/services/proposal.service.ts`,
   `src/routes/proposal.routes.ts`, `src/index.ts`, `src/frontend/src/pages/{ProposalNew,Proposals}.tsx`, `App.tsx`, `api.ts`
+
+## [2026-07-29] 전면 개편 Phase 6 — 이행·증빙 (OPS-01~08, REP-01)
+- **모델**: `Deliverable`(계약·제안의 활동 약속을 항목 단위로) + `DeliverableEvidence`(항목당 증빙 다건)
+  - 기존 `Verification`은 계약당 1건 구조라 항목별 추적이 불가능했음 → 별도 모델로 해결
+- **자동 생성(OPS-01/03)**: 제안이 승인되면 약속한 활동(착장·출전·SNS 피드/스토리/릴스·매장·행사·촬영)을
+  이행 항목으로 펼치고 계약 종료일을 기한으로 설정. 재실행해도 중복 생성되지 않음
+- **증빙 검수(OPS-04/05/06)**: 선수가 항목마다 증빙 제출 → 관리자가 건별 승인·반려 →
+  **승인된 건만** 이행 횟수 증가. 반려 시 재제출 가능하고, 검수 대기 증빙이 남아 있으면 상태를 유지
+- **대체이행(OPS-07/08, §26.3)**: 차기 이월·동일 등급 슬롯 변경·SNS 콘텐츠 대체·부분/전액 환불을
+  선수 또는 브랜드가 요청 → 관리자 승인 시 SUBSTITUTED로 갈음
+- **현황 요약(REP-01)**: 검증 완료 / 검수 대기 / 대체이행 / 기한 경과를 분리 집계.
+  **진행률은 검수 완료분만 반영**하고 그 사실을 화면에 명시 (LEG-06 미검증 수치 구분)
+- **알림**: 증빙 제출·대체이행 요청 시 관리자에게, 승인·반려 결과는 선수에게. 기한 경과 항목은 매일 오전 10시 알림
+- **화면**: `/deliverables` 하나로 역할별 처리 — 선수(증빙 등록·대체이행 요청) / 관리자(건별 승인·반려·대체 승인) /
+  브랜드(진행 현황). 항목별 증빙 목록·반려 사유·기한 경과 배지 표시
+- 검증(서비스 9종): 승인 시 6건 자동 생성 / 재생성 방지 / 제출→반려→재제출→승인 / 목표 달성 시 APPROVED /
+  타인 항목 증빙 차단 / 대체이행 요청·승인 / 요약 집계(목표 9·검증 2·검수대기 1·대체 1·진행률 22%)
+  브라우저: 선수 화면 6항목·증빙 등록 버튼 → 제출 시 검증 0/9·검수대기 1·진행률 0% (미검증이 진행률에 반영되지 않음 확인)
+  → 관리자 화면에서 승인 → 검증 1/9·진행률 11%로 반영
+- 미착수(외부 의존): 증빙 파일 업로드는 현재 URL 입력 방식(파일 스토리지 연동 시 교체),
+  REP-02~05(SNS 성과 자동연동·PDF 내보내기·재계약 추천)는 외부 API·데이터 정책 확정 필요
+- 영향: `prisma/schema.prisma`, `prisma/migrations/20260729_deliverable/`, `src/services/deliverable.service.ts`,
+  `src/routes/deliverable.routes.ts`, `src/services/proposal.service.ts`, `src/index.ts`,
+  `src/frontend/src/pages/Deliverables.tsx`, `App.tsx`, `api.ts`
