@@ -225,6 +225,7 @@ export class SlotInstanceService {
               name: true,
               tour: true,
               profileImageUrl: true,
+              isRecommended: true, // 메인 노출 필터용 (추천 선수만)
             },
           },
           slotTemplate: true,
@@ -370,6 +371,7 @@ export class SlotInstanceService {
       auctionMinBid?: number | null;
       auctionEndAt?: Date | null;
       isPublic?: boolean;
+      saleMode?: 'AUCTION' | 'DIRECT' | 'INQUIRY';
     }
   ) {
     const slot = await prisma.slotInstance.findUnique({
@@ -415,7 +417,13 @@ export class SlotInstanceService {
     const auctionMinBid = data.auctionMinBid !== undefined ? data.auctionMinBid : slot.auctionMinBid;
     const auctionEndAt = data.auctionEndAt !== undefined ? data.auctionEndAt : slot.auctionEndAt;
 
-    if (!enableAuction && !enableDirectBuy) {
+    // 판매 방식 (미지정 시 기존 플래그에서 파생)
+    const saleMode: 'AUCTION' | 'DIRECT' | 'INQUIRY' =
+      data.saleMode ?? (enableAuction ? 'AUCTION' : enableDirectBuy ? 'DIRECT' : (slot.saleMode as any) ?? 'INQUIRY');
+    const isInquiry = saleMode === 'INQUIRY';
+
+    // INQUIRY(협의 문의)는 경매·즉시구매 모두 비활성 상태가 정상
+    if (!isInquiry && !enableAuction && !enableDirectBuy) {
       throw new BadRequestError('At least one sale mode must be enabled');
     }
 
@@ -443,6 +451,7 @@ export class SlotInstanceService {
         data: {
           enableAuction,
           enableDirectBuy,
+          saleMode,
           directBuyPrice: enableDirectBuy && directBuyPrice ? new Decimal(directBuyPrice) : null,
           auctionMinBid: enableAuction && auctionMinBid ? new Decimal(auctionMinBid) : null,
           auctionEndAt: enableAuction ? auctionEndAt : null,

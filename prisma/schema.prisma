@@ -565,6 +565,13 @@ model SlotTemplate {
   @@map("slot_templates")
 }
 
+// 슬롯 판매 방식 (선수가 슬롯별로 선택)
+enum SlotSaleMode {
+  AUCTION // 경매 방식
+  DIRECT // 직접(즉시) 구매 방식
+  INQUIRY // 후원가능 슬롯만 오픈 → 스폰픽 협의로 확정 (카카오 상담)
+}
+
 enum SlotStatus {
   OPEN
   IN_AUCTION
@@ -591,6 +598,8 @@ model SlotInstance {
   directBuyPrice  Decimal?   @map("direct_buy_price") @db.Decimal(18, 0)
   auctionMinBid   Decimal?   @map("auction_min_bid") @db.Decimal(18, 0)
   auctionEndAt    DateTime?  @map("auction_end_at")
+  // 판매 방식 (선수 선택): AUCTION 경매 / DIRECT 즉시구매 / INQUIRY 슬롯만 오픈 후 스폰픽 협의
+  saleMode        SlotSaleMode @default(AUCTION) @map("sale_mode")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 

@@ -122,7 +122,15 @@ router.patch(
       const { id } = req.params;
       const userId = req.user!.id;
       const userRole = req.user!.role;
-      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt, isPublic } = req.body;
+      const { saleMode, directBuyPrice, auctionMinBid, auctionEndAt, isPublic } = req.body;
+      // 판매 방식 3종 — saleMode가 오면 플래그를 파생시킴 (구버전 클라이언트는 기존 플래그 그대로 사용)
+      const ALLOWED = ['AUCTION', 'DIRECT', 'INQUIRY'];
+      if (saleMode !== undefined && !ALLOWED.includes(saleMode)) {
+        res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: '지원하지 않는 판매 방식입니다' } });
+        return;
+      }
+      const enableAuction = saleMode !== undefined ? saleMode === 'AUCTION' : req.body.enableAuction;
+      const enableDirectBuy = saleMode !== undefined ? saleMode === 'DIRECT' : req.body.enableDirectBuy;
 
       let athleteId: string;
 
@@ -143,6 +151,7 @@ router.patch(
         auctionMinBid: auctionMinBid ? Number(auctionMinBid) : null,
         auctionEndAt: auctionEndAt ? new Date(auctionEndAt) : null,
         isPublic,
+        ...(saleMode !== undefined && { saleMode }),
       });
 
       res.json({

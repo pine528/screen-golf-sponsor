@@ -160,6 +160,7 @@ export class AuctionService {
                   name: true,
                   tour: true,
                   profileImageUrl: true,
+                  isRecommended: true, // 메인 노출 필터용 (추천 선수만)
                 },
               },
               slotTemplate: true,
