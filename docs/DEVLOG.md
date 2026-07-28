@@ -2924,5 +2924,11 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - buy-now에 기간겹침 검사 통합 + 동기화 훅(구매→HELD / 계약서명→SOLD / 계약취소→AVAILABLE). 업종충돌·대회규칙은 기존 conflictService/phase2UnlockService 재사용 확인
 - 백필 backfill-phase1-inventory.ts (재실행 안전): AthleteSlot 347 / SlotInventory 347 / Product 47 / ProductSlot 347 (엑셀 sponsorSlots·9월 슬롯 기준. 단, 중복 이벤트 정리 전까지 인벤토리 694 — 정리 스크립트가 중복분 347 함께 삭제)
 - 🔧 발견·복구: 지난 enum 사고 때 SHOULDER_LINE_L/R 템플릿 미복원 상태였음 → update-slot-templates-v2.ts 재실행(17개) + 9월 어깨 슬롯 48건 생성 (총 347)
-- ⚠️ 사고: open-sep-event-slots.ts가 Phase 0에서 중립화된 이벤트명("2026년 9월 출전 경기 (단일 출전)")을 옛 명칭으로 조회 → 중복 이벤트+슬롯 347+경매 21 생성. 스크립트 이벤트명 수정 완료. 중복분 삭제는 `APPLY=1 npx ts-node prisma/cleanup-duplicate-sep-event.ts` 실행 필요 (입찰·계약 0건 확인됨)
+- ⚠️ 사고1: open-sep-event-slots.ts가 Phase 0에서 중립화된 이벤트명("2026년 9월 출전 경기 (단일 출전)")을 옛 명칭으로 조회 → 중복 이벤트+슬롯 347+경매 21 생성. 스크립트 이벤트명 수정 + cleanup-duplicate-sep-event.ts로 삭제 완료 (입찰·계약 0건)
+- 🔴 사고2 근본원인 규명: **어깨라인 슬롯 48건 2회 소실의 진짜 원인은 enum이 아니라 `prisma/seed.ts`였음.**
+  seed.ts의 slotTemplates 목록(15개)에 SHOULDER_LINE_L/R이 없어 배포 시 seed가 이를 "legacy 템플릿"으로 판단 →
+  연결된 슬롯 인스턴스·경매·입찰·계약을 삭제 → 템플릿 삭제는 athlete_slots FK에 막혀 실패하고 catch로 무시 → 인스턴스만 소실
+  - 수정: seed.ts에 SHOULDER_LINE_L/R(A+ ₩900,000) 추가 + legacy 정리 로직을 "사용 중이면 경고만, 삭제 금지"로 안전화 (운영 데이터 삭제 코드 제거)
+  - 교훈: 슬롯 템플릿을 추가할 때는 반드시 `prisma/seed.ts`의 slotTemplates 목록에도 함께 추가할 것
+- 고아 인벤토리(삭제된 slotInstance 참조) 96건 정리 — `prisma/repair-orphan-inventory.ts` (계약·판매완료 행은 보존)
 - 영향: `prisma/schema.prisma`, `prisma/migrations/20260728_phase1_inventory/`, `prisma/backfill-phase1-inventory.ts`, `prisma/cleanup-duplicate-sep-event.ts`, `src/services/inventory.service.ts`, `slot.service.ts`, `contract.service.ts`, `src/routes/athlete.routes.ts`

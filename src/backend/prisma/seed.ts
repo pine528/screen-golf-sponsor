@@ -560,6 +560,69 @@ async function main() {
       reserveRecKrw: 700000,
       reserveReason: '후면 전신 누적 노출',
     },
+    // v2.0 개정 — 어깨라인(쇄골) 좌/우 (A+)
+    // ⚠️ 이 목록에서 빠지면 아래 '구버전 템플릿 정리'가 해당 슬롯 인스턴스를 삭제함
+    //    (2026-07-28 운영 슬롯 48건 2회 소실 사고의 원인)
+    {
+      code: 'SHOULDER_LINE_L',
+      name: '좌측 어깨라인',
+      bodyPart: BodyPart.SHOULDER_LINE_L,
+      sizeMaxWMm: 130,
+      sizeMaxHMm: 35,
+      perimeterMaxMm: 350,
+      recommendedWMm: 120,
+      recommendedHMm: 30,
+      materialRules: MaterialRule.EMBROIDERY_OK,
+      requiredAngles: ['side', 'back'],
+      categoryExclusivityGroup: 'shoulder_line',
+      defaultReservePrice: 900000,
+      phase: 1,
+      category: SlotCategory.TOP,
+      grade: SlotGrade.A_PLUS,
+      nameKr: '좌측 어깨라인',
+      nameEn: 'Shoulder Line Left',
+      uiHeadline: '장형 워드마크 집중노출',
+      uiCopy: '어깨 봉제선을 따라 길게 배치해 측면·백스윙 화면에서 브랜드명이 선명하게 노출.',
+      tags: ['측면', '워드마크', '프리미엄'],
+      openRule: '기본 오픈(항상)',
+      exclusivityGroup: 'SHOULDER_LINE',
+      tournamentReserved: false,
+      recSizeMm: '120x30',
+      material: '평자수/직조/인쇄',
+      reserveMinKrw: 700000,
+      reserveRecKrw: 900000,
+      reserveReason: '측면·백스윙 장형 노출',
+    },
+    {
+      code: 'SHOULDER_LINE_R',
+      name: '우측 어깨라인',
+      bodyPart: BodyPart.SHOULDER_LINE_R,
+      sizeMaxWMm: 130,
+      sizeMaxHMm: 35,
+      perimeterMaxMm: 350,
+      recommendedWMm: 120,
+      recommendedHMm: 30,
+      materialRules: MaterialRule.EMBROIDERY_OK,
+      requiredAngles: ['side', 'back'],
+      categoryExclusivityGroup: 'shoulder_line',
+      defaultReservePrice: 900000,
+      phase: 1,
+      category: SlotCategory.TOP,
+      grade: SlotGrade.A_PLUS,
+      nameKr: '우측 어깨라인',
+      nameEn: 'Shoulder Line Right',
+      uiHeadline: '장형 워드마크 집중노출',
+      uiCopy: '어깨 봉제선을 따라 길게 배치해 측면·백스윙 화면에서 브랜드명이 선명하게 노출.',
+      tags: ['측면', '워드마크', '프리미엄'],
+      openRule: '기본 오픈(항상)',
+      exclusivityGroup: 'SHOULDER_LINE',
+      tournamentReserved: false,
+      recSizeMm: '120x30',
+      material: '평자수/직조/인쇄',
+      reserveMinKrw: 700000,
+      reserveRecKrw: 900000,
+      reserveReason: '측면·백스윙 장형 노출',
+    },
     // Phase 2 - PANTS (2 slots)
     {
       code: 'PANTS_HIP_SIDE_FACING',
@@ -641,35 +704,23 @@ async function main() {
       select: { id: true, code: true },
     });
 
-    if (legacyTemplates.length > 0) {
-      const legacyTemplateIds = legacyTemplates.map(t => t.id);
-      console.log(`Found ${legacyTemplates.length} legacy templates to remove:`, legacyTemplates.map(t => t.code));
-
-      const legacySlotInstances = await prisma.slotInstance.findMany({
-        where: { slotTemplateId: { in: legacyTemplateIds } },
-        select: { id: true },
-      });
-      const legacySlotInstanceIds = legacySlotInstances.map(s => s.id);
-
-      if (legacySlotInstanceIds.length > 0) {
-        const legacyAuctions = await prisma.auction.findMany({
-          where: { slotInstanceId: { in: legacySlotInstanceIds } },
-          select: { id: true },
-        });
-        const legacyAuctionIds = legacyAuctions.map(a => a.id);
-
-        if (legacyAuctionIds.length > 0) {
-          await prisma.bid.deleteMany({ where: { auctionId: { in: legacyAuctionIds } } });
-          await prisma.contract.deleteMany({ where: { auctionId: { in: legacyAuctionIds } } });
-          await prisma.auction.deleteMany({ where: { id: { in: legacyAuctionIds } } });
-        }
-        await prisma.slotInstance.deleteMany({ where: { id: { in: legacySlotInstanceIds } } });
+    // ⚠️ 2026-07-28: 이 정리 로직이 운영 슬롯 인스턴스·경매·계약까지 삭제해
+    //    9월 어깨라인 슬롯 48건을 두 차례 소실시켰음. 이제 '사용 중이 아닌' 템플릿만 삭제한다.
+    //    사용 중(슬롯 인스턴스/선수 슬롯 설정 존재)이면 경고만 남기고 보존.
+    for (const t of legacyTemplates) {
+      const [instanceCount, athleteSlotCount] = await Promise.all([
+        prisma.slotInstance.count({ where: { slotTemplateId: t.id } }),
+        prisma.athleteSlot.count({ where: { slotTemplateId: t.id } }),
+      ]);
+      if (instanceCount > 0 || athleteSlotCount > 0) {
+        console.warn(
+          `⚠️  템플릿 ${t.code}는 seed 목록에 없지만 사용 중이라 보존합니다 ` +
+          `(슬롯 ${instanceCount}건 / 선수슬롯 ${athleteSlotCount}건). seed.ts 목록에 추가하세요.`
+        );
+        continue;
       }
-
-      const deletedTemplates = await prisma.slotTemplate.deleteMany({
-        where: { id: { in: legacyTemplateIds } },
-      });
-      console.log(`Legacy slot templates removed: ${deletedTemplates.count}`);
+      await prisma.slotTemplate.delete({ where: { id: t.id } });
+      console.log(`Legacy slot template removed: ${t.code}`);
     }
   } catch (error) {
     console.warn('Warning: Could not clean up legacy templates (non-fatal):', error);
