@@ -102,6 +102,7 @@ model Brand {
   user              User                         @relation(fields: [userId], references: [id])
   bids              Bid[]
   contracts         Contract[]
+  proposals         Proposal[]
   campaigns         Campaign[]
   payments          Payment[]
   favoritedBy       FavoriteBrand[]
@@ -183,6 +184,7 @@ model Athlete {
   sport               Sport?                 @relation(fields: [sportId], references: [id])
   slotInstances       SlotInstance[]
   contracts           Contract[]
+  proposals           Proposal[]
   eventParticipations EventParticipation[]
   payoutItems         PayoutItem[]
   favoritedBy         FavoriteAthlete[]
@@ -3404,4 +3406,96 @@ model ProductSlot {
 
   @@unique([productId, athleteSlotId])
   @@map("product_slots")
+}
+
+// ============================================
+// 개편 Phase 5 — 장기 파트너십 제안 (핸드오프 §14, WF-10)
+// 6·12개월 상품은 경매가 금지되므로 제안이 유일한 계약 경로다.
+// ============================================
+
+enum ProposalStatus {
+  DRAFT // 작성 중
+  SUBMITTED // 제안 완료
+  ADMIN_REVIEW // 관리자 검토
+  ATHLETE_REVIEW // 선수 검토
+  REVISION_REQUESTED // 수정 요청 (선수·관리자 → 브랜드)
+  BRAND_REVISING // 브랜드 수정 중
+  APPROVED // 승인
+  REJECTED // 거절
+  EXPIRED // 만료
+  CONTRACTING // 계약 진행
+  CONTRACTED // 계약 완료
+}
+
+model Proposal {
+  id        String         @id @default(uuid())
+  brandId   String         @map("brand_id")
+  athleteId String         @map("athlete_id")
+  status    ProposalStatus @default(DRAFT)
+
+  // 1단계 기본기간
+  startDate    DateTime            @map("start_date")
+  endDate      DateTime            @map("end_date")
+  durationType ProductDurationType @map("duration_type") // MONTHS_6 / MONTHS_12
+
+  // 2단계 슬롯 (athleteSlotId 배열 + 우선순위)
+  desiredSlots      Json?    @map("desired_slots")
+  allowAlternative  Boolean  @default(true) @map("allow_alternative") // 대체 슬롯 허용
+
+  // 3단계 활동
+  minAppearances Int?  @map("min_appearances") // 최소 출전 횟수
+  snsActivity    Json? @map("sns_activity")
+  storeVisits    Json? @map("store_visits")
+  corporateEvents Json? @map("corporate_events")
+  contentShoots  Json? @map("content_shoots")
+
+  // 4단계 권리
+  imageUsageScope  String?  @map("image_usage_scope")
+  imageUsageMonths Int?     @map("image_usage_months")
+  allowSecondaryEdit Boolean @default(false) @map("allow_secondary_edit")
+  allowPaidMedia   Boolean  @default(false) @map("allow_paid_media") // 광고 집행
+  categoryExclusive Boolean @default(false) @map("category_exclusive") // 업종 독점
+
+  // 5단계 예산
+  totalBudget    Int      @map("total_budget")
+  installmentPlan Json?   @map("installment_plan") // 분할 결제 계획
+  additionalCosts Json?   @map("additional_costs")
+  brandNote      String?  @map("brand_note")
+
+  // 검토 결과
+  reviewNote  String?   @map("review_note")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  submittedAt DateTime? @map("submitted_at")
+  expiresAt   DateTime? @map("expires_at")
+  contractId  String?   @map("contract_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  brand   Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  athlete Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  history ProposalHistory[]
+
+  @@index([brandId, status])
+  @@index([athleteId, status])
+  @@map("proposals")
+}
+
+// §14.3 수정 이력은 모두 저장한다
+model ProposalHistory {
+  id         String         @id @default(uuid())
+  proposalId String         @map("proposal_id")
+  fromStatus ProposalStatus? @map("from_status")
+  toStatus   ProposalStatus @map("to_status")
+  actorId    String?        @map("actor_id") // 변경한 사용자
+  actorRole  String?        @map("actor_role")
+  note       String?
+  changes    Json? // 변경된 필드 스냅샷
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, createdAt])
+  @@map("proposal_histories")
 }
