@@ -13,6 +13,22 @@ const router = Router();
  * @route GET /athletes/public
  * @desc 공개 선수 목록 (회원가입 + KYC 통과 ATHLETE만, 비회원 접근 가능)
  */
+/**
+ * @route GET /athletes/public-stats
+ * @desc 메인 실적 수치 — 검증 가능한 실데이터만 노출 (개편 LEG-06: 하드코딩 수치 금지)
+ */
+router.get('/public-stats', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [athletes, brands, activeSlots, contracts] = await Promise.all([
+      prisma.athlete.count({ where: { isActive: true, kycStatus: 'APPROVED' } }),
+      prisma.brand.count(),
+      prisma.slotInstance.count({ where: { isActive: true, status: { in: ['OPEN', 'IN_AUCTION'] } } }),
+      prisma.contract.count(),
+    ]);
+    res.json({ success: true, data: { athletes, brands, activeSlots, contracts }, error: null });
+  } catch (e) { next(e); }
+});
+
 router.get('/public', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { q, tour, sportType, sport, page = '1', limit = '24' } = req.query as any;
