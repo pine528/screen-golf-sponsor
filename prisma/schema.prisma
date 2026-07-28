@@ -642,6 +642,8 @@ model Auction {
   maxExtensionSec Int           @default(600) @map("max_extension_sec")
   totalExtended   Int           @default(0) @map("total_extended")
   minBidIncrement Int           @default(10000) @map("min_bid_increment")
+  // §12.5 첫 유효입찰 이후에도 즉시구매를 유지할지 (관리자 예외 설정)
+  allowBuyNowAfterBid Boolean   @default(false) @map("allow_buy_now_after_bid")
   currentPrice    Int           @default(0) @map("current_price")
   status          AuctionStatus @default(SCHEDULED)
   winningBidId    String?       @map("winning_bid_id")

@@ -167,6 +167,15 @@ cron.schedule('* * * * *', async () => {
   }
 }, cronOptions);
 
+// 개편 Phase 4 (AUC-15) — 경매 종료 임박 알림 (24시간 전 / 1시간 전)
+cron.schedule('*/5 * * * *', async () => {
+  try {
+    await auctionService.processEndingSoonNotifications();
+  } catch (error) {
+    console.error('[Cron] Auction ending-soon notification error:', error);
+  }
+}, cronOptions);
+
 // 개편 Phase 3 (BUY-02, §13.2) — 만료된 슬롯 임시예약(HELD 15분) 해제
 cron.schedule('* * * * *', async () => {
   try {
