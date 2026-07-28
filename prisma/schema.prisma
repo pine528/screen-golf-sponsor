@@ -206,6 +206,10 @@ model Athlete {
   followerSnapshots   AthleteFollowerSnapshot[]
   newsArticles        AthleteNewsArticle[]
 
+  // 2026-07 개편 Phase 1 — 슬롯 인벤토리·후원상품
+  athleteSlots        AthleteSlot[]
+  sponsorshipProducts SponsorshipProduct[]
+
   @@map("athletes")
 }
 
@@ -559,8 +563,12 @@ model SlotTemplate {
   reserveMinKrw      Int?          @map("reserve_min_krw") // 최소 예약가 (원)
   reserveRecKrw      Int?          @map("reserve_rec_krw") // 권장 예약가 (원)
   reserveReason      String?       @map("reserve_reason") // 예약가 산정 사유
+  // 개편 Phase 1 — 슬롯 도식(착장 마커) 좌표 (%) — Phase 2 슬롯 인벤토리 도식용
+  displayX           Float?        @map("display_x")
+  displayY           Float?        @map("display_y")
 
   slotInstances SlotInstance[]
+  athleteSlots  AthleteSlot[]
 
   @@map("slot_templates")
 }
@@ -3248,4 +3256,149 @@ model AthleteNewsArticle {
   @@unique([athleteId, url])
   @@index([athleteId, publishedAt(sort: Desc)])
   @@map("athlete_news_articles")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 2026-07 전면 개편 Phase 1 — 슬롯 인벤토리·후원상품 (핸드오프 §18)
+//  기존 SlotInstance/Auction 체계와 병행 운영. slotInstanceId 브릿지로 연동.
+// ═══════════════════════════════════════════════════════════════════
+
+// 슬롯 재고 상태 (핸드오프 §9.4)
+enum SlotInventoryStatus {
+  AVAILABLE // 구매 가능
+  AUCTION_ACTIVE // 경매 진행 중
+  HELD // 임시 예약 (결제 진행 중)
+  SOLD // 계약 완료
+  RESTRICTED // 사용 제한
+  PENDING_APPROVAL // 승인 대기
+  UNAVAILABLE // 해당 기간 판매 안 함
+}
+
+// 상품 기간 유형 (핸드오프 §10)
+enum ProductDurationType {
+  SINGLE_EVENT // 1회 출전 — 단일 출전 후원 캠페인
+  DAYS_30 // 30일 브랜드 파트너
+  MONTHS_6 // 6개월 시즌 파트너 (경매 금지)
+  MONTHS_12 // 12개월 선수 공식 파트너 (경매 금지)
+}
+
+// 상품 유형 (핸드오프 §9.5)
+enum ProductType {
+  APPAREL // 착장 노출형
+  SNS // SNS 연계형
+  STORE // 매장 홍보형
+  EVENT_CONTENT // 행사·콘텐츠형
+  BUNDLE // 통합형
+}
+
+// 거래 방식 (핸드오프 §2.4 — CTA: 입찰하기/바로 구매/파트너십 제안)
+enum ProductTransactionType {
+  AUCTION
+  BUY_NOW
+  PROPOSAL
+}
+
+enum ProductApprovalStatus {
+  DRAFT
+  PENDING_ATHLETE
+  PENDING_ADMIN
+  APPROVED
+  REJECTED
+}
+
+// 선수별 슬롯 기본 설정 (핸드오프 §18.4)
+model AthleteSlot {
+  id               String   @id @default(uuid())
+  athleteId        String   @map("athlete_id")
+  slotTemplateId   String   @map("slot_template_id")
+  customName       String?  @map("custom_name")
+  basePrice        Int      @map("base_price")
+  baseGrade        String?  @map("base_grade")
+  saleEnabled      Boolean  @default(true) @map("sale_enabled")
+  approvalRequired Boolean  @default(false) @map("approval_required")
+  restrictionNote  String?  @map("restriction_note")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  athlete      Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  slotTemplate SlotTemplate    @relation(fields: [slotTemplateId], references: [id])
+  inventories  SlotInventory[]
+  productSlots ProductSlot[]
+
+  @@unique([athleteId, slotTemplateId])
+  @@map("athlete_slots")
+}
+
+// 기간별 슬롯 재고 (핸드오프 §18.5) — 중복판매 방지의 단일 진실 원천
+model SlotInventory {
+  id                String              @id @default(uuid())
+  athleteSlotId     String              @map("athlete_slot_id")
+  startDate         DateTime            @map("start_date")
+  endDate           DateTime            @map("end_date")
+  status            SlotInventoryStatus @default(AVAILABLE)
+  reservedUntil     DateTime?           @map("reserved_until") // HELD 만료 시각
+  contractId        String?             @map("contract_id")
+  auctionId         String?             @map("auction_id")
+  productId         String?             @map("product_id")
+  slotInstanceId    String?             @map("slot_instance_id") // 기존 SlotInstance 연동 브릿지
+  restrictionReason String?             @map("restriction_reason")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  athleteSlot AthleteSlot         @relation(fields: [athleteSlotId], references: [id], onDelete: Cascade)
+  product     SponsorshipProduct? @relation(fields: [productId], references: [id])
+
+  @@index([athleteSlotId, startDate, endDate])
+  @@index([status])
+  @@map("slot_inventories")
+}
+
+// 후원상품 (핸드오프 §18.6 — 기간 4종 × 유형 5종 × 거래 3종)
+model SponsorshipProduct {
+  id                  String                 @id @default(uuid())
+  athleteId           String                 @map("athlete_id")
+  productName         String                 @map("product_name")
+  durationType        ProductDurationType    @map("duration_type")
+  startDate           DateTime?              @map("start_date")
+  endDate             DateTime?              @map("end_date")
+  productType         ProductType            @default(APPAREL) @map("product_type")
+  transactionType     ProductTransactionType @default(BUY_NOW) @map("transaction_type")
+  basePrice           Int                    @default(0) @map("base_price")
+  buyNowPrice         Int?                   @map("buy_now_price")
+  auctionStartPrice   Int?                   @map("auction_start_price")
+  minBidIncrement     Int?                   @map("min_bid_increment")
+  reservePrice        Int?                   @map("reserve_price")
+  minAppearanceCount  Int?                   @map("min_appearance_count")
+  snsDeliverables     Json?                  @map("sns_deliverables")
+  storeDeliverables   Json?                  @map("store_deliverables")
+  eventDeliverables   Json?                  @map("event_deliverables")
+  contentUsageRights  Json?                  @map("content_usage_rights")
+  categoryExclusivity String?                @map("category_exclusivity")
+  replacementPolicy   String?                @map("replacement_policy")
+  approvalStatus      ProductApprovalStatus  @default(APPROVED) @map("approval_status")
+  publicationStatus   String                 @default("PUBLIC") @map("publication_status") // PUBLIC | HIDDEN
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+
+  athlete      Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  productSlots ProductSlot[]
+  inventories  SlotInventory[]
+
+  @@index([athleteId, publicationStatus])
+  @@map("sponsorship_products")
+}
+
+// 상품-슬롯 연결 (핸드오프 §18.7)
+model ProductSlot {
+  id              String  @id @default(uuid())
+  productId       String  @map("product_id")
+  athleteSlotId   String  @map("athlete_slot_id")
+  isPrimary       Boolean @default(false) @map("is_primary")
+  additionalPrice Int     @default(0) @map("additional_price")
+
+  product     SponsorshipProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  athleteSlot AthleteSlot        @relation(fields: [athleteSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, athleteSlotId])
+  @@map("product_slots")
 }

@@ -203,6 +203,24 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
 });
 
 /**
+ * @route GET /athletes/public/:id/inventory
+ * @desc 개편 Phase 1 (DATA-07) — 선수의 기간별 슬롯 인벤토리
+ *       ?start=YYYY-MM-DD&end=YYYY-MM-DD (없으면 오늘 이후 전체)
+ */
+router.get('/public/:id/inventory', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { inventoryService } = await import('../services/inventory.service');
+    const start = req.query.start ? new Date(String(req.query.start)) : undefined;
+    const end = req.query.end ? new Date(String(req.query.end)) : undefined;
+    if ((start && isNaN(start.getTime())) || (end && isNaN(end.getTime()))) {
+      return res.status(400).json({ success: false, data: null, error: 'invalid start/end date', request_id: (req as any).requestId });
+    }
+    const slots = await inventoryService.getAthleteInventory(req.params.id, start, end);
+    res.json({ success: true, data: { slots }, error: null, request_id: (req as any).requestId });
+  } catch (e) { next(e); }
+});
+
+/**
  * @route GET /athletes/public/:id/roi-dashboard
  * @desc 선수 ROI 대시보드 (docx '선수 상세 페이지 수정개발' 2026-05-04)
  *

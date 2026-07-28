@@ -639,6 +639,24 @@ export class SlotInstanceService {
       throw new ConflictError('Slot already has an active contract');
     }
 
+    // ★ 개편 Phase 1 (§19.1): 신규 인벤토리 기준 기간 겹침 중복판매 차단
+    //    (동일 선수·슬롯의 다른 인스턴스/상품이 같은 기간에 HELD/SOLD/AUCTION_ACTIVE면 차단)
+    if (slot.event) {
+      const athleteSlot = await prisma.athleteSlot.findUnique({
+        where: { athleteId_slotTemplateId: { athleteId: slot.athleteId, slotTemplateId: slot.slotTemplateId } },
+        select: { id: true },
+      });
+      if (athleteSlot) {
+        const ownInventory = await prisma.slotInventory.findFirst({
+          where: { slotInstanceId: slotId }, select: { id: true },
+        });
+        const { inventoryService } = await import('./inventory.service');
+        await inventoryService.assertNoSlotConflict(
+          athleteSlot.id, slot.event.dateStart, slot.event.dateEnd, ownInventory?.id
+        );
+      }
+    }
+
     // 트랜잭션으로 원자적 처리
     const contract = await prisma.$transaction(async (tx) => {
       // 동시성 방어: 상태 조건부 업데이트 (OPEN 또는 IN_AUCTION 상태일 때만)
@@ -772,6 +790,14 @@ export class SlotInstanceService {
 
       return createdContract;
     });
+
+    // ★ 개편 Phase 1: 인벤토리 브릿지 동기화 (RESERVED → HELD + 계약 연결)
+    try {
+      const { inventoryService } = await import('./inventory.service');
+      await inventoryService.syncByInstance(slotId, 'HELD', { contractId: contract.id, reservedUntil: null });
+    } catch (e) {
+      console.error('Failed to sync slot inventory (buy-now):', e);
+    }
 
     // 선수에게 알림 발송 (트랜잭션 외부)
     try {

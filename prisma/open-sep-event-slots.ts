@@ -12,8 +12,10 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
+// ⚠️ Phase 0 대회명 중립화(LEG-05) 이후 운영 이벤트명은 중립 명칭임.
+//    옛 명칭으로 findFirst 하면 이벤트가 새로 생겨 슬롯이 전부 중복 생성됨 (2026-07-28 사고).
 const EVENT = {
-  name: '2026 신한투자증권 GTOUR 7차',
+  name: '2026년 9월 출전 경기 (단일 출전)',
   tour: 'GTOUR',
   dateStart: new Date('2026-09-12T00:00:00+09:00'),
   dateEnd: new Date('2026-09-13T23:59:59+09:00'),
