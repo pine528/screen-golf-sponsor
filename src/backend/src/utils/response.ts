@@ -17,6 +17,11 @@ export function serializeDecimals<T>(obj: T): T {
     return (obj as any).toString() as unknown as T;
   }
 
+  // Date 처리 - ISO 문자열로 변환
+  if (obj instanceof Date) {
+    return obj.toISOString() as unknown as T;
+  }
+
   // 배열 처리
   if (Array.isArray(obj)) {
     return obj.map(item => serializeDecimals(item)) as unknown as T;
@@ -35,9 +40,11 @@ export function serializeDecimals<T>(obj: T): T {
 }
 
 export function sendSuccess<T>(res: Response, data: T, statusCode: number = 200): void {
-  const response: ApiResponse<T> = {
+  const response: any = {
     success: true,
     data: serializeDecimals(data),
+    error: null,
+    request_id: (res.req as any).requestId,
   };
   res.status(statusCode).json(response);
 }
@@ -70,13 +77,15 @@ export function sendError(
   statusCode: number = 400,
   details?: any
 ): void {
-  const response: ApiResponse = {
+  const response: any = {
     success: false,
+    data: null,
     error: {
       code,
       message,
       details,
     },
+    request_id: (res.req as any).requestId,
   };
   res.status(statusCode).json(response);
 }

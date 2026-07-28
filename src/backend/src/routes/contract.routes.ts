@@ -41,6 +41,80 @@ router.get('/my', authenticate, contractController.getMyContracts);
 router.post('/', authenticate, authorize('ADMIN'), contractController.createFromAuction);
 
 /**
+ * @route GET /contracts/settlements
+ * @desc List all settlements (admin)
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get('/settlements', authenticate, authorize('ADMIN'), settlementController.list);
+
+/**
+ * @route GET /contracts/settlements/my
+ * @desc Get athlete's settlements
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get(
+  '/settlements/my',
+  authenticate,
+  authorize('ATHLETE'),
+  settlementController.getMySettlements
+);
+
+/**
+ * @route GET /contracts/settlements/my/stats
+ * @desc Get athlete's settlement stats
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get(
+  '/settlements/my/stats',
+  authenticate,
+  authorize('ATHLETE'),
+  settlementController.getMyStats
+);
+
+/**
+ * @route GET /contracts/settlements/my/monthly
+ * @desc Get athlete's monthly settlements
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get(
+  '/settlements/my/monthly',
+  authenticate,
+  authorize('ATHLETE'),
+  settlementController.getMonthlySettlements
+);
+
+/**
+ * @route GET /contracts/settlements/my/report
+ * @desc Download settlement report for a month
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get(
+  '/settlements/my/report',
+  authenticate,
+  authorize('ATHLETE'),
+  settlementController.downloadReport
+);
+
+/**
+ * @route GET /contracts/settlements/:id
+ * @desc Get settlement by ID
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.get('/settlements/:id', authenticate, settlementController.getById);
+
+/**
+ * @route POST /contracts/settlements/:id/process
+ * @desc Process settlement payment (admin)
+ * 주의: /:id 보다 먼저 선언해야 함
+ */
+router.post(
+  '/settlements/:id/process',
+  authenticate,
+  authorize('ADMIN'),
+  settlementController.processPayment
+);
+
+/**
  * @route GET /contracts/:id
  * @desc Get contract by ID
  */
@@ -128,77 +202,6 @@ router.post(
   authenticate,
   authorize('ADMIN'),
   contractController.reviewVerification
-);
-
-// ============================================
-// Settlements
-// ============================================
-
-/**
- * @route GET /contracts/settlements
- * @desc List all settlements (admin)
- */
-router.get('/settlements', authenticate, authorize('ADMIN'), settlementController.list);
-
-/**
- * @route GET /contracts/settlements/my
- * @desc Get athlete's settlements
- */
-router.get(
-  '/settlements/my',
-  authenticate,
-  authorize('ATHLETE'),
-  settlementController.getMySettlements
-);
-
-/**
- * @route GET /contracts/settlements/my/stats
- * @desc Get athlete's settlement stats
- */
-router.get(
-  '/settlements/my/stats',
-  authenticate,
-  authorize('ATHLETE'),
-  settlementController.getMyStats
-);
-
-/**
- * @route GET /contracts/settlements/my/monthly
- * @desc Get athlete's monthly settlements
- */
-router.get(
-  '/settlements/my/monthly',
-  authenticate,
-  authorize('ATHLETE'),
-  settlementController.getMonthlySettlements
-);
-
-/**
- * @route GET /contracts/settlements/my/report
- * @desc Download settlement report for a month
- */
-router.get(
-  '/settlements/my/report',
-  authenticate,
-  authorize('ATHLETE'),
-  settlementController.downloadReport
-);
-
-/**
- * @route GET /contracts/settlements/:id
- * @desc Get settlement by ID
- */
-router.get('/settlements/:id', authenticate, settlementController.getById);
-
-/**
- * @route POST /contracts/settlements/:id/process
- * @desc Process settlement payment (admin)
- */
-router.post(
-  '/settlements/:id/process',
-  authenticate,
-  authorize('ADMIN'),
-  settlementController.processPayment
 );
 
 // ============================================

@@ -7,7 +7,7 @@ import { settingsService } from './settings.service';
 export class AdminService {
   // KYC Management
   async getPendingKyc() {
-    const [brands, athletes] = await Promise.all([
+    const [brands, athletes, agencies] = await Promise.all([
       prisma.brand.findMany({
         where: { kycStatus: 'PENDING' },
         orderBy: { createdAt: 'asc' },
@@ -32,6 +32,18 @@ export class AdminService {
           },
         },
       }),
+      prisma.agency.findMany({
+        where: { kycStatus: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+        },
+      }),
     ]);
 
     // kycDocuments에서 businessNumber 추출하여 최상위로 노출
@@ -40,7 +52,12 @@ export class AdminService {
       businessNumber: (brand.kycDocuments as any)?.businessNumber || null,
     }));
 
-    return { brands: brandsWithBusinessNumber, athletes };
+    const agenciesWithBusinessNumber = agencies.map(agency => ({
+      ...agency,
+      businessNumber: (agency.kycDocuments as any)?.businessNumber || agency.bizNo || null,
+    }));
+
+    return { brands: brandsWithBusinessNumber, athletes, agencies: agenciesWithBusinessNumber };
   }
 
   async reviewBrandKyc(brandId: string, status: KycStatus, notes?: string) {
@@ -105,6 +122,37 @@ export class AdminService {
     return updatedAthlete;
   }
 
+  async reviewAgencyKyc(agencyId: string, status: KycStatus, notes?: string) {
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      include: { user: true },
+    });
+    if (!agency) {
+      throw new NotFoundError('Agency not found');
+    }
+
+    const updatedAgency = await prisma.agency.update({
+      where: { id: agencyId },
+      data: {
+        kycStatus: status,
+        kycDocuments: {
+          ...((agency.kycDocuments as any) || {}),
+          reviewNotes: notes,
+          reviewedAt: new Date(),
+        },
+      },
+    });
+
+    // Send email notification
+    if (status === 'APPROVED') {
+      emailService.sendKycApprovedNotification(agency.user.email, agency.name, 'AGENCY');
+    } else if (status === 'REJECTED') {
+      emailService.sendKycRejectedNotification(agency.user.email, agency.name, 'AGENCY', notes || '서류 검토 결과 승인이 거절되었습니다.');
+    }
+
+    return updatedAgency;
+  }
+
   // Dashboard Stats
   async getDashboardStats() {
     const [
@@ -112,6 +160,8 @@ export class AdminService {
       pendingBrandKyc,
       totalAthletes,
       pendingAthleteKyc,
+      totalAgencies,
+      pendingAgencyKyc,
       totalEvents,
       upcomingEvents,
       liveAuctions,
@@ -123,6 +173,8 @@ export class AdminService {
       prisma.brand.count({ where: { kycStatus: 'PENDING' } }),
       prisma.athlete.count(),
       prisma.athlete.count({ where: { kycStatus: 'PENDING' } }),
+      prisma.agency.count(),
+      prisma.agency.count({ where: { kycStatus: 'PENDING' } }),
       prisma.event.count(),
       prisma.event.count({ where: { status: 'UPCOMING' } }),
       prisma.auction.count({ where: { status: 'LIVE' } }),
@@ -137,6 +189,7 @@ export class AdminService {
     return {
       brands: { total: totalBrands, pendingKyc: pendingBrandKyc },
       athletes: { total: totalAthletes, pendingKyc: pendingAthleteKyc },
+      agencies: { total: totalAgencies, pendingKyc: pendingAgencyKyc },
       events: { total: totalEvents, upcoming: upcomingEvents },
       auctions: { live: liveAuctions },
       contracts: { total: totalContracts },
@@ -213,7 +266,12 @@ export class AdminService {
 
   // Monitoring
   async getAuctionMonitoring() {
-    const [live, endingSoon, flagged] = await Promise.all([
+    // 오늘 시작 시간 계산
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [live, endingSoon, flagged, todayBids] = await Promise.all([
+      // 진행중 경매
       prisma.auction.findMany({
         where: { status: 'LIVE' },
         include: {
@@ -228,6 +286,7 @@ export class AdminService {
         },
         orderBy: { endAt: 'asc' },
       }),
+      // 마감 임박 (10분 이내)
       prisma.auction.findMany({
         where: {
           status: 'LIVE',
@@ -253,22 +312,59 @@ export class AdminService {
           },
         },
       }),
+      // 오늘 입찰 통계
+      prisma.bid.findMany({
+        where: {
+          createdAt: { gte: todayStart },
+        },
+        select: {
+          maxBid: true,
+          brandId: true,
+        },
+      }),
     ]);
 
-    return { live, endingSoon, flagged };
+    // 오늘 총 입찰액 계산 (maxBid 합계)
+    const todayTotalBids = todayBids.reduce((sum, bid) => sum + bid.maxBid, 0);
+
+    // 오늘 활성 입찰자 수 (고유 브랜드)
+    const activeBidders = new Set(todayBids.map(bid => bid.brandId)).size;
+
+    return {
+      live,
+      endingSoonList: endingSoon,
+      flagged,
+      // 프론트엔드용 요약 통계
+      liveAuctions: live.length,
+      endingSoon: endingSoon.length,
+      todayTotalBids,
+      activeBidders,
+    };
   }
 
   // Pending Reviews
   async getPendingReviews() {
+    const contractInclude = {
+      brand: { select: { id: true, name: true } },
+      athlete: { select: { id: true, name: true } },
+      auction: {
+        include: {
+          slotInstance: {
+            include: {
+              event: { select: { id: true, name: true } },
+              slotTemplate: { select: { id: true, name: true, code: true } },
+            },
+          },
+        },
+      },
+    };
+
     const [assets, verifications] = await Promise.all([
       prisma.creativeAsset.findMany({
         where: { status: 'SUBMITTED' },
         include: {
           contract: {
-            include: {
-              brand: { select: { id: true, name: true } },
-              athlete: { select: { id: true, name: true } },
-            },
+            include: contractInclude,
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -277,10 +373,7 @@ export class AdminService {
         where: { status: 'SUBMITTED' },
         include: {
           contract: {
-            include: {
-              brand: { select: { id: true, name: true } },
-              athlete: { select: { id: true, name: true } },
-            },
+            include: contractInclude,
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -700,6 +793,201 @@ export class AdminService {
     });
 
     return result;
+  }
+
+  // ============================================
+  // Featured Auction Management (공개 이벤트 경매)
+  // ============================================
+
+  /**
+   * Admin이 유명 선수의 슬롯을 직접 설정하고 경매 오픈
+   * - 슬롯 생성 + 경매 즉시 시작 (1단계로 처리)
+   */
+  async createFeaturedAuction(data: {
+    athleteId: string;
+    eventId: string;
+    slotTemplateId: string;
+    reservePrice: number;
+    auctionEndAt: Date;
+    enableDirectBuy?: boolean;
+    directBuyPrice?: number;
+  }) {
+    const { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy, directBuyPrice } = data;
+
+    // Validate athlete (활성 + KYC 검증, docx 4)
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { id: true, isActive: true, kycStatus: true },
+    });
+    if (!athlete) throw new NotFoundError('Athlete not found');
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수에게 추천 경매를 생성할 수 없습니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 추천 경매 생성 가능합니다');
+    }
+
+    // Validate event (활성 검증)
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, isActive: true },
+    });
+    if (!event) throw new NotFoundError('Event not found');
+    if (!event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회에는 추천 경매를 생성할 수 없습니다');
+    }
+
+    // Validate slot template
+    const template = await prisma.slotTemplate.findUnique({ where: { id: slotTemplateId } });
+    if (!template) throw new NotFoundError('Slot template not found');
+
+    // Validate auction end date
+    if (new Date(auctionEndAt) <= new Date()) {
+      throw new BadRequestError('Auction end date must be in the future');
+    }
+
+    // Transaction: Create slot + auction in one step
+    return prisma.$transaction(async (tx) => {
+      // Check for existing slot
+      const existingSlot = await tx.slotInstance.findUnique({
+        where: {
+          eventId_athleteId_slotTemplateId: { eventId, athleteId, slotTemplateId },
+        },
+      });
+
+      if (existingSlot) {
+        throw new BadRequestError('Slot already exists for this athlete/event/template combination');
+      }
+
+      // Create slot instance with auction enabled
+      const slot = await tx.slotInstance.create({
+        data: {
+          eventId,
+          athleteId,
+          slotTemplateId,
+          reservePrice,
+          enableAuction: true,
+          enableDirectBuy: enableDirectBuy || false,
+          directBuyPrice: enableDirectBuy && directBuyPrice ? directBuyPrice : null,
+          auctionMinBid: reservePrice,
+          auctionEndAt,
+          status: 'IN_AUCTION',
+        },
+      });
+
+      // Create auction (immediately LIVE, marked as featured)
+      const now = new Date();
+      const auction = await tx.auction.create({
+        data: {
+          slotInstanceId: slot.id,
+          startAt: now,
+          endAt: new Date(auctionEndAt),
+          originalEndAt: new Date(auctionEndAt),
+          currentPrice: reservePrice,
+          status: 'LIVE',
+          softCloseSec: 120,
+          maxExtensionSec: 600,
+          minBidIncrement: Math.max(10000, Math.floor(reservePrice * 0.05)), // 5% or 10000원 중 큰 값
+          isFeatured: true, // 어드민 추천경매로 표시
+        },
+      });
+
+      // Return complete data
+      return tx.slotInstance.findUnique({
+        where: { id: slot.id },
+        include: {
+          event: true,
+          athlete: true,
+          slotTemplate: true,
+          auction: true,
+        },
+      });
+    });
+  }
+
+  /**
+   * 여러 슬롯을 한번에 공개 경매로 설정
+   */
+  async bulkCreateFeaturedAuctions(data: {
+    athleteId: string;
+    eventId: string;
+    slots: Array<{
+      slotTemplateId: string;
+      reservePrice: number;
+    }>;
+    auctionEndAt: Date;
+    enableDirectBuy?: boolean;
+  }) {
+    const results = await Promise.all(
+      data.slots.map(async (slot) => {
+        try {
+          const result = await this.createFeaturedAuction({
+            athleteId: data.athleteId,
+            eventId: data.eventId,
+            slotTemplateId: slot.slotTemplateId,
+            reservePrice: slot.reservePrice,
+            auctionEndAt: data.auctionEndAt,
+            enableDirectBuy: data.enableDirectBuy,
+            directBuyPrice: data.enableDirectBuy ? Math.floor(slot.reservePrice * 1.5) : undefined,
+          });
+          return { success: true, data: result };
+        } catch (e: any) {
+          return { success: false, error: e.message, slotTemplateId: slot.slotTemplateId };
+        }
+      })
+    );
+
+    return {
+      created: results.filter((r) => r.success).map((r) => r.data),
+      failed: results.filter((r) => !r.success),
+    };
+  }
+
+  /**
+   * 최근 생성된 공개 경매 목록 (추천 경매)
+   */
+  async getFeaturedAuctions(limit: number = 10) {
+    const recentAuctions = await prisma.auction.findMany({
+      where: {
+        status: 'LIVE',
+        // 최근 7일 이내 생성된 경매
+        createdAt: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        },
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+      ],
+      take: limit,
+      include: {
+        slotInstance: {
+          include: {
+            event: true,
+            athlete: true,
+            slotTemplate: true,
+          },
+        },
+        _count: {
+          select: { bids: true },
+        },
+      },
+    });
+
+    return recentAuctions.map((auction) => ({
+      id: auction.id,
+      slotId: auction.slotInstanceId,
+      slotName: auction.slotInstance.slotTemplate.name,
+      athleteId: auction.slotInstance.athleteId,
+      athleteName: auction.slotInstance.athlete.name,
+      eventId: auction.slotInstance.eventId,
+      eventName: auction.slotInstance.event.name,
+      currentPrice: auction.currentPrice,
+      reservePrice: auction.slotInstance.reservePrice,
+      bidCount: auction._count.bids,
+      endAt: auction.endAt,
+      createdAt: auction.createdAt,
+      status: auction.status,
+    }));
   }
 }
 

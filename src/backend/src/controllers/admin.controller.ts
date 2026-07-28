@@ -48,6 +48,17 @@ export class AdminController {
     }
   }
 
+  async reviewAgencyKyc(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { agencyId } = req.params;
+      const { status, notes } = req.body;
+      const agency = await adminService.reviewAgencyKyc(agencyId, status, notes);
+      sendSuccess(res, agency);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Slot Templates
   async createSlotTemplate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -314,6 +325,58 @@ export class AdminController {
         reason
       );
       sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // Featured Auctions (공개 이벤트 경매)
+  // ============================================
+
+  async createFeaturedAuction(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy, directBuyPrice } = req.body;
+
+      const result = await adminService.createFeaturedAuction({
+        athleteId,
+        eventId,
+        slotTemplateId,
+        reservePrice: Number(reservePrice),
+        auctionEndAt: new Date(auctionEndAt),
+        enableDirectBuy,
+        directBuyPrice: directBuyPrice ? Number(directBuyPrice) : undefined,
+      });
+
+      sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async bulkCreateFeaturedAuctions(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { athleteId, eventId, slots, auctionEndAt, enableDirectBuy } = req.body;
+
+      const result = await adminService.bulkCreateFeaturedAuctions({
+        athleteId,
+        eventId,
+        slots,
+        auctionEndAt: new Date(auctionEndAt),
+        enableDirectBuy,
+      });
+
+      sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getFeaturedAuctions(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const auctions = await adminService.getFeaturedAuctions(limit);
+      sendSuccess(res, auctions);
     } catch (error) {
       next(error);
     }

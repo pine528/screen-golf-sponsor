@@ -68,8 +68,29 @@ export class AuctionController {
         throw new Error('No brand associated with this user');
       }
 
-      const result = await bidService.placeBid(id, req.user.brandId, maxBid, autoBid);
-      sendSuccess(res, result, 201);
+      // P2002 에러 발생 시 최대 3회 재시도
+      const maxRetries = 3;
+      let lastError: any;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await bidService.placeBid(id, req.user.brandId, maxBid, autoBid);
+          sendSuccess(res, result, 201);
+          return;
+        } catch (error: any) {
+          lastError = error;
+          // P2002 (unique constraint violation) 또는 409 상태 에러인 경우 재시도
+          const isP2002 = error?.code === 'P2002' || error?.name === 'PrismaClientKnownRequestError' && error?.code === 'P2002';
+          if (isP2002 && attempt < maxRetries) {
+            // 짧은 지연 후 재시도 (10-50ms 랜덤)
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 40 + 10));
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      throw lastError;
     } catch (error) {
       next(error);
     }
@@ -90,6 +111,16 @@ export class AuctionController {
       const { id } = req.params;
       const { reason } = req.body;
       const auction = await auctionService.cancelAuction(id, reason);
+      sendSuccess(res, auction);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async startAuction(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const auction = await auctionService.startAuction(id);
       sendSuccess(res, auction);
     } catch (error) {
       next(error);
@@ -147,6 +178,18 @@ export class AuctionController {
       const brandId = req.user?.brandId;
       const summary = await auctionService.getSummary(id, brandId);
       sendSuccess(res, summary);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * 어드민이 설정한 특별 공개 경매 목록 (Featured Auctions)
+   */
+  async getFeatured(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const auctions = await auctionService.getFeaturedAuctions();
+      sendSuccess(res, auctions);
     } catch (error) {
       next(error);
     }

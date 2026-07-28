@@ -16,14 +16,32 @@ export class AuctionService {
     maxExtensionSec?: number;
     minBidIncrement?: number;
   }) {
-    // Check slot instance exists and is available
+    // Check slot instance exists and is available (athlete/event 비활성 동시 검증)
     const slotInstance = await prisma.slotInstance.findUnique({
       where: { id: data.slotInstanceId },
-      include: { auction: true },
+      include: {
+        auction: true,
+        athlete: { select: { isActive: true, kycStatus: true } },
+        event: { select: { isActive: true } },
+      },
     });
 
     if (!slotInstance) {
       throw new NotFoundError('Slot instance not found');
+    }
+
+    // SPONPIK docx 4 — 비활성 entity 위에 새 경매 생성 차단
+    if (!slotInstance.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (!slotInstance.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수의 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (slotInstance.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯에는 경매를 개설할 수 없습니다');
+    }
+    if (!slotInstance.event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회의 슬롯에는 경매를 개설할 수 없습니다');
     }
 
     if (slotInstance.status !== 'OPEN') {
@@ -107,13 +125,24 @@ export class AuctionService {
     athleteId?: string;
     page?: number;
     limit?: number;
+    includeInactive?: boolean; // ADMIN 전용
   }) {
-    const { status, eventId, athleteId, page = 1, limit = 20 } = filters;
+    const { status, eventId, athleteId, page = 1, limit = 20, includeInactive = false } = filters;
 
     const where: any = {};
     if (status) where.status = status;
-    if (eventId) where.slotInstance = { eventId };
-    if (athleteId) where.slotInstance = { ...where.slotInstance, athleteId };
+
+    // SPONPIK docx 4 — 공개 목록은 비활성 선수/슬롯/대회의 경매 제외
+    // (관리자 명시 요청 시 includeInactive=true)
+    const slotFilter: any = {};
+    if (eventId) slotFilter.eventId = eventId;
+    if (athleteId) slotFilter.athleteId = athleteId;
+    if (!includeInactive) {
+      slotFilter.isActive = true;
+      slotFilter.athlete = { isActive: true, kycStatus: 'APPROVED' };
+      slotFilter.event = { isActive: true };
+    }
+    if (Object.keys(slotFilter).length > 0) where.slotInstance = slotFilter;
 
     const [auctions, total] = await Promise.all([
       prisma.auction.findMany({
@@ -131,6 +160,7 @@ export class AuctionService {
                   name: true,
                   tour: true,
                   profileImageUrl: true,
+                  isRecommended: true, // 메인 노출 필터용 (추천 선수만)
                 },
               },
               slotTemplate: true,
@@ -148,8 +178,16 @@ export class AuctionService {
   }
 
   async getLiveAuctions() {
+    // SPONPIK docx 4 — 공개 LIVE 응답은 비활성 선수/슬롯/대회 제외
     return prisma.auction.findMany({
-      where: { status: 'LIVE' },
+      where: {
+        status: 'LIVE',
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
+      },
       orderBy: { endAt: 'asc' },
       include: {
         slotInstance: {
@@ -177,11 +215,14 @@ export class AuctionService {
     const threshold = new Date(now.getTime() + minutes * 60 * 1000);
 
     return prisma.auction.findMany({
+      // SPONPIK docx 4 — 비활성 선수/슬롯/대회 제외
       where: {
         status: 'LIVE',
-        endAt: {
-          gte: now,
-          lte: threshold,
+        endAt: { gte: now, lte: threshold },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
         },
       },
       orderBy: { endAt: 'asc' },
@@ -198,7 +239,18 @@ export class AuctionService {
   }
 
   async startAuction(id: string) {
-    const auction = await prisma.auction.findUnique({ where: { id } });
+    const auction = await prisma.auction.findUnique({
+      where: { id },
+      include: {
+        slotInstance: {
+          select: {
+            isActive: true,
+            athlete: { select: { isActive: true, kycStatus: true } },
+            event: { select: { isActive: true } },
+          },
+        },
+      },
+    });
 
     if (!auction) {
       throw new NotFoundError('Auction not found');
@@ -206,6 +258,20 @@ export class AuctionService {
 
     if (auction.status !== 'SCHEDULED') {
       throw new BadRequestError('Auction is not in scheduled status');
+    }
+
+    // SPONPIK docx 4 — 비활성 entity 위에서 경매 시작 차단
+    if (!auction.slotInstance.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯의 경매를 시작할 수 없습니다');
+    }
+    if (!auction.slotInstance.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수의 경매를 시작할 수 없습니다');
+    }
+    if (auction.slotInstance.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 경매를 시작할 수 없습니다');
+    }
+    if (!auction.slotInstance.event.isActive) {
+      throw new BadRequestError('비활성 상태인 대회의 경매를 시작할 수 없습니다');
     }
 
     return prisma.auction.update({
@@ -408,18 +474,31 @@ export class AuctionService {
   async processScheduledAuctions() {
     const now = new Date();
 
+    // SPONPIK docx 4 — 비활성 entity 위의 SCHEDULED 경매는 cron에서 자동 시작 차단
     const toStart = await prisma.auction.findMany({
       where: {
         status: 'SCHEDULED',
         startAt: { lte: now },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
       },
     });
 
+    let started = 0;
     for (const auction of toStart) {
-      await this.startAuction(auction.id);
+      try {
+        await this.startAuction(auction.id);
+        started++;
+      } catch (e: any) {
+        // 부분 실패는 무시하고 다음 경매 진행 (이미 비활성 필터링했지만 race condition 대비)
+        console.warn(`[processScheduledAuctions] skip auction ${auction.id}:`, e?.message);
+      }
     }
 
-    return toStart.length;
+    return started;
   }
 
   // Scheduler job: End expired auctions
@@ -438,6 +517,64 @@ export class AuctionService {
     }
 
     return toEnd.length;
+  }
+
+  /**
+   * Featured Auctions: 어드민이 설정한 특별 공개 경매 목록
+   * - isFeatured=true인 LIVE 또는 SCHEDULED 경매
+   * - 비로그인 사용자도 조회 가능
+   * - SPONPIK docx 4: 비활성 entity 제외
+   */
+  async getFeaturedAuctions() {
+    return prisma.auction.findMany({
+      where: {
+        isFeatured: true,
+        status: { in: ['LIVE', 'SCHEDULED'] },
+        slotInstance: {
+          isActive: true,
+          athlete: { isActive: true, kycStatus: 'APPROVED' },
+          event: { isActive: true },
+        },
+      },
+      orderBy: [
+        { status: 'asc' }, // LIVE first
+        { endAt: 'asc' },
+      ],
+      include: {
+        slotInstance: {
+          include: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                dateStart: true,
+                dateEnd: true,
+                venue: true,
+              },
+            },
+            athlete: {
+              select: {
+                id: true,
+                name: true,
+                tour: true,
+                profileImageUrl: true,
+              },
+            },
+            slotTemplate: {
+              select: {
+                id: true,
+                name: true,
+                bodyPart: true,
+                defaultReservePrice: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: { bids: true },
+        },
+      },
+    });
   }
 
   /**

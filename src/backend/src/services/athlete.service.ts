@@ -1,5 +1,5 @@
 import prisma from '../models/prisma';
-import { NotFoundError, ForbiddenError } from '../utils/errors';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { KycStatus } from '@prisma/client';
 
 export class AthleteService {
@@ -97,14 +97,29 @@ export class AthleteService {
     bankName?: string;
     bankAccount?: string;
     bankHolder?: string;
+    // SPONPIK 4. 권장 데이터 항목 (구조화 필드)
+    height?: number | null;
+    region?: string | null;
+    debutYear?: number | null;
+    affiliation?: string | null;
+    education?: string | null;
+    awards?: string | null;
+    career?: string | null;
+    sportType?: string | null;
+    sportId?: string | null;
+    isActive?: boolean;
   }) {
+    console.log('[AthleteService.update] Input:', { id, userId, data });
+
     const athlete = await prisma.athlete.findUnique({ where: { id } });
 
     if (!athlete) {
+      console.log('[AthleteService.update] Athlete not found:', id);
       throw new NotFoundError('Athlete not found');
     }
 
     if (athlete.userId !== userId) {
+      console.log('[AthleteService.update] Authorization failed:', { athleteUserId: athlete.userId, requestUserId: userId });
       throw new ForbiddenError('Not authorized to update this athlete');
     }
 
@@ -112,8 +127,9 @@ export class AthleteService {
     const updateData: any = {};
 
     // undefined가 아닌 경우에만 업데이트 (빈 문자열도 허용)
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.displayName !== undefined) updateData.name = data.displayName;
+    // name 필드는 displayName이 빈 문자열이 아닌 경우에만 업데이트
+    if (data.name !== undefined && data.name !== '') updateData.name = data.name;
+    if (data.displayName !== undefined && data.displayName !== '') updateData.name = data.displayName;
     if (data.realName !== undefined) updateData.realName = data.realName;
     if (data.bio !== undefined) updateData.bio = data.bio;
     if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
@@ -121,6 +137,53 @@ export class AthleteService {
     if (data.socialMedia !== undefined) updateData.socialLinks = { instagram: data.socialMedia };
     if (data.blockedCategories !== undefined) updateData.blockedCategories = data.blockedCategories;
     if (data.primarySponsors !== undefined) updateData.primarySponsors = data.primarySponsors;
+
+    // SPONPIK 4. 권장 데이터 항목 (구조화 필드) — 선수가 직접 수정 가능
+    // 범위 검증 (악의적 값 차단)
+    if (data.height !== undefined) {
+      if (data.height !== null && (data.height < 100 || data.height > 250)) {
+        throw new BadRequestError('신장은 100~250cm 범위로 입력해주세요');
+      }
+      updateData.height = data.height;
+    }
+    if (data.region !== undefined) {
+      if (data.region !== null && data.region.length > 100) {
+        throw new BadRequestError('거주 지역은 100자 이내로 입력해주세요');
+      }
+      updateData.region = data.region;
+    }
+    if (data.debutYear !== undefined) {
+      const currentYear = new Date().getFullYear();
+      if (data.debutYear !== null && (data.debutYear < 1950 || data.debutYear > currentYear + 1)) {
+        throw new BadRequestError(`데뷔 연도는 1950~${currentYear + 1} 범위로 입력해주세요`);
+      }
+      updateData.debutYear = data.debutYear;
+    }
+    if (data.affiliation !== undefined) {
+      if (data.affiliation !== null && data.affiliation.length > 200) {
+        throw new BadRequestError('소속은 200자 이내로 입력해주세요');
+      }
+      updateData.affiliation = data.affiliation;
+    }
+    // 선수 프로필 구조화 — 학력/수상/경력 (각 500자 이내)
+    for (const key of ['education', 'awards', 'career'] as const) {
+      if (data[key] !== undefined) {
+        if (data[key] !== null && (data[key] as string).length > 500) {
+          throw new BadRequestError('학력/수상/경력은 각 500자 이내로 입력해주세요');
+        }
+        updateData[key] = data[key];
+      }
+    }
+    if (data.sportType !== undefined) {
+      // 화이트리스트 검증 (1차 골프/스크린골프)
+      if (data.sportType !== null && !['GOLF', 'SCREEN_GOLF', 'BASEBALL', 'SOCCER', 'VOLLEYBALL', 'BASKETBALL', 'TENNIS'].includes(data.sportType)) {
+        throw new BadRequestError('지원하지 않는 종목입니다');
+      }
+      updateData.sportType = data.sportType;
+    }
+    if (data.sportId !== undefined) updateData.sportId = data.sportId;
+    // isActive는 운영자 전용 토글 — service.update에서는 제외
+    // (관리자 전용 라우트 별도 필요)
 
     // 은행 정보는 bankAccount JSON 필드에 저장
     if (data.bankName !== undefined || data.bankAccount !== undefined || data.bankHolder !== undefined) {
@@ -133,10 +196,15 @@ export class AthleteService {
       };
     }
 
-    return prisma.athlete.update({
+    console.log('[AthleteService.update] UpdateData:', updateData);
+
+    const updated = await prisma.athlete.update({
       where: { id },
       data: updateData,
     });
+
+    console.log('[AthleteService.update] Updated athlete:', updated);
+    return updated;
   }
 
   async updateKycStatus(id: string, status: KycStatus, documents?: any) {
@@ -232,7 +300,11 @@ export class AthleteService {
   }
 
   async getAvailableSlots(athleteId: string, eventId?: string) {
-    const where: any = { athleteId, status: 'OPEN' };
+    // OPEN, IN_AUCTION, RESERVED 상태 모두 포함 (경매중/예약 슬롯도 표시)
+    const where: any = {
+      athleteId,
+      status: { in: ['OPEN', 'IN_AUCTION', 'RESERVED'] },
+    };
     if (eventId) where.eventId = eventId;
 
     return prisma.slotInstance.findMany({
@@ -240,7 +312,36 @@ export class AthleteService {
       include: {
         slotTemplate: true,
         event: true,
+        auction: {
+          select: {
+            id: true,
+            status: true,
+            currentPrice: true,
+            startAt: true,
+            endAt: true,
+            isFeatured: true,
+            _count: { select: { bids: true } },
+            // Contract는 Auction을 통해 연결됨 (1:1 관계)
+            contract: {
+              select: {
+                id: true,
+                status: true,
+                priceFinal: true,
+                brand: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
+      orderBy: [
+        { event: { dateStart: 'asc' } },
+        { createdAt: 'desc' },
+      ],
     });
   }
 

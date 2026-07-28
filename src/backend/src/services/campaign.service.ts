@@ -13,8 +13,8 @@ export class CampaignService {
     targetCategories?: string[];
     excludedAthletes?: string[];
     preferredAthletes?: string[];
-    dateStart: Date;
-    dateEnd: Date;
+    dateStart?: Date;
+    dateEnd?: Date;
   }) {
     return prisma.campaign.create({
       data: {
@@ -26,8 +26,8 @@ export class CampaignService {
         targetCategories: data.targetCategories || [],
         excludedAthletes: data.excludedAthletes || [],
         preferredAthletes: data.preferredAthletes || [],
-        dateStart: data.dateStart,
-        dateEnd: data.dateEnd,
+        dateStart: data.dateStart || null,
+        dateEnd: data.dateEnd || null,
         status: 'DRAFT',
       },
       include: {
@@ -147,10 +147,37 @@ export class CampaignService {
       throw new ForbiddenError('Not authorized');
     }
 
-    return prisma.campaign.update({
+    const updated = await prisma.campaign.update({
       where: { id },
       data: { status: 'ACTIVE' },
     });
+
+    // handoff 3-1: 캠페인 ACTIVE 전환 시 자산 자동 생성 (idempotent)
+    try {
+      const { campaignAssetsService } = await import('./campaignAssets.service');
+      const cc = await prisma.campaignContract.findFirst({
+        where: { campaignId: id },
+        include: { contract: { select: { athleteId: true } } },
+      });
+      if (cc?.contract.athleteId) {
+        await campaignAssetsService.generate({
+          campaignId: id,
+          brandId: campaign.brandId,
+          athleteId: cc.contract.athleteId,
+        });
+        console.log(`[Campaign] Auto-generated funnel assets for campaign ${id}`);
+      } else {
+        console.warn(`[Campaign] ACTIVE 전환되었으나 매칭된 선수 없음 → 자산 자동 생성 skip: ${id}`);
+      }
+    } catch (e) {
+      console.error(`[Campaign] Auto asset generation failed for ${id}:`, e);
+      // wireframe TABLE 4: GENERATION_FAILED 상태로 마킹
+      try {
+        await prisma.campaign.update({ where: { id }, data: { status: 'GENERATION_FAILED' } });
+      } catch {}
+    }
+
+    return updated;
   }
 
   async pause(id: string, brandId: string) {

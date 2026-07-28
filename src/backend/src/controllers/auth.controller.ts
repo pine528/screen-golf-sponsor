@@ -82,6 +82,24 @@ export class AuthController {
       next(error);
     }
   }
+
+  // Agency Auth Methods
+  async registerAgency(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email, password, name, bizNo, contactName, contactPhone } = req.body;
+      const result = await authService.registerAgency({
+        email,
+        password,
+        name,
+        bizNo,
+        contactName,
+        contactPhone,
+      });
+      sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();

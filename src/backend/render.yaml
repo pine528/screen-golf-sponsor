@@ -4,7 +4,9 @@ services:
     runtime: node
     region: singapore
     plan: free
-    buildCommand: npm ci --include=dev && npx prisma generate && npx prisma db push --accept-data-loss && npm run build
+    # db push에서 --accept-data-loss 제거 (2026-07-27 슬롯 데이터 소실 사고 재발 방지)
+    # 데이터 손실이 필요한 스키마 변경이면 빌드가 실패함 — 그 경우 수동으로 마이그레이션 처리
+    buildCommand: npm ci --include=dev && npx prisma generate && npx prisma db push && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV

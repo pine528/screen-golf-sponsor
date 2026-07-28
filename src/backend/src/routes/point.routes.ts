@@ -14,22 +14,20 @@ const router = Router();
 router.get('/ranking', pointController.getRanking.bind(pointController));
 
 // ============================================
-// Fan Routes (FAN 권한 필요)
+// User Routes (모든 인증된 사용자)
 // ============================================
 
-// 내 포인트 잔액 조회
+// 내 포인트 잔액 조회 (FAN, ATHLETE, BRAND 모두 가능)
 router.get(
   '/me',
   authenticate,
-  requireRole('FAN'),
   pointController.getMyBalance.bind(pointController)
 );
 
-// 내 포인트 내역 조회
+// 내 포인트 내역 조회 (FAN, ATHLETE, BRAND 모두 가능)
 router.get(
   '/me/history',
   authenticate,
-  requireRole('FAN'),
   pointController.getMyHistory.bind(pointController)
 );
 

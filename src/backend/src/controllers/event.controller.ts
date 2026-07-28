@@ -34,6 +34,7 @@ export class EventController {
         page: Number(page),
         limit: Number(limit),
       });
+
       sendPaginated(res, events, Number(page), Number(limit), total);
     } catch (error) {
       next(error);

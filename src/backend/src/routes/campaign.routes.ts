@@ -29,9 +29,47 @@ router.get('/stats', authorize('BRAND'), campaignController.getStats);
 
 /**
  * @route POST /campaigns
- * @desc Create new campaign (Brand only)
+ * @desc Create new campaign (Brand or Admin)
  */
-router.post('/', authorize('BRAND'), campaignController.create);
+router.post('/', authorize('BRAND', 'ADMIN'), campaignController.create);
+
+/**
+ * GET /campaigns/recommended-athletes
+ * 추천 선수 조회 (주의: /:id 보다 먼저 선언해야 함)
+ */
+router.get(
+  '/recommended-athletes',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await import('../models/prisma').then(m =>
+        m.default.brand.findUnique({ where: { userId: req.user!.id } })
+      );
+      if (!brand) {
+        return res.status(403).json({ success: false, message: 'Brand not found' });
+      }
+
+      const tours = req.query.tours
+        ? (req.query.tours as string).split(',')
+        : undefined;
+      const minRating = req.query.minRating
+        ? parseFloat(req.query.minRating as string)
+        : undefined;
+      const limit = req.query.limit
+        ? parseInt(req.query.limit as string, 10)
+        : 10;
+
+      const athletes = await campaignService.getRecommendedAthletes(brand.id, {
+        tours,
+        minRating,
+        limit,
+      });
+      res.json({ success: true, data: athletes });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * @route GET /campaigns/:id
@@ -164,44 +202,6 @@ router.delete(
         req.params.contractId
       );
       res.json({ success: true, message: 'Contract removed from campaign' });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /campaigns/recommended-athletes
- * 추천 선수 조회
- */
-router.get(
-  '/recommended-athletes',
-  authorize('BRAND'),
-  async (req: AuthRequest, res: Response, next: NextFunction) => {
-    try {
-      const brand = await import('../models/prisma').then(m =>
-        m.default.brand.findUnique({ where: { userId: req.user!.id } })
-      );
-      if (!brand) {
-        return res.status(403).json({ success: false, message: 'Brand not found' });
-      }
-
-      const tours = req.query.tours
-        ? (req.query.tours as string).split(',')
-        : undefined;
-      const minRating = req.query.minRating
-        ? parseFloat(req.query.minRating as string)
-        : undefined;
-      const limit = req.query.limit
-        ? parseInt(req.query.limit as string, 10)
-        : 10;
-
-      const athletes = await campaignService.getRecommendedAthletes(brand.id, {
-        tours,
-        minRating,
-        limit,
-      });
-      res.json({ success: true, data: athletes });
     } catch (error) {
       next(error);
     }

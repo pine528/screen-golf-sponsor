@@ -41,6 +41,12 @@ router.post('/kyc/brands/:brandId/review', adminController.reviewBrandKyc);
  */
 router.post('/kyc/athletes/:athleteId/review', adminController.reviewAthleteKyc);
 
+/**
+ * @route POST /admin/kyc/agencies/:agencyId/review
+ * @desc Review agency KYC
+ */
+router.post('/kyc/agencies/:agencyId/review', adminController.reviewAgencyKyc);
+
 // ============================================
 // Slot Templates
 // ============================================
@@ -208,5 +214,29 @@ router.patch('/admins/:adminId/role', adminController.changeAdminRole);
  * @body { permissions: string[], reason: string }
  */
 router.patch('/admins/:adminId/permissions', adminController.updateAdminPermissions);
+
+// ============================================
+// Featured Auctions (공개 이벤트 경매)
+// ============================================
+
+/**
+ * @route POST /admin/featured-auctions
+ * @desc Create a featured auction for a famous athlete
+ * @body { athleteId, eventId, slotTemplateId, reservePrice, auctionEndAt, enableDirectBuy?, directBuyPrice? }
+ */
+router.post('/featured-auctions', adminController.createFeaturedAuction);
+
+/**
+ * @route POST /admin/featured-auctions/bulk
+ * @desc Create multiple featured auctions at once
+ * @body { athleteId, eventId, slots: [{slotTemplateId, reservePrice}], auctionEndAt, enableDirectBuy? }
+ */
+router.post('/featured-auctions/bulk', adminController.bulkCreateFeaturedAuctions);
+
+/**
+ * @route GET /admin/featured-auctions
+ * @desc Get list of recent featured auctions
+ */
+router.get('/featured-auctions', adminController.getFeaturedAuctions);
 
 export default router;

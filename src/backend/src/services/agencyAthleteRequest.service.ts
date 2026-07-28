@@ -371,6 +371,12 @@ export class AgencyAthleteRequestService {
     }
 
     // 트랜잭션으로 요청 승인 + 선수 연결
+    console.log('[approveRequest] Starting transaction:', {
+      requestId,
+      athleteId,
+      requestAgencyId: request.agencyId,
+    });
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. 요청 상태 변경
       const updatedRequest = await tx.agencyAthleteRequest.update({
@@ -381,13 +387,20 @@ export class AgencyAthleteRequestService {
         },
       });
 
+      console.log('[approveRequest] Request status updated to APPROVED');
+
       // 2. 선수에게 에이전시 연결
-      await tx.athlete.update({
+      const updatedAthlete = await tx.athlete.update({
         where: { id: athleteId },
         data: {
           agencyId: request.agencyId,
           agencyAssignedAt: new Date(),
         },
+      });
+
+      console.log('[approveRequest] Athlete updated:', {
+        athleteId: updatedAthlete.id,
+        newAgencyId: updatedAthlete.agencyId,
       });
 
       // 3. 해당 선수의 다른 PENDING 요청들 자동 거부

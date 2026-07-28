@@ -1,6 +1,6 @@
 import { Router, Response, NextFunction } from 'express';
 import { slotTemplateController, slotInstanceController } from '../controllers/slot.controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createSlotTemplateSchema, createSlotInstanceSchema } from '../utils/validation';
 import { slotInstanceService } from '../services/slot.service';
@@ -55,15 +55,15 @@ router.patch(
 
 /**
  * @route GET /slots/instances
- * @desc List slot instances with filters
+ * @desc List slot instances with filters (public - non-logged-in users can view)
  */
-router.get('/instances', authenticate, slotInstanceController.list);
+router.get('/instances', optionalAuth, slotInstanceController.list);
 
 /**
  * @route GET /slots/instances/available
- * @desc Get available slots for bidding
+ * @desc Get available slots for bidding (public - non-logged-in users can view)
  */
-router.get('/instances/available', authenticate, slotInstanceController.getAvailable);
+router.get('/instances/available', optionalAuth, slotInstanceController.getAvailable);
 
 /**
  * @route POST /slots/instances
@@ -111,27 +111,47 @@ router.patch(
 
 /**
  * @route PATCH /slots/instances/:id/sale-mode
- * @desc Update slot sale mode (auction/direct buy settings) - Athlete only
+ * @desc Update slot sale mode (auction/direct buy settings) - Athlete or Admin
  */
 router.patch(
   '/instances/:id/sale-mode',
   authenticate,
-  authorize('ATHLETE'),
+  authorize('ATHLETE', 'ADMIN'),
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      const { enableAuction, enableDirectBuy, directBuyPrice, auctionMinBid, auctionEndAt } = req.body;
+      const userRole = req.user!.role;
+      const { saleMode, directBuyPrice, auctionMinBid, auctionEndAt, isPublic } = req.body;
+      // 판매 방식 3종 — saleMode가 오면 플래그를 파생시킴 (구버전 클라이언트는 기존 플래그 그대로 사용)
+      const ALLOWED = ['AUCTION', 'DIRECT', 'INQUIRY'];
+      if (saleMode !== undefined && !ALLOWED.includes(saleMode)) {
+        res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: '지원하지 않는 판매 방식입니다' } });
+        return;
+      }
+      const enableAuction = saleMode !== undefined ? saleMode === 'AUCTION' : req.body.enableAuction;
+      const enableDirectBuy = saleMode !== undefined ? saleMode === 'DIRECT' : req.body.enableDirectBuy;
 
-      // Get athlete ID from user
-      const athlete = await athleteService.findByUserId(userId);
+      let athleteId: string;
 
-      const slot = await slotInstanceService.updateSaleMode(id, athlete.id, {
+      if (userRole === 'ADMIN') {
+        // Admin: 슬롯에서 직접 athleteId 가져오기
+        const slot = await slotInstanceService.findById(id);
+        athleteId = slot.athleteId;
+      } else {
+        // Athlete: 본인 athleteId 사용
+        const athlete = await athleteService.findByUserId(userId);
+        athleteId = athlete.id;
+      }
+
+      const slot = await slotInstanceService.updateSaleMode(id, athleteId, {
         enableAuction,
         enableDirectBuy,
         directBuyPrice: directBuyPrice ? Number(directBuyPrice) : null,
         auctionMinBid: auctionMinBid ? Number(auctionMinBid) : null,
         auctionEndAt: auctionEndAt ? new Date(auctionEndAt) : null,
+        isPublic,
+        ...(saleMode !== undefined && { saleMode }),
       });
 
       res.json({

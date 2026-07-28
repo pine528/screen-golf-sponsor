@@ -2916,3 +2916,13 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - CTA 표준화(§2.4): 즉시구매→'바로 구매' 전 화면 통일, 선수목록 페이지명 '후원 가능한 선수 찾기'
 - LEG-01/03: 9월 판매 이벤트명 중립화 ("2026 신한투자증권 GTOUR 7차"→"2026년 9월 출전 경기 (단일 출전)")
 - 다음 단계: Phase 1 데이터·인벤토리(SlotInventory 기간재고·SponsorshipProduct·업종충돌·중복판매) → Phase 2 선수상세 통합 구매화면(3열)
+
+## [2026-07-28] 전면 개편 Phase 1 — 슬롯 인벤토리·후원상품 데이터 기반 (DATA-01~10)
+- 신규 모델 4종 + enum 5종: AthleteSlot(선수×템플릿 판매설정) / SlotInventory(기간별 재고 = 중복판매 방지 단일 진실) / SponsorshipProduct(기간형 상품, 6/12개월 경매금지) / ProductSlot. 기존 SlotInstance와 slotInstanceId로 브릿지
+- SlotTemplate.displayX/Y (Phase 2 착장 도식 좌표) 추가. 마이그레이션 `20260728_phase1_inventory` 운영·로컬 적용 (멱등 SQL)
+- inventory.service.ts: GET /athletes/public/:id/inventory (기간별 상태, HELD 만료 lazy 복구), assertNoSlotConflict(§19.1 기간겹침 차단)
+- buy-now에 기간겹침 검사 통합 + 동기화 훅(구매→HELD / 계약서명→SOLD / 계약취소→AVAILABLE). 업종충돌·대회규칙은 기존 conflictService/phase2UnlockService 재사용 확인
+- 백필 backfill-phase1-inventory.ts (재실행 안전): AthleteSlot 347 / SlotInventory 347 / Product 47 / ProductSlot 347 (엑셀 sponsorSlots·9월 슬롯 기준. 단, 중복 이벤트 정리 전까지 인벤토리 694 — 정리 스크립트가 중복분 347 함께 삭제)
+- 🔧 발견·복구: 지난 enum 사고 때 SHOULDER_LINE_L/R 템플릿 미복원 상태였음 → update-slot-templates-v2.ts 재실행(17개) + 9월 어깨 슬롯 48건 생성 (총 347)
+- ⚠️ 사고: open-sep-event-slots.ts가 Phase 0에서 중립화된 이벤트명("2026년 9월 출전 경기 (단일 출전)")을 옛 명칭으로 조회 → 중복 이벤트+슬롯 347+경매 21 생성. 스크립트 이벤트명 수정 완료. 중복분 삭제는 `APPLY=1 npx ts-node prisma/cleanup-duplicate-sep-event.ts` 실행 필요 (입찰·계약 0건 확인됨)
+- 영향: `prisma/schema.prisma`, `prisma/migrations/20260728_phase1_inventory/`, `prisma/backfill-phase1-inventory.ts`, `prisma/cleanup-duplicate-sep-event.ts`, `src/services/inventory.service.ts`, `slot.service.ts`, `contract.service.ts`, `src/routes/athlete.routes.ts`

@@ -21,7 +21,9 @@ import { escrowService } from './services/escrow.service';
 import { notificationService } from './services/notification.service';
 import { reportsService } from './services/reports.service';
 import { reconciliationService } from './services/reconciliation.service';
-import { fanVoteService } from './services/fanVote.service';
+import { funnelSettlementCron } from './cron/funnelSettlement.cron';
+import { youtubeSyncCron } from './cron/youtube.cron';
+import { roiAutoSyncCron } from './cron/followerSnapshot.cron';
 import { validateEncryptionKey } from './utils/crypto';
 import prisma from './models/prisma';
 
@@ -50,25 +52,35 @@ if (config.nodeEnv === 'production') {
 const app = express();
 const httpServer = createServer(app);
 
+// Trust proxy (Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Initialize Socket.io
 socketService.initialize(httpServer);
 
 // Security middleware
 app.use(helmet());
+// CORS: 쉼표 구분 다중 origin 지원
+const corsOriginEnv = process.env.CORS_ORIGIN;
+const corsOrigin = corsOriginEnv
+  ? (corsOriginEnv.includes(',') ? corsOriginEnv.split(',').map(o => o.trim()) : corsOriginEnv)
+  : '*';
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: corsOrigin,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-idempotency-key'],
 }));
 
 // Request ID 미들웨어 (가장 먼저)
 app.use(requestIdMiddleware);
 
-// Rate limiting
+// Rate limiting (프로덕션에서도 넉넉하게)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000, // 1분
+  max: 200, // 분당 200 요청
   message: { error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  skip: () => config.nodeEnv === 'development', // 개발환경에서는 rate limit 스킵
 });
 app.use('/api/', limiter);
 
@@ -88,6 +100,44 @@ app.use('/uploads', express.static(path.resolve(uploadDir)));
 // API routes
 app.use('/api', routes);
 app.use('/api/metrics', metricsRoutes);
+
+// ============================================
+// Public 단축링크 3xx redirect: /s/:shortCode
+// SNS 크롤러 / OG 태그 / 사용자 직접 접속 모두 대응
+// ============================================
+app.get('/s/:shortCode', async (req, res, _next) => {
+  try {
+    const { trackingLinkService } = await import('./services/trackingLink.service');
+    // 기존 쿠키에서 anonymousId/sessionId 추출 (있으면 재사용)
+    const cookies = (req.headers.cookie || '').split(';').reduce((acc, c) => {
+      const [k, v] = c.trim().split('=');
+      if (k) acc[k] = decodeURIComponent(v || '');
+      return acc;
+    }, {} as Record<string, string>);
+
+    const result = await trackingLinkService.trackClick({
+      shortCode: req.params.shortCode,
+      sessionId: cookies['spk_session_id'] || undefined,
+      anonymousId: cookies['spk_anonymous_id'] || undefined,
+      referrer: req.get('referer') || undefined,
+      userAgent: req.get('user-agent') || undefined,
+      ipAddress: req.ip,
+      deviceType: req.get('user-agent')?.includes('Mobile') ? 'mobile' : 'desktop',
+    });
+
+    // 세션 쿠키 설정 (24시간) + 익명 쿠키 (1년) → 미니스토어 도메인 진입 시 동일 세션 유지
+    const sameSite = 'Lax';
+    res.setHeader('Set-Cookie', [
+      `spk_session_id=${encodeURIComponent(result.sessionId)}; Max-Age=86400; Path=/; SameSite=${sameSite}`,
+      `spk_anonymous_id=${encodeURIComponent(cookies['spk_anonymous_id'] || result.sessionId)}; Max-Age=31536000; Path=/; SameSite=${sameSite}`,
+      `spk_click_id=${encodeURIComponent(result.clickId)}; Max-Age=3600; Path=/; SameSite=${sameSite}`,
+    ]);
+    res.redirect(302, result.redirectUrl);
+  } catch (e: any) {
+    console.error('[Short link]', e);
+    res.status(404).send('Short link not found');
+  }
+});
 
 // Error handling
 app.use(notFoundHandler);
@@ -139,6 +189,19 @@ cron.schedule('0 9 * * *', async () => {
   }
 }, cronOptions);
 
+// Phase 3: Funnel Performance Settlement (CPA/CPS) daily at 1 AM KST
+cron.schedule('0 1 * * *', async () => {
+  try {
+    const results = await funnelSettlementCron.runDaily();
+    const settled = results.filter((r: any) => r.status === 'settled').length;
+    if (settled > 0) {
+      console.log(`[Cron] Funnel Settlement: ${settled} campaigns settled`);
+    }
+  } catch (error) {
+    console.error('[Cron] Funnel settlement error:', error);
+  }
+}, cronOptions);
+
 // Process expired escrows daily at 3 AM KST (30일 경과 자동 환불)
 cron.schedule('0 3 * * *', async () => {
   try {
@@ -148,6 +211,46 @@ cron.schedule('0 3 * * *', async () => {
     }
   } catch (error) {
     console.error('[Cron] Escrow expiry processing error:', error);
+  }
+}, cronOptions);
+
+// SPONPIK Phase 2 SNS — YouTube 채널/영상 동기화 (매일 03:30 KST)
+cron.schedule('30 3 * * *', async () => {
+  try {
+    const result = await youtubeSyncCron.runDaily();
+    console.log('[Cron] YouTube sync:', result);
+  } catch (error) {
+    console.error('[Cron] YouTube sync error:', error);
+  }
+}, cronOptions);
+
+// SPONPIK Phase 2 SNS — 선수 출연 영상(mention) 통계 갱신 (매일 04:00 KST)
+cron.schedule('0 4 * * *', async () => {
+  try {
+    const result = await youtubeSyncCron.runMentionStats();
+    console.log('[Cron] YouTube mention stats:', result);
+  } catch (error) {
+    console.error('[Cron] YouTube mention stats error:', error);
+  }
+}, cronOptions);
+
+// docx §6 C-3 — 팔로워 일별 스냅샷 (증가율 계산용, 매일 04:30 KST)
+cron.schedule('30 4 * * *', async () => {
+  try {
+    const result = await roiAutoSyncCron.runFollowerSnapshot();
+    console.log('[Cron] Follower snapshot:', result);
+  } catch (error) {
+    console.error('[Cron] Follower snapshot error:', error);
+  }
+}, cronOptions);
+
+// docx §6 C-1 — 네이버 뉴스 자동 수집 (기사 언급 수, 매일 05:00 KST)
+cron.schedule('0 5 * * *', async () => {
+  try {
+    const result = await roiAutoSyncCron.runNewsSync();
+    console.log('[Cron] News sync:', result);
+  } catch (error) {
+    console.error('[Cron] News sync error:', error);
   }
 }, cronOptions);
 
@@ -241,17 +344,6 @@ cron.schedule('20 9 * * *', async () => {
   }
 }, cronOptions);
 
-// ★ Fan Vote: Auto-close expired votes every 5 minutes
-cron.schedule('*/5 * * * *', async () => {
-  try {
-    const result = await fanVoteService.autoCloseExpiredEvents();
-    if (result.closedCount > 0) {
-      console.log(`[Cron] Fan Votes: ${result.closedCount} expired votes closed`);
-    }
-  } catch (error) {
-    console.error('[Cron] Fan Vote auto-close error:', error);
-  }
-}, cronOptions);
 
 // Startup migration: Remove wallet FK constraints if they exist
 async function runStartupMigrations() {

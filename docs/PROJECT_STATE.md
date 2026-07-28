@@ -635,6 +635,24 @@
 - Brand: POST /api/brand/creative-approvals (제출), GET .../events/:eventId (상태 조회)
 - Admin: GET /api/admin/creative-approvals, POST .../:id/approve, POST .../:id/reject
 
+### 1.20 전면 개편 Phase 1 — 슬롯 인벤토리·후원상품 (2026-07)
+
+**모델** (기존 SlotInstance 체계와 `slotInventory.slotInstanceId`로 브릿지):
+| 모델 | 역할 |
+|------|------|
+| AthleteSlot | 선수×슬롯템플릿 판매 설정 (basePrice, saleEnabled) — @@unique(athleteId, slotTemplateId) |
+| SlotInventory | 기간별 재고 = 중복판매 방지의 단일 진실. 상태: AVAILABLE/AUCTION_ACTIVE/HELD/SOLD/RESTRICTED/PENDING_APPROVAL/UNAVAILABLE |
+| SponsorshipProduct | 후원 상품 (SINGLE_EVENT/DAYS_30/MONTHS_6/MONTHS_12 · AUCTION/BUY_NOW/PROPOSAL) — 6/12개월은 경매 금지 |
+| ProductSlot | 상품↔선수슬롯 구성 (isPrimary, additionalPrice) |
+
+**API/로직** (`inventory.service.ts`):
+- GET /api/athletes/public/:id/inventory?start&end — 기간별 슬롯 상태 (HELD 만료 lazy 복구 포함)
+- `assertNoSlotConflict()` §19.1 기간 겹침 차단 — buy-now에 통합
+- 동기화 훅: buy-now→HELD / 계약 서명→SOLD / 계약 취소→AVAILABLE
+- 업종충돌·대회규칙은 기존 conflictService/phase2UnlockService 재사용
+- SlotTemplate.displayX/Y — Phase 2 착장 도식 좌표(%)
+- 백필: `prisma/backfill-phase1-inventory.ts` (재실행 안전)
+
 ---
 
 ## 2. FAN 기능

@@ -251,6 +251,17 @@ router.get('/athletes/:id', async (req: AuthRequest, res: Response, next: NextFu
         kycStatus: true,
         createdAt: true,
         updatedAt: true,
+        // SPONPIK docx 4 권장 데이터 항목
+        height: true,
+        region: true,
+        debutYear: true,
+        affiliation: true,
+        education: true,
+        awards: true,
+        career: true,
+        sportType: true,
+        isActive: true,
+        sport: { select: { code: true, name: true } },
         // 민감정보 제외: bankAccount, taxInfo, kycDocuments
         user: {
           select: {
@@ -808,6 +819,75 @@ router.delete('/athletes/:id', async (req: AuthRequest, res: Response, next: Nex
     });
 
     res.json({ success: true, message: 'Athlete deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route GET /admin/entities/fans
+ * @desc Get fans list with search
+ * @query email (search by email)
+ */
+router.get('/fans', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const email = (req.query.email as string) || '';
+
+    const where: any = {
+      role: 'FAN',
+    };
+
+    if (email) {
+      where.email = { contains: email, mode: 'insensitive' };
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          isActive: true,
+          createdAt: true,
+          fan: {
+            select: {
+              nickname: true,
+            },
+          },
+          pointWallet: {
+            select: {
+              balance: true,
+              updatedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: users.map((u) => ({
+        ...u,
+        pointWallet: u.pointWallet
+          ? {
+              balance: u.pointWallet.balance.toString(),
+              updatedAt: u.pointWallet.updatedAt,
+            }
+          : null,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (error) {
     next(error);
   }

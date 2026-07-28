@@ -306,7 +306,8 @@ export class BrandService {
     return bids.map((bid) => {
       const auction = bid.auction;
       const slot = auction.slotInstance;
-      const highestBid = auction.bids[0]?.currentProxy || 0;
+      // currentPrice는 2차가 경매의 공개 최고가 (다음 입찰 최소 금액)
+      const highestBid = auction.currentPrice || auction.bids[0]?.currentProxy || 0;
       const remainingMs = auction.endAt.getTime() - now.getTime();
       const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
 
@@ -415,6 +416,32 @@ export class BrandService {
       },
       recentTransactions,
     };
+  }
+
+  async updateRoiSettings(brandId: string, data: {
+    keywords?: string[];
+    competitors?: string[];
+    blockedCategories?: string[];
+  }) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+    if (!brand) {
+      throw new NotFoundError('Brand not found');
+    }
+
+    return prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        keywords: data.keywords ?? [],
+        competitors: data.competitors ?? [],
+        blockedCategories: data.blockedCategories ?? [],
+      },
+      select: {
+        id: true,
+        keywords: true,
+        competitors: true,
+        blockedCategories: true,
+      },
+    });
   }
 }
 

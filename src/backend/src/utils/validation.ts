@@ -56,6 +56,13 @@ export const createEventSchema = z.object({
   broadcastEpisode: z.string().optional(),
   multiplier: z.number().positive().default(1.0),
   venue: z.string().optional(),
+  // SPONPIK 4. 권장 데이터 항목 (대회)
+  category: z.string().optional().nullable(),
+  qualifyingDate: z.coerce.date().optional().nullable(),
+  displayOrder: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+  activeDays: z.number().int().min(1).max(60).optional().nullable(),
+  sportId: z.string().optional().nullable(),
 });
 
 // Slot Template Schemas

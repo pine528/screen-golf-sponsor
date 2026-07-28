@@ -1,6 +1,26 @@
 import prisma from '../models/prisma';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, BadRequestError } from '../utils/errors';
 import { EventStatus } from '@prisma/client';
+
+// 날짜 기반으로 이벤트 상태 계산
+function computeEventStatus(event: { dateStart: Date; dateEnd: Date; status: EventStatus }): EventStatus {
+  // CANCELLED는 수동 설정이므로 유지
+  if (event.status === 'CANCELLED') {
+    return 'CANCELLED';
+  }
+
+  const now = new Date();
+  const start = new Date(event.dateStart);
+  const end = new Date(event.dateEnd);
+
+  if (now < start) {
+    return 'UPCOMING';
+  } else if (now >= start && now <= end) {
+    return 'LIVE';
+  } else {
+    return 'COMPLETED';
+  }
+}
 
 export class EventService {
   async create(data: {
@@ -12,6 +32,13 @@ export class EventService {
     broadcastEpisode?: string;
     multiplier?: number;
     venue?: string;
+    // SPONPIK 4. 권장 데이터 항목
+    category?: string | null;
+    qualifyingDate?: Date | null;
+    displayOrder?: number;
+    isActive?: boolean;
+    activeDays?: number | null;
+    sportId?: string | null;
   }) {
     return prisma.event.create({
       data: {
@@ -50,7 +77,11 @@ export class EventService {
       throw new NotFoundError('Event not found');
     }
 
-    return event;
+    // 날짜 기반으로 상태 자동 계산
+    return {
+      ...event,
+      status: computeEventStatus(event),
+    };
   }
 
   async list(filters: {
@@ -72,7 +103,7 @@ export class EventService {
       if (to) where.dateStart.lte = to;
     }
 
-    const [events, total] = await Promise.all([
+    const [rawEvents, total] = await Promise.all([
       prisma.event.findMany({
         where,
         skip: (page - 1) * limit,
@@ -102,6 +133,12 @@ export class EventService {
       prisma.event.count({ where }),
     ]);
 
+    // 날짜 기반으로 상태 자동 계산
+    const events = rawEvents.map(event => ({
+      ...event,
+      status: computeEventStatus(event),
+    }));
+
     return { events, total };
   }
 
@@ -114,6 +151,13 @@ export class EventService {
     multiplier: number;
     venue: string;
     status: EventStatus;
+    // SPONPIK 4. 권장 데이터 항목
+    category: string | null;
+    qualifyingDate: Date | null;
+    displayOrder: number;
+    isActive: boolean;
+    activeDays: number | null;
+    sportId: string | null;
   }>) {
     return prisma.event.update({
       where: { id },
@@ -138,6 +182,21 @@ export class EventService {
   }
 
   async addParticipant(eventId: string, athleteId: string) {
+    // SPONPIK docx 4 — 비활성/미승인 선수는 대회 참가 등록 불가
+    const athlete = await prisma.athlete.findUnique({
+      where: { id: athleteId },
+      select: { isActive: true, kycStatus: true },
+    });
+    if (!athlete) {
+      throw new NotFoundError('Athlete not found');
+    }
+    if (!athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수는 대회 참가 등록할 수 없습니다');
+    }
+    if (athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 승인이 완료된 선수만 대회 참가 등록 가능합니다');
+    }
+
     return prisma.eventParticipation.create({
       data: {
         eventId,

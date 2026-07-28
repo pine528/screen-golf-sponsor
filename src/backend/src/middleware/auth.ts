@@ -34,6 +34,7 @@ export const authenticate = async (
         athlete: true,
         admin: true,
         fan: true,
+        agency: true,
       },
     });
 
@@ -49,6 +50,7 @@ export const authenticate = async (
       athleteId: user.athlete?.id,
       adminId: user.admin?.id,
       fanId: user.fan?.id,
+      agencyId: user.agency?.id,
     };
 
     next();
@@ -105,6 +107,7 @@ export const optionalAuth = async (
         athlete: true,
         admin: true,
         fan: true,
+        agency: true,
       },
     });
 
@@ -117,6 +120,7 @@ export const optionalAuth = async (
         athleteId: user.athlete?.id,
         adminId: user.admin?.id,
         fanId: user.fan?.id,
+        agencyId: user.agency?.id,
       };
     }
 
@@ -237,6 +241,13 @@ export const requireKycApproved = async (
         where: { id: req.user.athleteId },
       });
       if (athlete?.kycStatus !== 'APPROVED') {
+        throw new ForbiddenError('KYC approval required');
+      }
+    } else if (req.user.role === 'AGENCY' && req.user.agencyId) {
+      const agency = await prisma.agency.findUnique({
+        where: { id: req.user.agencyId },
+      });
+      if (agency?.kycStatus !== 'APPROVED') {
         throw new ForbiddenError('KYC approval required');
       }
     }

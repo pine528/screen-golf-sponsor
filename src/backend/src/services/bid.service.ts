@@ -5,6 +5,7 @@ import { BidResult } from '../types';
 import { auctionService } from './auction.service';
 import { socketService } from './socket.service';
 import { conflictService } from './conflict.service';
+import { phase2UnlockService } from './phase2Unlock.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export class BidService {
@@ -22,7 +23,7 @@ export class BidService {
     maxBid: number,
     autoBid: boolean = true
   ): Promise<BidResult> {
-    // Get auction with current bids
+    // Get auction with current bids (event도 포함 — 비활성 검증용)
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {
@@ -30,6 +31,7 @@ export class BidService {
           include: {
             athlete: true,
             slotTemplate: true,
+            event: { select: { isActive: true } },
           },
         },
         bids: {
@@ -48,6 +50,21 @@ export class BidService {
 
     if (new Date() > auction.endAt) {
       throw new BadRequestError('Auction has ended');
+    }
+
+    // SPONPIK docx 4 — 운영 비활성 entity 차단 (서버 사이드 강제)
+    const slotInst = auction.slotInstance;
+    if (!slotInst.isActive) {
+      throw new BadRequestError('비활성 상태인 슬롯입니다');
+    }
+    if (!slotInst.athlete.isActive) {
+      throw new BadRequestError('비활성 상태인 선수입니다');
+    }
+    if (slotInst.athlete.kycStatus !== 'APPROVED') {
+      throw new BadRequestError('KYC 미승인 선수의 슬롯입니다');
+    }
+    if (slotInst.event && (slotInst.event as any).isActive === false) {
+      throw new BadRequestError('비활성 상태인 대회입니다');
     }
 
     // Get brand and check restrictions
@@ -92,6 +109,17 @@ export class BidService {
       brandCategory: brand.category,
       excludeAuctionId: auctionId, // 현재 경매는 제외
     });
+
+    // ★ v2: 대회 규칙 통합 검증 (maxSlotsPerBrandPerPlayer, prohibitedCategories, creativeApprovalRequired)
+    const tournamentValidation = await phase2UnlockService.validateTournamentRulesForBid(
+      auction.slotInstance.eventId,
+      auction.slotInstance.athleteId,
+      brandId,
+      brand.category
+    );
+    if (!tournamentValidation.valid) {
+      throw new BadRequestError(tournamentValidation.errors.join(' '));
+    }
 
     // Check for existing brand bids in same auction
     const existingBid = auction.bids.find((b) => b.brandId === brandId);
@@ -138,32 +166,46 @@ export class BidService {
 
       let bid;
 
-      if (existingBid) {
-        // Update existing bid
-        if (maxBid <= existingBid.maxBid) {
-          throw new BadRequestError('New max bid must be higher than current max bid');
+      // 먼저 기존 입찰 확인 (maxBid 검증용)
+      const existingBidInTx = await tx.bid.findUnique({
+        where: {
+          auctionId_brandId: { auctionId, brandId }
         }
+      });
 
-        bid = await tx.bid.update({
-          where: { id: existingBid.id },
-          data: {
-            maxBid,
-            autoBid,
-            updatedAt: new Date(),
-          },
-        });
-      } else {
-        // Create new bid
-        bid = await tx.bid.create({
-          data: {
-            auctionId,
-            brandId,
-            maxBid,
-            currentProxy: minRequiredBid,
-            autoBid,
-          },
-        });
+      console.log(`[BidService] placeBid - auctionId: ${auctionId}, brandId: ${brandId}, maxBid: ${maxBid}`);
+      console.log(`[BidService] existingBidInTx: ${existingBidInTx ? `id=${existingBidInTx.id}, maxBid=${existingBidInTx.maxBid}` : 'null'}`);
+
+      // 기존 입찰이 있고 새 금액이 더 낮으면 거부
+      if (existingBidInTx && maxBid <= existingBidInTx.maxBid) {
+        throw new BadRequestError('New max bid must be higher than current max bid');
       }
+
+      // ★ PostgreSQL 네이티브 UPSERT 사용 (INSERT ON CONFLICT)
+      // Prisma upsert 대신 raw SQL로 atomic하게 처리
+      const bidId = existingBidInTx?.id || crypto.randomUUID();
+      const now = new Date();
+
+      await tx.$executeRaw`
+        INSERT INTO bids (id, auction_id, brand_id, max_bid, current_proxy, auto_bid, created_at, updated_at)
+        VALUES (${bidId}, ${auctionId}, ${brandId}, ${maxBid}, ${minRequiredBid}, ${autoBid}, ${now}, ${now})
+        ON CONFLICT (auction_id, brand_id)
+        DO UPDATE SET
+          max_bid = ${maxBid},
+          auto_bid = ${autoBid},
+          updated_at = ${now}
+      `;
+
+      // 생성/수정된 bid 조회
+      bid = await tx.bid.findUnique({
+        where: { auctionId_brandId: { auctionId, brandId } }
+      });
+
+      if (!bid) {
+        throw new BadRequestError('Failed to create or update bid');
+      }
+
+      console.log(`[BidService] Bid upsert successful: ${bid.id}`);
 
       // Process auto-bid competition (determines winner)
       const { newCurrentPrice, winningBidId } = await this.processAutoBidCompetition(
@@ -192,6 +234,7 @@ export class BidService {
                 version: { increment: 1 },
               },
             });
+            // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
             await tx.ledgerTx.create({
               data: {
                 walletId: prevWallet.id,
@@ -199,7 +242,7 @@ export class BidService {
                 amount: new Decimal(previousWinner.frozenAmount).negated(),
                 balanceAfter: prevWallet.balance,
                 refType: 'BID',
-                refId: previousWinner.id,
+                refId: `${previousWinner.id}:${Date.now()}`,
                 description: `Outbid - auction ${auctionId}`,
               },
             });
@@ -225,6 +268,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: brandWallet.id,
@@ -232,7 +276,7 @@ export class BidService {
               amount: incrementAmount,
               balanceAfter: brandWallet.balance,
               refType: 'BID',
-              refId: bid.id,
+              refId: `${bid.id}:${Date.now()}`,
               description: `Auction bid freeze - auction ${auctionId}`,
             },
           });
@@ -254,6 +298,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: brandWallet.id,
@@ -261,7 +306,7 @@ export class BidService {
               amount: new Decimal(existingBid.frozenAmount).negated(),
               balanceAfter: brandWallet.balance,
               refType: 'BID',
-              refId: bid.id,
+              refId: `${bid.id}:${Date.now()}`,
               description: `Outbid - auction ${auctionId}`,
             },
           });
@@ -358,9 +403,9 @@ export class BidService {
     }
 
     if (bids.length === 1) {
-      // Single bidder - current price is their proxy (reserve or min bid)
+      // Single bidder - current price is their max bid amount
       return {
-        newCurrentPrice: bids[0].currentProxy,
+        newCurrentPrice: bids[0].maxBid,
         winningBidId: bids[0].id,
       };
     }
@@ -498,6 +543,7 @@ export class BidService {
               version: { increment: 1 },
             },
           });
+          // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
           await tx.ledgerTx.create({
             data: {
               walletId: wallet.id,
@@ -505,7 +551,7 @@ export class BidService {
               amount: new Decimal(bid.frozenAmount).negated(),
               balanceAfter: wallet.balance,
               refType: 'BID',
-              refId: bidId,
+              refId: `${bidId}:${Date.now()}`,
               description: `Bid deleted - auction ${bid.auctionId}`,
             },
           });
@@ -542,6 +588,7 @@ export class BidService {
                 version: { increment: 1 },
               },
             });
+            // ★ refId에 타임스탬프 추가하여 unique constraint 충돌 방지
             await tx.ledgerTx.create({
               data: {
                 walletId: winnerWallet.id,
@@ -549,7 +596,7 @@ export class BidService {
                 amount: freezeAmount,
                 balanceAfter: winnerWallet.balance,
                 refType: 'BID',
-                refId: newWinner.id,
+                refId: `${newWinner.id}:${Date.now()}`,
                 description: `New winning bid after deletion - auction ${bid.auctionId}`,
               },
             });

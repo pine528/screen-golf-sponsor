@@ -133,6 +133,23 @@ export class BrandController {
       next(error);
     }
   }
+
+  async updateRoiSettings(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.brandId) {
+        throw new Error('No brand associated with this user');
+      }
+      const { keywords, competitors, blockedCategories } = req.body;
+      const updated = await brandService.updateRoiSettings(req.user.brandId, {
+        keywords,
+        competitors,
+        blockedCategories,
+      });
+      sendSuccess(res, updated);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const brandController = new BrandController();

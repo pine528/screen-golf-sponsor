@@ -12,12 +12,17 @@ const REQUIRED_ENVS = [
 ];
 
 /**
- * 운영 환경(production)에서 추가로 필요한 환경변수
- * PortOne V2는 시크릿 키 하나만 사용
+ * 결제 연동 환경변수 안내 (validateEnv에서 강제하지 않음)
+ *
+ * TossPayments 직접 연동:
+ * - TOSS_SECRET_KEY (필수) - Toss 시크릿 키
+ * - TOSS_WEBHOOK_SECRET (선택) - Webhook 서명 검증용
+ * - TOSS_CLIENT_KEY (선택) - 프론트엔드 SDK용
+ *
+ * Stripe (글로벌 결제):
+ * - STRIPE_SECRET_KEY - Stripe 시크릿 키
+ * - STRIPE_WEBHOOK_SECRET - Webhook 서명 검증용
  */
-const PRODUCTION_REQUIRED_ENVS = [
-  'PORTONE_SECRET',  // V2 시크릿 키 (store-xxx 형식)
-];
 
 /**
  * 환경변수 검증 함수
@@ -34,14 +39,8 @@ export function validateEnv(): void {
     }
   }
 
-  // 운영 환경에서는 추가 환경변수 체크
-  if (nodeEnv === 'production') {
-    for (const key of PRODUCTION_REQUIRED_ENVS) {
-      if (!process.env[key]) {
-        missing.push(key);
-      }
-    }
-  }
+  // 결제: TossPayments 사용 (TOSS_SECRET_KEY)
+  // 환경변수 미설정 시 결제 기능 비활성화 (서버는 정상 동작)
 
   if (missing.length > 0) {
     console.error('========================================');
@@ -94,6 +93,15 @@ export const config = {
   upload: {
     maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10),
     uploadDir: process.env.UPLOAD_DIR || './uploads',
+  },
+
+  // SMS 인증 (알리고)
+  sms: {
+    aligoApiKey: process.env.ALIGO_API_KEY || '',
+    aligoUserId: process.env.ALIGO_USER_ID || '',
+    aligoSender: process.env.ALIGO_SENDER || '',
+    certificationRequiredRoles: (process.env.CERTIFICATION_REQUIRED_ROLES || 'BRAND,ATHLETE,AGENCY').split(','),
+    certificationTokenExpiryMinutes: parseInt(process.env.CERTIFICATION_TOKEN_EXPIRY_MINUTES || '10', 10),
   },
 };
 

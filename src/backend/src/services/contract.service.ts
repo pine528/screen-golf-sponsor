@@ -390,6 +390,9 @@ export class ContractService {
             data: { status: 'SOLD' },
           });
           console.log(`[Contract] Slot ${contractWithAuction.auction.slotInstanceId} status updated to SOLD`);
+          // ★ 개편 Phase 1: 인벤토리 브릿지 동기화 (→ SOLD)
+          const { inventoryService } = await import('./inventory.service');
+          await inventoryService.syncByInstance(contractWithAuction.auction.slotInstanceId, 'SOLD', { contractId: id });
         }
       } catch (e) {
         console.error(`[Contract] Failed to update slot status for contract ${id}:`, e);
@@ -431,6 +434,13 @@ export class ContractService {
         where: { id: auction.slotInstanceId },
         data: { status: 'OPEN' },
       });
+      // ★ 개편 Phase 1: 인벤토리 브릿지 복구 (→ AVAILABLE, 계약 연결 해제)
+      try {
+        const { inventoryService } = await import('./inventory.service');
+        await inventoryService.syncByInstance(auction.slotInstanceId, 'AVAILABLE', { contractId: null as any, reservedUntil: null });
+      } catch (e) {
+        console.error(`[Contract] Failed to reset slot inventory for contract ${id}:`, e);
+      }
     }
 
     // 에스크로 환불 처리 (멱등성 보장)

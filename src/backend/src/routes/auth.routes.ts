@@ -91,4 +91,27 @@ router.post(
   authController.loginFan
 );
 
+// ============================================
+// Agency Auth Routes
+// ============================================
+
+const agencyRegisterSchema = z.object({
+  email: z.string().email('유효한 이메일을 입력하세요'),
+  password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다'),
+  name: z.string().min(2, '에이전시명은 2자 이상이어야 합니다'),
+  bizNo: z.string().optional(),
+  contactName: z.string().optional(),
+  contactPhone: z.string().optional(),
+});
+
+/**
+ * @route POST /auth/agency/register
+ * @desc Register a new agency account
+ */
+router.post(
+  '/agency/register',
+  validate(agencyRegisterSchema),
+  authController.registerAgency
+);
+
 export default router;

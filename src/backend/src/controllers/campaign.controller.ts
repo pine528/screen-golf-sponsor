@@ -6,21 +6,23 @@ import { AuthRequest } from '../types';
 export class CampaignController {
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      if (!req.user?.brandId) {
-        throw new Error('No brand associated with this user');
+      // ADMIN can pass brandId in body, BRAND uses own brandId
+      const brandId = req.body.brandId || req.user?.brandId;
+      if (!brandId) {
+        throw new Error('brandId is required');
       }
 
       const { name, description, budget, targetCategories, excludedAthletes, preferredAthletes, dateStart, dateEnd } = req.body;
 
-      const campaign = await campaignService.create(req.user.brandId, {
+      const campaign = await campaignService.create(brandId, {
         name,
         description,
         budget,
         targetCategories,
         excludedAthletes,
         preferredAthletes,
-        dateStart: new Date(dateStart),
-        dateEnd: new Date(dateEnd),
+        dateStart: dateStart ? new Date(dateStart) : undefined,
+        dateEnd: dateEnd ? new Date(dateEnd) : undefined,
       });
 
       sendSuccess(res, campaign, 201);

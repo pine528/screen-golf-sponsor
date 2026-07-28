@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { withdrawalService } from '../services/withdrawal.service';
-import { sendSuccess } from '../utils/response';
+import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../types';
 import { WithdrawalStatus } from '@prisma/client';
 
@@ -14,7 +14,7 @@ export class WithdrawalController {
       const athleteId = req.user!.athleteId;
 
       if (!athleteId) {
-        return res.status(403).json({ error: '선수만 출금을 요청할 수 있습니다' });
+        return sendError(res, 'FORBIDDEN', '선수만 출금을 요청할 수 있습니다', 403);
       }
 
       const idempotencyKey = req.headers['x-idempotency-key'] as string | undefined;
@@ -47,7 +47,7 @@ export class WithdrawalController {
       const athleteId = req.user!.athleteId;
 
       if (!athleteId) {
-        return res.status(403).json({ error: '선수만 조회할 수 있습니다' });
+        return sendError(res, 'FORBIDDEN', '선수만 조회할 수 있습니다', 403);
       }
 
       const { status, page, pageSize } = req.query;
@@ -73,7 +73,7 @@ export class WithdrawalController {
       const athleteId = req.user!.athleteId;
 
       if (!athleteId) {
-        return res.status(403).json({ error: '선수만 조회할 수 있습니다' });
+        return sendError(res, 'FORBIDDEN', '선수만 조회할 수 있습니다', 403);
       }
 
       const { id } = req.params;
@@ -81,7 +81,7 @@ export class WithdrawalController {
 
       // 본인 요청인지 확인
       if (request.athleteId !== athleteId) {
-        return res.status(403).json({ error: '본인의 출금 요청만 조회할 수 있습니다' });
+        return sendError(res, 'FORBIDDEN', '본인의 출금 요청만 조회할 수 있습니다', 403);
       }
 
       sendSuccess(res, request);
@@ -99,7 +99,7 @@ export class WithdrawalController {
       const athleteId = req.user!.athleteId;
 
       if (!athleteId) {
-        return res.status(403).json({ error: '선수만 조회할 수 있습니다' });
+        return sendError(res, 'FORBIDDEN', '선수만 조회할 수 있습니다', 403);
       }
 
       const result = await withdrawalService.getAvailableBalance(athleteId);

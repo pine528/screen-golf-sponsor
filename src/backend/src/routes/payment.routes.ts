@@ -54,6 +54,22 @@ router.post(
 // Admin Routes
 // ============================================
 
+// 결제 통계 (/:id보다 먼저 정의해야 함)
+router.get(
+  '/stats/summary',
+  authenticate,
+  requireRole('ADMIN'),
+  paymentController.getPaymentStats.bind(paymentController)
+);
+
+// 일별 결제 통계
+router.get(
+  '/stats/daily',
+  authenticate,
+  requireRole('ADMIN'),
+  paymentController.getDailyPaymentStats.bind(paymentController)
+);
+
 // 모든 결제 목록
 router.get(
   '/',
@@ -75,22 +91,6 @@ router.post(
   authenticate,
   requireRole('ADMIN'),
   paymentController.refundPayment.bind(paymentController)
-);
-
-// 결제 통계
-router.get(
-  '/stats/summary',
-  authenticate,
-  requireRole('ADMIN'),
-  paymentController.getPaymentStats.bind(paymentController)
-);
-
-// 일별 결제 통계
-router.get(
-  '/stats/daily',
-  authenticate,
-  requireRole('ADMIN'),
-  paymentController.getDailyPaymentStats.bind(paymentController)
 );
 
 export default router;

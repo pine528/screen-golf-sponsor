@@ -11,6 +11,7 @@ export interface AuthRequest extends Request {
     athleteId?: string;
     adminId?: string;
     fanId?: string;
+    agencyId?: string;
   };
 }
 
@@ -59,6 +60,7 @@ export interface RegisterRequest {
   tour?: string; // For athletes
   category?: string; // For brands
   bizNo?: string; // For brands
+  certificationToken?: string; // 본인인증 토큰 (BRAND, ATHLETE, AGENCY 필수)
 }
 
 // Brand Types
