@@ -327,9 +327,14 @@ export default function UnifiedPurchase({
             {buyNowMut.isPending ? '처리 중...' : ctaLabel}
           </button>
 
+          {/* 개편 Phase 5 — 6·12개월은 경매가 금지되어 제안이 유일한 계약 경로 */}
           <button
             type="button"
-            onClick={openKakaoConsult}
+            onClick={() =>
+              isAuthenticated && userRole === 'BRAND'
+                ? navigate(`/proposals/new?athleteId=${athlete?.id}`)
+                : openKakaoConsult()
+            }
             className="mt-2 w-full py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
           >
             장기 파트너십 제안하기

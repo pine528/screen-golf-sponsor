@@ -3102,6 +3102,37 @@ class ApiService {
     return r.data;
   }
 
+  // 개편 Phase 5 — 장기 파트너십 제안
+  async listProposals(status?: string) {
+    const r = await this.client.get<ApiResponse<any[]>>('/proposals', { params: status ? { status } : undefined });
+    return r.data;
+  }
+
+  async getProposal(id: string) {
+    const r = await this.client.get<ApiResponse<any>>(`/proposals/${id}`);
+    return r.data;
+  }
+
+  async createProposal(data: any) {
+    const r = await this.client.post<ApiResponse<any>>('/proposals', data);
+    return r.data;
+  }
+
+  async updateProposal(id: string, data: any) {
+    const r = await this.client.patch<ApiResponse<any>>(`/proposals/${id}`, data);
+    return r.data;
+  }
+
+  async submitProposal(id: string) {
+    const r = await this.client.post<ApiResponse<any>>(`/proposals/${id}/submit`);
+    return r.data;
+  }
+
+  async transitionProposal(id: string, to: string, note?: string) {
+    const r = await this.client.post<ApiResponse<any>>(`/proposals/${id}/transition`, { to, note });
+    return r.data;
+  }
+
   // 개편 Phase 3 — 슬롯 임시예약(HELD 15분) + 주문확인 견적
   async holdSlot(slotInstanceId: string) {
     const r = await this.client.post<ApiResponse<{ inventoryId: string; reservedUntil: string; expiresInSec: number }>>(

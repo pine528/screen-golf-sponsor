@@ -2989,3 +2989,26 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - 영향: `src/services/bid.service.ts`, `auction.service.ts`, `notification.service.ts`, `slot.service.ts`,
   `src/index.ts`, `prisma/schema.prisma`, `prisma/migrations/20260729_auction_buynow_flag/`,
   `src/frontend/src/pages/AuctionDetail.tsx`
+
+## [2026-07-29] 전면 개편 Phase 5 — 장기 파트너십 제안 (PROP-01~08)
+- **모델**: `Proposal` + `ProposalHistory`. 6·12개월만 허용을 DB CHECK 제약으로 고정
+  (경매가 금지된 기간이라 제안이 유일한 계약 경로)
+- **상태머신(§14.2)** 11단계: DRAFT → SUBMITTED → ADMIN_REVIEW → ATHLETE_REVIEW → APPROVED → CONTRACTING → CONTRACTED
+  (+ REVISION_REQUESTED / BRAND_REVISING / REJECTED / EXPIRED)
+  - 허용 전이표와 전이 주체를 서버에서 강제 — 단계 건너뛰기·브랜드의 자기 제안 승인 등을 차단
+- **입력항목(§14.1)**: 기간·희망슬롯(우선순위)·대체 허용·최소 출전·SNS/매장/행사/촬영·이미지 사용범위와 기간·
+  2차편집·유료광고·업종 독점·총 예산·분할결제·요청사항
+- **변경 이력(§14.3)**: 모든 상태 전이와 내용 수정을 필드 단위 before/after로 기록
+- **PROP-07**: 제출 후 14일 내 검토가 끝나지 않으면 자동 만료 (매시 cron)
+- **알림**: 선수 검토 전달 / 승인 / 거절 / 수정 요청 / 계약 완료 시 당사자에게 발송
+- **화면(WF-10)**: 제안 작성 5단계 + 하단 고정(임시저장·미리보기·제출),
+  목록/상세는 역할별로 브랜드(보낸 제안)·선수(받은 제안)·관리자(검토)를 한 화면에서 처리.
+  상세에 상태 배지·검토 기한·진행 이력·면책문구 노출, 역할에 맞는 버튼만 표시
+- 통합 구매화면의 '장기 파트너십 제안하기' 버튼을 실제 제안 폼으로 연결 (브랜드 외에는 카카오 상담)
+- 검증(서비스 9종): 단일출전 차단 / 역순 기간 차단 / 생성·수정·제출 / 비정상 전이 차단 /
+  브랜드의 자기 승인 차단 / 선수 승인 → 계약 진행 / 이력 7건 + 예산 변경 스냅샷 / 만료 처리
+  브라우저: 5단계 폼 렌더 → 기간·예산 입력 → 제출 → 목록에 '관리자 검토'로 표시 → 상세·이력·기한 확인
+- 미착수(외부 의존): 승인 후 실제 계약서 생성은 계약서 양식 확정 전이라 CONTRACTING 상태까지만 처리.
+  분할결제(PROP-09)는 결제정책 확정 필요
+- 영향: `prisma/schema.prisma`, `prisma/migrations/20260729_proposal/`, `src/services/proposal.service.ts`,
+  `src/routes/proposal.routes.ts`, `src/index.ts`, `src/frontend/src/pages/{ProposalNew,Proposals}.tsx`, `App.tsx`, `api.ts`

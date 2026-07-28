@@ -104,6 +104,8 @@ import { ShortLinkRedirect } from './pages/ShortLinkRedirect';
 import PublicAthletes from './pages/PublicAthletes';
 import PublicAthleteDetail from './pages/PublicAthleteDetail';
 import SlotCheckout from './pages/SlotCheckout';
+import ProposalNew from './pages/ProposalNew';
+import Proposals from './pages/Proposals';
 import AdminAthleteEventResults from './pages/admin/AdminAthleteEventResults';
 import AdminMediaExposure from './pages/admin/AdminMediaExposure';
 import AdminTournamentActivation from './pages/admin/AdminTournamentActivation';
@@ -263,6 +265,10 @@ function App() {
           </ProtectedRoute>
         }
       />
+      {/* 개편 Phase 5 (WF-10) — 장기 파트너십 제안 */}
+      <Route path="/proposals/new" element={<ProtectedRoute><ProposalNew /></ProtectedRoute>} />
+      <Route path="/proposals/:id" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
+      <Route path="/proposals" element={<ProtectedRoute><Proposals /></ProtectedRoute>} />
       <Route
         path="/profile"
         element={

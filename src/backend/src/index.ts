@@ -167,6 +167,16 @@ cron.schedule('* * * * *', async () => {
   }
 }, cronOptions);
 
+// 개편 Phase 5 (PROP-07) — 검토 기한이 지난 장기 제안 만료 처리
+cron.schedule('0 * * * *', async () => {
+  try {
+    const { proposalService } = await import('./services/proposal.service');
+    await proposalService.expireOverdue();
+  } catch (error) {
+    console.error('[Cron] Proposal expiry error:', error);
+  }
+}, cronOptions);
+
 // 개편 Phase 4 (AUC-15) — 경매 종료 임박 알림 (24시간 전 / 1시간 전)
 cron.schedule('*/5 * * * *', async () => {
   try {
