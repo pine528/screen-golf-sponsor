@@ -139,6 +139,17 @@ export const proposalService = {
     });
     await this.addHistory(id, p.status, to, { actorId: actor.id, actorRole: actor.role, note });
     await this.notifyTransition(updated, to);
+
+    // 개편 Phase 6 (OPS-01): 승인 즉시 약속한 활동을 이행 항목으로 펼친다
+    if (to === 'APPROVED') {
+      try {
+        const { deliverableService } = await import('./deliverable.service');
+        const r = await deliverableService.generateFromProposal(id);
+        if (r.created > 0) console.log(`[Proposal] 이행 항목 ${r.created}건 생성 (제안 ${id})`);
+      } catch (e) {
+        console.error('[Proposal] 이행 항목 생성 실패:', e);
+      }
+    }
     return updated;
   },
 

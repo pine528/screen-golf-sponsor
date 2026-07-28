@@ -103,6 +103,7 @@ model Brand {
   bids              Bid[]
   contracts         Contract[]
   proposals         Proposal[]
+  deliverables      Deliverable[]
   campaigns         Campaign[]
   payments          Payment[]
   favoritedBy       FavoriteBrand[]
@@ -185,6 +186,7 @@ model Athlete {
   slotInstances       SlotInstance[]
   contracts           Contract[]
   proposals           Proposal[]
+  deliverables        Deliverable[]
   eventParticipations EventParticipation[]
   payoutItems         PayoutItem[]
   favoritedBy         FavoriteAthlete[]
@@ -3498,4 +3500,97 @@ model ProposalHistory {
 
   @@index([proposalId, createdAt])
   @@map("proposal_histories")
+}
+
+// ============================================
+// 개편 Phase 6 — 이행·증빙 (핸드오프 §OPS, 우선순위표 OPS-01~08)
+// 계약·제안에서 약속한 활동을 항목 단위로 추적하고 증빙을 검수한다.
+// ============================================
+
+enum DeliverableType {
+  APPAREL_WEAR // 착장 노출
+  APPEARANCE // 대회 출전
+  SNS_FEED
+  SNS_STORY
+  SNS_REELS
+  STORE_VISIT // 매장 방문
+  CORPORATE_EVENT // 기업 행사
+  CONTENT_SHOOT // 콘텐츠 촬영
+}
+
+enum DeliverableStatus {
+  PENDING // 예정
+  IN_PROGRESS // 진행 중 (일부 이행)
+  SUBMITTED // 증빙 제출, 검수 대기
+  APPROVED // 검수 완료
+  REJECTED // 반려 (재제출 필요)
+  SUBSTITUTED // 대체이행으로 갈음
+  CANCELLED
+}
+
+// §26.3 대체이행 수단
+enum SubstitutionType {
+  CARRY_OVER // 차기 출전 이월
+  ALTERNATE_SLOT // 동일 등급 슬롯 변경
+  SNS_CONTENT // SNS 콘텐츠 대체
+  PARTIAL_REFUND // 부분 환불
+  FULL_REFUND // 전액 환불
+}
+
+enum SubstitutionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+model Deliverable {
+  id         String            @id @default(uuid())
+  contractId String?           @map("contract_id")
+  proposalId String?           @map("proposal_id")
+  athleteId  String            @map("athlete_id")
+  brandId    String            @map("brand_id")
+  type       DeliverableType
+  title      String
+  targetCount    Int           @default(1) @map("target_count")
+  completedCount Int           @default(0) @map("completed_count")
+  dueDate    DateTime?         @map("due_date")
+  status     DeliverableStatus @default(PENDING)
+  note       String?
+
+  // 대체이행 (OPS-07/08)
+  substitutionType   SubstitutionType?   @map("substitution_type")
+  substitutionStatus SubstitutionStatus? @map("substitution_status")
+  substitutionNote   String?             @map("substitution_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  athlete  Athlete               @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  brand    Brand                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  evidence DeliverableEvidence[]
+
+  @@index([athleteId, status])
+  @@index([brandId, status])
+  @@index([proposalId])
+  @@map("deliverables")
+}
+
+model DeliverableEvidence {
+  id            String    @id @default(uuid())
+  deliverableId String    @map("deliverable_id")
+  fileUrl       String    @map("file_url")
+  fileType      String?   @map("file_type")
+  linkUrl       String?   @map("link_url") // SNS 게시물 링크 등
+  capturedAt    DateTime? @map("captured_at")
+  note          String?
+  status        String    @default("SUBMITTED") // SUBMITTED / APPROVED / REJECTED
+  reviewNote    String?   @map("review_note")
+  reviewedBy    String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+
+  @@index([deliverableId, status])
+  @@map("deliverable_evidence")
 }
