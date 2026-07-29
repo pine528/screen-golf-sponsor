@@ -1,5 +1,6 @@
 import { PrismaClient, BodyPart, MaterialRule, SlotGrade, SlotCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { SLOT_DISPLAY_COORDS } from './slot-display-coords';
 
 const prisma = new PrismaClient();
 
@@ -687,10 +688,14 @@ async function main() {
   ];
 
   for (const template of slotTemplates) {
+    // 도식 좌표는 프론트 SlotDiagram 이미지 기준 측정값(slot-display-coords.ts)을 함께 반영한다.
+    // 좌표가 없는 템플릿은 기존 값을 건드리지 않는다.
+    const coord = SLOT_DISPLAY_COORDS[template.code];
+    const withCoord = coord ? { ...template, displayX: coord[0], displayY: coord[1] } : template;
     await prisma.slotTemplate.upsert({
       where: { code: template.code },
-      update: template,
-      create: template,
+      update: withCoord,
+      create: withCoord,
     });
   }
   console.log('Slot templates created:', slotTemplates.length);
