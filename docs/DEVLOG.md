@@ -3094,3 +3094,35 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - `src/frontend/src/components/Layout.tsx`
 - `src/frontend/src/pages/AuctionDetail.tsx`, `Contact.tsx`, `Faq.tsx`, `Guide.tsx`, `Privacy.tsx`, `Terms.tsx`,
   `PublicAthletes.tsx`, `PublicAthleteDetail.tsx`, `Deliverables.tsx`, `Proposals.tsx`, `ProposalNew.tsx`, `SlotCheckout.tsx`
+
+## [2026-07-29] 공개 페이지 공용 상단 메뉴바 적용
+
+### 배경
+메인의 메뉴(라이브 경매/투표/선수/이용방법)로 들어간 화면에는 메뉴바가 없어
+다른 메뉴로 이동하거나 빠져나가기 어려웠다.
+
+### 변경 사항
+- `components/PublicHeader.tsx` 신설 — 메인에 인라인으로 있던 상단 메뉴를 공용 컴포넌트로 분리.
+  로고·메뉴 4종(LIVE 뱃지 포함)·로그인/시작하기·모바일 햄버거 메뉴 포함.
+  현재 보고 있는 메뉴는 배경으로 강조(`aria-current="page"`)
+  - `fixed` prop: 메인·마케팅 페이지처럼 히어로 위에 겹치는 경우 (기본은 `sticky`)
+- `Layout.tsx`의 비로그인 헤더(로고+로그인/시작하기만 있던 것)를 `PublicHeader`로 교체
+  → Layout을 쓰는 페이지는 **로그아웃 상태에서 모두 동일한 메뉴바** 사용
+- Layout을 쓰지 않는 페이지 14곳에 직접 삽입:
+  PublicAthletes·PublicAthleteDetail·Guide·Faq·Terms·Privacy·Contact·Deliverables·Proposals·ProposalNew·SlotCheckout,
+  그리고 자체 메뉴(기능/이용방법/대상)를 갖고 있던 Features·ForWho·HowItWorks는 기존 nav를 대체
+- Features·ForWho·HowItWorks에는 브레드크럼도 추가하고 히어로 상단 여백을 `pt-32` → `pt-6`으로 조정
+  (고정 헤더 아래 브레드크럼 줄이 들어가면서 여백이 중복되므로)
+
+### 검증
+- 로그아웃 상태로 11개 공개 경로 순회 — 모든 화면에 메뉴바 노출,
+  `/auctions` `/votes` `/athletes` `/how-it-works`에서 해당 메뉴가 활성 표시됨
+- `/how-it-works` `/for-who` `/features` 브레드크럼 추가 확인, 본문이 고정 헤더에 가리지 않음(h1 top 202 > nav 65)
+- 메인 레이아웃 회귀 없음 — 히어로 시작 위치·라이브 경매 현황판 좌우 정렬(오차 0px) 유지
+- `tsc --noEmit` 및 프로덕션 빌드 통과
+
+### 영향받는 파일
+- `src/frontend/src/components/PublicHeader.tsx` (신규)
+- `src/frontend/src/components/Layout.tsx`, `src/frontend/src/pages/Home.tsx`
+- `Features.tsx`, `ForWho.tsx`, `HowItWorks.tsx`, `Guide.tsx`, `Faq.tsx`, `Terms.tsx`, `Privacy.tsx`, `Contact.tsx`,
+  `PublicAthletes.tsx`, `PublicAthleteDetail.tsx`, `Deliverables.tsx`, `Proposals.tsx`, `ProposalNew.tsx`, `SlotCheckout.tsx`
