@@ -25,6 +25,19 @@ router.get('/featured', optionalAuth, auctionController.getFeatured);
 router.get('/live', optionalAuth, auctionController.getLive);
 
 /**
+ * @route GET /auctions/live-board
+ * @desc 메인 라이브 경매 현황판 (공개) — 실제 집계값만 반환
+ */
+router.get('/live-board', async (_req, res, next) => {
+  try {
+    const { auctionService } = await import('../services/auction.service');
+    res.json({ success: true, data: await auctionService.getLiveBoard(), error: null });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
  * @route GET /auctions/ending-soon
  * @desc Get auctions ending soon (public - non-logged-in users can view)
  */

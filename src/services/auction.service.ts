@@ -516,6 +516,93 @@ export class AuctionService {
 
   // Scheduler job: End expired auctions
   /**
+   * 메인 라이브 경매 현황판 (공개)
+   *
+   * 실제 값만 반환한다 — 입찰이 없으면 0으로 내려가며, 화면에서도 그대로 0으로 표시한다.
+   * (검증되지 않은 수치를 실적처럼 보이게 하지 않는다 — 개편 LEG-06)
+   */
+  async getLiveBoard() {
+    const now = new Date();
+    const in24h = new Date(now.getTime() + 24 * 3600_000);
+
+    const liveWhere = {
+      status: 'LIVE' as const,
+      slotInstance: {
+        isActive: true,
+        athlete: { isActive: true, kycStatus: 'APPROVED' as const },
+        event: { isActive: true },
+      },
+    };
+
+    const [liveCount, endingSoon, priceSum, bidRows, auctions, recent] = await Promise.all([
+      prisma.auction.count({ where: liveWhere }),
+      prisma.auction.count({ where: { ...liveWhere, endAt: { lte: in24h } } }),
+      prisma.auction.aggregate({ where: liveWhere, _sum: { currentPrice: true } }),
+      prisma.bid.findMany({ where: { auction: liveWhere }, select: { brandId: true } }),
+      prisma.auction.findMany({
+        where: liveWhere,
+        orderBy: [{ endAt: 'asc' }],
+        take: 6,
+        include: {
+          _count: { select: { bids: true } },
+          bids: { select: { brandId: true } },
+          slotInstance: {
+            include: {
+              athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true } },
+              slotTemplate: { select: { name: true, nameKr: true, grade: true } },
+            },
+          },
+        },
+      }),
+      prisma.auction.findMany({
+        where: { status: 'ENDED' },
+        orderBy: { updatedAt: 'desc' },
+        take: 3,
+        include: {
+          slotInstance: {
+            include: {
+              athlete: { select: { name: true } },
+              slotTemplate: { select: { name: true, nameKr: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      summary: {
+        liveCount,
+        endingSoonCount: endingSoon, // 24시간 내 마감
+        totalBids: bidRows.length,
+        participatingBrands: new Set(bidRows.map((b) => b.brandId)).size,
+        startingPriceSum: priceSum._sum.currentPrice || 0, // 진행 중 경매의 현재가 합계
+      },
+      auctions: auctions.map((a) => ({
+        id: a.id,
+        athleteId: a.slotInstance.athlete.id,
+        athleteName: a.slotInstance.athlete.name,
+        athleteTour: a.slotInstance.athlete.tour,
+        athleteImage: a.slotInstance.athlete.profileImageUrl,
+        slotName: a.slotInstance.slotTemplate.nameKr || a.slotInstance.slotTemplate.name,
+        slotGrade: a.slotInstance.slotTemplate.grade,
+        currentPrice: a.currentPrice,
+        minBidIncrement: a.minBidIncrement,
+        bidCount: a._count.bids,
+        brandCount: new Set(a.bids.map((b) => b.brandId)).size,
+        endAt: a.endAt,
+        endingSoon: a.endAt <= in24h,
+      })),
+      recentSettlements: recent.map((r) => ({
+        athleteName: r.slotInstance.athlete.name,
+        slotName: r.slotInstance.slotTemplate.nameKr || r.slotInstance.slotTemplate.name,
+        price: r.currentPrice,
+        endedAt: r.updatedAt,
+      })),
+      serverTime: now,
+    };
+  }
+
+  /**
    * 개편 Phase 4 (AUC-15) — 종료 임박 알림 (24시간 전 / 1시간 전)
    * 이미 같은 시점 알림을 보냈으면 건너뛴다(재시작·중복 실행 방어).
    */
