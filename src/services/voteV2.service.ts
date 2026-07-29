@@ -102,8 +102,27 @@ class VoteV2Service {
       prisma.voteV2.count({ where }),
     ]);
 
+    // 선택지별 실제 득표수 집계 (목록 카드의 비율 표시용 — 집계값만 내려주고 임의 수치는 만들지 않는다)
+    const voteIds = votes.map((v) => v.id);
+    const tallyByVote = new Map<string, Record<string, number>>();
+    if (voteIds.length > 0) {
+      const parts = await prisma.voteParticipationV2.findMany({
+        where: { voteId: { in: voteIds } },
+        select: { voteId: true, answer: true },
+      });
+      for (const p of parts) {
+        const a = p.answer as any;
+        const picked = a?.optionId ?? a?.choice ?? a?.value;
+        if (picked === undefined || picked === null) continue;
+        const t = tallyByVote.get(p.voteId) || {};
+        const key = String(picked);
+        t[key] = (t[key] || 0) + 1;
+        tallyByVote.set(p.voteId, t);
+      }
+    }
+
     return {
-      votes,
+      votes: votes.map((v) => ({ ...v, optionTally: tallyByVote.get(v.id) || {} })),
       pagination: {
         page,
         pageSize,
