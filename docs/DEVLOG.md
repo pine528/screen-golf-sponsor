@@ -3036,3 +3036,30 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - 영향: `prisma/schema.prisma`, `prisma/migrations/20260729_deliverable/`, `src/services/deliverable.service.ts`,
   `src/routes/deliverable.routes.ts`, `src/services/proposal.service.ts`, `src/index.ts`,
   `src/frontend/src/pages/Deliverables.tsx`, `App.tsx`, `api.ts`
+
+## [2026-07-29] 투표 UI 개편 (메인 "진행 중인 투표" + /votes 목록)
+
+### 변경 사항
+- **집계 실값 노출(백엔드)**: `voteV2.service.ts`의 `list()`가 선택지별 득표수(`optionTally`)를 함께 반환.
+  참여 기록의 `answer.optionId`(또는 `choice`/`value`)를 집계하며, 참여가 없으면 빈 객체 → 화면은 0%로 표시
+  (LEG-06 — 임의 수치 노출 금지)
+- **메인 섹션 재구성**: `HomeVoteSection.tsx` 신설로 기존 인라인 마크업 대체.
+  필터(전체/진행중/마감임박/결과보기), 카드별 상태 배지·D-day·참여자 수·선택지별 비율 막대,
+  정산 완료 건은 1위 선택지와 총 표수 카드, 우측 "투표는 어떻게 진행되나요?" 안내 카드, 하단 모니터링 고지
+- **/votes 목록 개편**: 2열 카드 그리드 + 우측 고정 안내 사이드바(4단계 진행 절차 + 자주 묻는 질문).
+  카드에 유형 배지(Yes/No·다지선다 등)·상태 배지·참여자·마감·선택지 수·선택지 칩·예상 보상 EP·
+  상태별 액션(투표 참여/결과 보기/정산 보기) 표시. 키보드 접근(Enter/Space) 추가
+- 마감 24시간 이내는 "마감임박"으로 구분해 색상(amber)과 필터를 분리
+
+### 검증
+- 로컬에 임시 투표 3건(OPEN 2·SETTLED 1, 참여 6명) 생성해 메인/목록 렌더 확인 후 삭제
+  - 메인: 마감임박·진행중·결과보기 배지, 비율 33.3/33.3/16.7/16.7% 정상
+  - 목록: 유형·상태 배지, 액션 버튼(투표 참여/정산 보기), 사이드바 4단계 정상
+- 프로덕션 `/api/votes` 확인 — 진행 중 투표 2건 존재(참여 0명)이므로 배포 후 메인 섹션 노출됨
+- backend/frontend `tsc --noEmit` 통과
+
+### 영향받는 파일
+- `src/backend/src/services/voteV2.service.ts`
+- `src/frontend/src/components/HomeVoteSection.tsx` (신규)
+- `src/frontend/src/pages/Home.tsx`
+- `src/frontend/src/pages/fan/VoteV2List.tsx`
