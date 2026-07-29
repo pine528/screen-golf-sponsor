@@ -960,7 +960,60 @@ async function main() {
     console.log('========================================\n');
   }
 
+  // 일회성 데이터 보정 — 조건이 사라지면 자동으로 아무 것도 하지 않는다
+  await mergeDuplicateAthleteAccounts();
+
   console.log('Database seeding completed!');
+}
+
+/**
+ * 선수 본인이 직접 가입해 생긴 중복 계정을 본인 계정으로 통합한다 (일회성 보정).
+ *
+ * 데이터(프로필·이력·슬롯·경매)가 붙어 있는 선수행의 소유 계정만 본인 계정으로 옮기고,
+ * 비어 있는 선수행과 우리가 만든 placeholder 계정을 삭제한다.
+ * 빈 선수행에 슬롯·입상·계약이 하나라도 있으면 건드리지 않고 경고만 남긴다.
+ *
+ * 통합이 끝나면 placeholder 계정이 없어져 다음 배포부터는 자동으로 건너뛴다.
+ * 대상이 모두 정리되면 이 함수와 호출부를 지워도 된다.
+ */
+async function mergeDuplicateAthleteAccounts() {
+  // [본인 실계정(유지), 우리가 만든 계정(삭제)]
+  const TARGETS: [string, string][] = [
+    ['duaehsdnd@naver.com', 'youmdonwoong@sponpik.com'], // 염돈웅 (2026-07-29 본인 가입)
+  ];
+
+  for (const [realEmail, placeholderEmail] of TARGETS) {
+    try {
+      const [real, ph] = await Promise.all([
+        prisma.user.findUnique({ where: { email: realEmail }, include: { athlete: true } }),
+        prisma.user.findUnique({ where: { email: placeholderEmail }, include: { athlete: true } }),
+      ]);
+      if (!real || !ph?.athlete) continue; // 이미 통합됐거나 대상 없음 → 조용히 건너뜀
+
+      const empty = real.athlete;
+      if (empty) {
+        const [slots, results, contracts] = await Promise.all([
+          prisma.slotInstance.count({ where: { athleteId: empty.id } }),
+          prisma.athleteEventResult.count({ where: { athleteId: empty.id } }),
+          prisma.contract.count({ where: { athleteId: empty.id } }),
+        ]);
+        if (slots + results + contracts > 0) {
+          console.warn(
+            `⚠️  ${realEmail} 쪽 선수행에 데이터가 있어 자동 통합을 건너뜁니다 ` +
+            `(슬롯 ${slots} / 입상 ${results} / 계약 ${contracts}). 수동 확인 필요.`
+          );
+          continue;
+        }
+        await prisma.athlete.delete({ where: { id: empty.id } });
+      }
+
+      await prisma.athlete.update({ where: { id: ph.athlete.id }, data: { userId: real.id } });
+      await prisma.user.delete({ where: { id: ph.id } });
+      console.log(`✅ 중복 계정 통합: ${placeholderEmail} → ${realEmail} (${ph.athlete.name})`);
+    } catch (e) {
+      console.warn(`Warning: ${realEmail} 계정 통합 실패 (non-fatal):`, e);
+    }
+  }
 }
 
 main()
