@@ -3063,3 +3063,34 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - `src/frontend/src/components/HomeVoteSection.tsx` (신규)
 - `src/frontend/src/pages/Home.tsx`
 - `src/frontend/src/pages/fan/VoteV2List.tsx`
+
+## [2026-07-29] 전 페이지 브레드크럼(현재 위치 표시) 적용
+
+### 변경 사항
+- `components/Breadcrumb.tsx` 신설 — 경로에서 자동으로 "홈 > 상위 > 현재" 표시를 만든다.
+  - `PATH_LABELS`에 라우트별 한글 이름 정의(공개/브랜드/선수/팬/에이전시/관리자 전 영역)
+  - UUID·숫자 ID 조각은 표시하지 않고, 페이지가 `useBreadcrumbTitle(name)`으로 지정한 이름
+    (없으면 '상세')으로 대체 — 예: `/athletes/<uuid>` → 홈 > 선수 찾기 > 김프로
+  - 라벨 조회는 ID를 제외한 경로 기준. `/seasons/123/leaderboard` → 홈 > 시즌 > 리더보드
+  - 실제 라우트가 없는 묶음 경로(`/brand`, `/admin/roi` 등)는 링크가 아닌 글자로만 표시
+  - 우측에 '뒤로' 버튼. 히스토리가 없으면(직접 링크 진입) 상위 경로로 이동
+  - 최상위 화면(`/`, `/dashboard`, `/admin`, `/fan`, `/agency`, 로그인/회원가입)에서는 숨김
+  - 컬러 헤더 위에 얹을 때는 `tone="onDark"`
+- `Layout.tsx`에 `BreadcrumbProvider` + `<Breadcrumb />` 삽입 → **Layout을 쓰는 112개 페이지에 자동 적용**
+- Layout을 쓰지 않는 페이지 11곳에 개별 삽입:
+  Contact·Faq·Guide·Privacy·Terms(기존 "홈으로 돌아가기" 링크를 대체),
+  PublicAthletes(컬러 헤더, onDark)·PublicAthleteDetail(선수명 포함)·Deliverables·Proposals·ProposalNew·SlotCheckout
+- `AuctionDetail`의 자체 경로 표시는 제거하고 전역 브레드크럼 + `useBreadcrumbTitle(슬롯명)`으로 통일
+- SlotCheckout의 '돌아가기' 버튼은 임시예약(hold) 해제 로직이 있어 그대로 유지
+
+### 검증
+- 브라우저: `/auctions`, `/athletes`, `/votes`, `/guide`, `/faq`, `/terms`, `/inventory`(사이드바 레이아웃) 정상 표시
+- `/athletes/<uuid>` → "홈 > 선수 찾기 > 김프로" (UUID가 선수명으로 대체됨)
+- `buildTrail` 직접 호출로 깊은 경로 9종 확인 — 관리자 재무 5단계·엔티티 상세·캠페인 증빙 등 모두 한글 라벨
+- `tsc --noEmit` 및 프로덕션 빌드 통과
+
+### 영향받는 파일
+- `src/frontend/src/components/Breadcrumb.tsx` (신규)
+- `src/frontend/src/components/Layout.tsx`
+- `src/frontend/src/pages/AuctionDetail.tsx`, `Contact.tsx`, `Faq.tsx`, `Guide.tsx`, `Privacy.tsx`, `Terms.tsx`,
+  `PublicAthletes.tsx`, `PublicAthleteDetail.tsx`, `Deliverables.tsx`, `Proposals.tsx`, `ProposalNew.tsx`, `SlotCheckout.tsx`
