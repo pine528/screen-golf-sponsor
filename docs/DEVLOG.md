@@ -3126,3 +3126,42 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - `src/frontend/src/components/Layout.tsx`, `src/frontend/src/pages/Home.tsx`
 - `Features.tsx`, `ForWho.tsx`, `HowItWorks.tsx`, `Guide.tsx`, `Faq.tsx`, `Terms.tsx`, `Privacy.tsx`, `Contact.tsx`,
   `PublicAthletes.tsx`, `PublicAthleteDetail.tsx`, `Deliverables.tsx`, `Proposals.tsx`, `ProposalNew.tsx`, `SlotCheckout.tsx`
+
+## [2026-07-29] 스폰서십 슬롯 전체 목록 페이지 신설 (/slots)
+
+### 배경
+메인 "진행중인 스폰서십 슬롯"의 전체보기가 라이브 경매 목록(`/auctions`)으로 가서
+바로구매·협의 슬롯은 볼 수 없었다.
+
+### 변경 사항
+- `pages/SponsorshipSlots.tsx` 신설 (`/slots`) — 경매·바로구매·협의 슬롯을 한 화면에서 비교
+  - 상단: 제목·설명 + "스폰서십 슬롯 유형 안내" 카드(라이브 경매/직접 구매/계약 가능 설명)
+  - 요약 지표 5종: 전체 슬롯 수 · 라이브 경매 수 · 바로 구매 가능 · 계약 가능 수 · 마감 임박
+  - 유형 탭(전체/라이브 경매/직접 구매/계약 가능/마감 임박) + 상세 필터
+    (선수명 검색 · 슬롯 위치 · 종목/투어 · 상품 유형(모자/상의/하의) · 성별 · 가격대 · 정렬 · 초기화)
+  - 카드 3열 그리드: 유형 배지, 선수별 슬롯 수, 선수 사진·이름·투어, 대표 슬롯명,
+    유형별 가격 라벨(경매 시작가/바로 구매가/협의 시작가), 남은 시간, 상세 보기
+  - 페이지네이션 12개 단위 (1 … 4 [5] 6 … 36 형태)
+  - 필터 선택지는 실제 데이터에 존재하는 값만 노출. 성별은 선수 데이터에 필드가 없어 투어로 유추
+    (KPGA→남자, KLPGA·WGTOUR·LPGA→여자)
+- 메뉴바(`PublicHeader`)에 "스폰서십 슬롯" 추가 — 라이브 경매 다음 자리
+- 메인 "전체보기" 링크를 `/auctions` → `/slots`로 변경
+- 브레드크럼 라벨에 `/slots` 추가
+
+### 함께 고친 것
+- **목록 API 파라미터 이름 오류**: 경매/슬롯 목록은 `pageSize`가 아니라 `limit`을 받는다.
+  메인의 `getAuctions({ pageSize: 30 })`은 무시되어 기본 20건에서 잘리고 있었다 → `limit: 100`으로 수정.
+  새 페이지는 두 API 모두 `pagination.totalPages`를 보고 끝까지 순회한다(슬롯 총 337건 > 페이지당 200건)
+- 경매용 슬롯인데 진행 중인 경매가 없는 건은 아직 구매할 수 없는 예정 물량이므로 목록에서 제외
+  (메인 캐러셀과 동일 규칙 — 이를 넣으면 "라이브 경매" 배지에 남은 시간이 없는 카드가 생김)
+
+### 검증
+- 로컬: 유형 탭 5종·정렬(가격 높은순 상위 8,100,000 → 8,000,000)·페이지 이동 동작 확인,
+  카드의 배지/가격 라벨/하단 문구가 유형별로 일치
+- 프로덕션 API 실측 — 슬롯 337건·라이브 경매 20건 전량 수집 확인
+  (화면 예상: 전체 337 / 라이브경매 20 / 바로구매 317 / 계약가능 0 / 마감임박 0)
+- `tsc --noEmit` 및 프로덕션 빌드 통과
+
+### 영향받는 파일
+- `src/frontend/src/pages/SponsorshipSlots.tsx` (신규)
+- `src/frontend/src/App.tsx`, `src/components/PublicHeader.tsx`, `src/components/Breadcrumb.tsx`, `src/pages/Home.tsx`
