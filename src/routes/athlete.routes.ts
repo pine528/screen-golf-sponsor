@@ -64,6 +64,7 @@ router.get('/public', async (req: Request, res: Response, next: NextFunction) =>
           height: true, region: true, debutYear: true, affiliation: true, sportType: true,
           // 2026-07 항목2 — 추천/신규 노출용
           isRecommended: true, recommendOrder: true, createdAt: true, snsStats: true, tourQualification: true,
+          profileUpdatedAt: true,
         },
         // 추천 우선(운영 지정 순) → 신규 가입 최신순
         orderBy: [
@@ -733,6 +734,8 @@ router.post('/me/event-results', authenticate, authorize('ATHLETE'), async (req:
         source: 'ATHLETE_SELF', status: 'PENDING',
       },
     });
+    // 경기결과 등록도 선수의 정보 갱신으로 본다 (목록 UPDATE 뱃지)
+    await prisma.athlete.update({ where: { id: athleteId }, data: { profileUpdatedAt: new Date() } });
     res.json({ success: true, data: created, error: null });
   } catch (e) { next(e); }
 });

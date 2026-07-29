@@ -168,6 +168,8 @@ model Athlete {
   // 추천 선수 노출 (2026-07 항목2 — 운영 지정 리스트만 추천 캐러셀/메인 노출)
   isRecommended     Boolean   @default(false) @map("is_recommended")
   recommendOrder    Int?      @map("recommend_order")   // 추천 정렬 (낮을수록 먼저)
+  // 선수가 직접 프로필을 수정한 시각 (운영 일괄 작업은 반영하지 않음 — 목록의 UPDATE 뱃지 기준)
+  profileUpdatedAt  DateTime? @map("profile_updated_at")
   sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
   sportId           String?   @map("sport_id")
   isActive          Boolean   @default(true) @map("is_active")  // 운영 활성/비활성 (관리자 토글, docx 4. status)

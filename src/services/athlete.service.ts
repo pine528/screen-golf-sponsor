@@ -198,6 +198,16 @@ export class AthleteService {
 
     console.log('[AthleteService.update] UpdateData:', updateData);
 
+    // 선수가 직접 프로필을 고친 경우에만 수정 시각을 남긴다 (목록의 UPDATE 뱃지 기준).
+    // 은행 정보처럼 공개되지 않는 항목만 바꾼 경우는 제외한다.
+    const PUBLIC_FIELDS = [
+      'name', 'realName', 'bio', 'profileImageUrl', 'socialLinks', 'primarySponsors',
+      'height', 'region', 'debutYear', 'affiliation', 'education', 'awards', 'career', 'sportType',
+    ];
+    if (PUBLIC_FIELDS.some((f) => updateData[f] !== undefined)) {
+      updateData.profileUpdatedAt = new Date();
+    }
+
     const updated = await prisma.athlete.update({
       where: { id },
       data: updateData,
