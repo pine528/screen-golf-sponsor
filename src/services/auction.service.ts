@@ -534,40 +534,45 @@ export class AuctionService {
       },
     };
 
-    const [liveCount, endingSoon, priceSum, bidRows, auctions, recent] = await Promise.all([
-      prisma.auction.count({ where: liveWhere }),
-      prisma.auction.count({ where: { ...liveWhere, endAt: { lte: in24h } } }),
-      prisma.auction.aggregate({ where: liveWhere, _sum: { currentPrice: true } }),
-      prisma.bid.findMany({ where: { auction: liveWhere }, select: { brandId: true } }),
-      prisma.auction.findMany({
-        where: liveWhere,
-        orderBy: [{ endAt: 'asc' }],
-        take: 6,
-        include: {
-          _count: { select: { bids: true } },
-          bids: { select: { brandId: true } },
-          slotInstance: {
-            include: {
-              athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true } },
-              slotTemplate: { select: { name: true, nameKr: true, grade: true } },
+    const [liveCount, endingSoon, priceSum, bidRows, auctions, recent, endedCount, unsoldCount, scheduledCount] =
+      await Promise.all([
+        prisma.auction.count({ where: liveWhere }),
+        prisma.auction.count({ where: { ...liveWhere, endAt: { lte: in24h } } }),
+        prisma.auction.aggregate({ where: liveWhere, _sum: { currentPrice: true } }),
+        prisma.bid.findMany({ where: { auction: liveWhere }, select: { brandId: true } }),
+        prisma.auction.findMany({
+          where: liveWhere,
+          // 현재가가 높은 순 = 가장 주목받는 경매 순 (동률이면 마감 임박 순)
+          orderBy: [{ currentPrice: 'desc' }, { endAt: 'asc' }],
+          take: 5,
+          include: {
+            _count: { select: { bids: true } },
+            bids: { select: { brandId: true, brand: { select: { name: true } } } },
+            slotInstance: {
+              include: {
+                athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true } },
+                slotTemplate: { select: { name: true, nameKr: true, grade: true } },
+              },
             },
           },
-        },
-      }),
-      prisma.auction.findMany({
-        where: { status: 'ENDED' },
-        orderBy: { updatedAt: 'desc' },
-        take: 3,
-        include: {
-          slotInstance: {
-            include: {
-              athlete: { select: { name: true } },
-              slotTemplate: { select: { name: true, nameKr: true } },
+        }),
+        prisma.auction.findMany({
+          where: { status: 'ENDED' },
+          orderBy: { updatedAt: 'desc' },
+          take: 3,
+          include: {
+            slotInstance: {
+              include: {
+                athlete: { select: { name: true } },
+                slotTemplate: { select: { name: true, nameKr: true } },
+              },
             },
           },
-        },
-      }),
-    ]);
+        }),
+        prisma.auction.count({ where: { status: 'ENDED' } }),
+        prisma.auction.count({ where: { status: 'UNSOLD' } }),
+        prisma.auction.count({ where: { status: 'SCHEDULED' } }),
+      ]);
 
     return {
       summary: {
@@ -576,22 +581,32 @@ export class AuctionService {
         totalBids: bidRows.length,
         participatingBrands: new Set(bidRows.map((b) => b.brandId)).size,
         startingPriceSum: priceSum._sum.currentPrice || 0, // 진행 중 경매의 현재가 합계
+        endedCount, // 낙찰 완료
+        unsoldCount, // 유찰
+        scheduledCount, // 시작 예정
       },
-      auctions: auctions.map((a) => ({
-        id: a.id,
-        athleteId: a.slotInstance.athlete.id,
-        athleteName: a.slotInstance.athlete.name,
-        athleteTour: a.slotInstance.athlete.tour,
-        athleteImage: a.slotInstance.athlete.profileImageUrl,
-        slotName: a.slotInstance.slotTemplate.nameKr || a.slotInstance.slotTemplate.name,
-        slotGrade: a.slotInstance.slotTemplate.grade,
-        currentPrice: a.currentPrice,
-        minBidIncrement: a.minBidIncrement,
-        bidCount: a._count.bids,
-        brandCount: new Set(a.bids.map((b) => b.brandId)).size,
-        endAt: a.endAt,
-        endingSoon: a.endAt <= in24h,
-      })),
+      auctions: auctions.map((a, i) => {
+        const brandNames = [...new Map(a.bids.map((b) => [b.brandId, b.brand?.name || ''])).values()];
+        return {
+          rank: i + 1,
+          id: a.id,
+          athleteId: a.slotInstance.athlete.id,
+          athleteName: a.slotInstance.athlete.name,
+          athleteTour: a.slotInstance.athlete.tour,
+          athleteImage: a.slotInstance.athlete.profileImageUrl,
+          slotName: a.slotInstance.slotTemplate.nameKr || a.slotInstance.slotTemplate.name,
+          slotGrade: a.slotInstance.slotTemplate.grade,
+          currentPrice: a.currentPrice,
+          minBidIncrement: a.minBidIncrement,
+          bidCount: a._count.bids,
+          brandCount: brandNames.length,
+          // 참여 브랜드는 경매 상세와 동일하게 첫 글자만 공개한다
+          brandInitials: brandNames.slice(0, 3).map((n) => (n ? n.trim().charAt(0) : '?')),
+          startAt: a.startAt,
+          endAt: a.endAt,
+          endingSoon: a.endAt <= in24h,
+        };
+      }),
       recentSettlements: recent.map((r) => ({
         athleteName: r.slotInstance.athlete.name,
         slotName: r.slotInstance.slotTemplate.nameKr || r.slotInstance.slotTemplate.name,
