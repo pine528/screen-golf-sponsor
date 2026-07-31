@@ -962,6 +962,7 @@ async function main() {
 
   // 일회성 데이터 보정 — 조건이 사라지면 자동으로 아무 것도 하지 않는다
   await mergeDuplicateAthleteAccounts();
+  await fixAthleteTourInfo();
 
   console.log('Database seeding completed!');
 }
@@ -1012,6 +1013,49 @@ async function mergeDuplicateAthleteAccounts() {
       console.log(`✅ 중복 계정 통합: ${placeholderEmail} → ${realEmail} (${ph.athlete.name})`);
     } catch (e) {
       console.warn(`Warning: ${realEmail} 계정 통합 실패 (non-fatal):`, e);
+    }
+  }
+}
+
+/**
+ * 선수 소속협회·투어 정보 보정 (엑셀 제출본 기준)
+ *
+ * `tools/audit-athlete-profiles.cjs`로 '선수 프로필 엑셀/' 원본과 대조해 찾은 차이를 맞춘다.
+ * tour는 목록 필터가 정확히 일치로 거르므로 대표 협회 하나만 두고,
+ * 복수 소속·투어 상세는 tourQualification에 함께 적는다.
+ *
+ * 값이 이미 같으면 쓰지 않으므로 몇 번 배포해도 안전하다.
+ */
+async function fixAthleteTourInfo() {
+  const FIXES: { name: string; tour?: string; qualification?: string; note: string }[] = [
+    // 엑셀: 소속협회 KLPGA / 상세 'KLPGA 드림투어' — DB에 WGTOUR로 잘못 들어가 있었음
+    { name: '홍지우', tour: 'KLPGA', qualification: 'KLPGA 정회원 1497 · 드림투어', note: '소속협회 정정' },
+    // 엑셀: 소속협회 KAPGA / 상세 'KAPGA/2부투어' / 자격 'KLPGA/정회원'
+    // → 정회원 자격이 KLPGA이므로 필터용 tour는 KLPGA로 두고 KAPGA를 상세에 남긴다
+    { name: '김진아2', qualification: 'KLPGA 정회원 · KAPGA / 2부투어', note: 'KAPGA 누락 보완' },
+    // 엑셀: 소속협회 'KPGA/GTOUR' — GTOUR 누락
+    { name: '나승규', qualification: 'KPGA 투어프로 · GTOUR', note: 'GTOUR 누락 보완' },
+    // 엑셀: 소속협회 'KLPGA / WGTOUR' / 상세 'KLPGA 드림투어 / WGTOUR' — WGTOUR 누락
+    { name: '장연주', qualification: 'KLPGA 정회원 · 드림투어 · WGTOUR', note: 'WGTOUR 누락 보완' },
+    // 엑셀: 소속협회 'KLPGA / WGTOUR' — WGTOUR 누락
+    { name: '요코야마 미즈카', qualification: 'KLPGA 정회원 (01576) · WGTOUR', note: 'WGTOUR 누락 보완' },
+  ];
+
+  for (const f of FIXES) {
+    try {
+      const a = await prisma.athlete.findFirst({
+        where: { name: f.name },
+        select: { id: true, tour: true, tourQualification: true },
+      });
+      if (!a) continue;
+      const data: any = {};
+      if (f.tour && a.tour !== f.tour) data.tour = f.tour;
+      if (f.qualification && a.tourQualification !== f.qualification) data.tourQualification = f.qualification;
+      if (Object.keys(data).length === 0) continue; // 이미 반영됨
+      await prisma.athlete.update({ where: { id: a.id }, data });
+      console.log(`✅ ${f.name} 투어정보 보정 (${f.note})`);
+    } catch (e) {
+      console.warn(`Warning: ${f.name} 투어정보 보정 실패 (non-fatal):`, e);
     }
   }
 }
