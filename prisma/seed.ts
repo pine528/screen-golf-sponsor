@@ -963,6 +963,7 @@ async function main() {
   // 일회성 데이터 보정 — 조건이 사라지면 자동으로 아무 것도 하지 않는다
   await mergeDuplicateAthleteAccounts();
   await fixAthleteTourInfo();
+  await fixAthleteActivityFields();
 
   console.log('Database seeding completed!');
 }
@@ -1056,6 +1057,45 @@ async function fixAthleteTourInfo() {
       console.log(`✅ ${f.name} 투어정보 보정 (${f.note})`);
     } catch (e) {
       console.warn(`Warning: ${f.name} 투어정보 보정 실패 (non-fatal):`, e);
+    }
+  }
+}
+
+/**
+ * 활동분야·SNS 보정 (엑셀 제출본 기준)
+ *
+ * tools/audit-athlete-profiles.cjs 대조에서 나온 차이를 맞춘다.
+ * activityFields는 부분 병합(기존 값 위에 지정한 키만 덮어씀)이라 다른 항목은 건드리지 않는다.
+ * 값이 이미 같으면 쓰지 않으므로 재배포해도 안전하다.
+ */
+async function fixAthleteActivityFields() {
+  const FIXES: { name: string; fields: Record<string, boolean>; qualification?: string; note: string }[] = [
+    // 엑셀 C18='GTOUR' / D18='Y' — GTOUR 활동인데 DB에 반영 안 됨
+    { name: '김다훈2', fields: { gtour: true }, note: 'GTOUR 활동 반영' },
+    // 엑셀에서 GTOUR 칸을 'WGTOUR'로 고쳐 적고 Y. 그리고 SNS·유튜브 칸에 Y 대신
+    // 계정명(인스타그램 / 수짱골프_김수아프로)을 적어 활동 플래그가 모두 꺼져 있었다.
+    // 실제 인스타(suuuzzang 3000) · 유튜브(수짱골프_김수아프로 300)가 등록돼 있어 활동으로 본다.
+    { name: '김수아2', fields: { sns: true, youtube: true },
+      qualification: 'KLPGA 정회원 · WGTOUR', note: 'SNS·유튜브 활동 및 WGTOUR 반영' },
+  ];
+
+  for (const f of FIXES) {
+    try {
+      const a = await prisma.athlete.findFirst({
+        where: { name: f.name },
+        select: { id: true, activityFields: true, tourQualification: true },
+      });
+      if (!a) continue;
+      const cur: any = (a.activityFields as any) || {};
+      const next = { ...cur, ...f.fields };
+      const data: any = {};
+      if (JSON.stringify(cur) !== JSON.stringify(next)) data.activityFields = next;
+      if (f.qualification && a.tourQualification !== f.qualification) data.tourQualification = f.qualification;
+      if (Object.keys(data).length === 0) continue; // 이미 반영됨
+      await prisma.athlete.update({ where: { id: a.id }, data });
+      console.log(`✅ ${f.name} 활동분야 보정 (${f.note})`);
+    } catch (e) {
+      console.warn(`Warning: ${f.name} 활동분야 보정 실패 (non-fatal):`, e);
     }
   }
 }
