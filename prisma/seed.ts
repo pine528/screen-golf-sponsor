@@ -964,6 +964,7 @@ async function main() {
   await mergeDuplicateAthleteAccounts();
   await fixAthleteTourInfo();
   await fixAthleteActivityFields();
+  await backfillSlotInventory();
 
   console.log('Database seeding completed!');
 }
@@ -1097,6 +1098,72 @@ async function fixAthleteActivityFields() {
     } catch (e) {
       console.warn(`Warning: ${f.name} 활동분야 보정 실패 (non-fatal):`, e);
     }
+  }
+}
+
+/**
+ * 슬롯 인스턴스에 대응하는 인벤토리 보충
+ *
+ * 선수 상세의 구매 화면은 SlotInstance가 아니라 AthleteSlot + SlotInventory를 읽는다.
+ * 관리자 화면·API로 슬롯 인스턴스만 새로 만들면 구매 화면에 나타나지 않으므로,
+ * 짝이 없는 인스턴스에 대해 두 행을 만들어 준다. (prisma/backfill-phase1-inventory.ts와 같은 규칙)
+ *
+ * 이미 있으면 건너뛰므로 배포마다 돌아도 안전하다.
+ */
+async function backfillSlotInventory() {
+  const STATUS_MAP: Record<string, string> = {
+    OPEN: 'AVAILABLE', IN_AUCTION: 'AUCTION_ACTIVE', RESERVED: 'HELD', SOLD: 'SOLD',
+  };
+  try {
+    const instances = await prisma.slotInstance.findMany({
+      where: { isActive: true },
+      include: {
+        event: { select: { dateStart: true, dateEnd: true } },
+        auction: { select: { id: true, status: true } },
+        slotTemplate: { select: { id: true, grade: true, defaultReservePrice: true } },
+      },
+    });
+
+    let slotCnt = 0, invCnt = 0;
+    for (const si of instances) {
+      if (!si.event) continue;
+      // 1) 선수 슬롯 설정
+      let as = await prisma.athleteSlot.findUnique({
+        where: { athleteId_slotTemplateId: { athleteId: si.athleteId, slotTemplateId: si.slotTemplateId } },
+        select: { id: true },
+      });
+      if (!as) {
+        as = await prisma.athleteSlot.create({
+          data: {
+            athleteId: si.athleteId,
+            slotTemplateId: si.slotTemplateId,
+            basePrice: Number(si.directBuyPrice ?? si.reservePrice ?? si.slotTemplate.defaultReservePrice),
+            baseGrade: si.slotTemplate.grade as any,
+            saleEnabled: true,
+            approvalRequired: false,
+          },
+          select: { id: true },
+        });
+        slotCnt++;
+      }
+      // 2) 기간별 재고
+      const exists = await prisma.slotInventory.findFirst({ where: { slotInstanceId: si.id }, select: { id: true } });
+      if (exists) continue;
+      await prisma.slotInventory.create({
+        data: {
+          athleteSlotId: as.id,
+          startDate: si.event.dateStart,
+          endDate: si.event.dateEnd,
+          status: (si.auction?.status === 'LIVE' ? 'AUCTION_ACTIVE' : STATUS_MAP[si.status] || 'AVAILABLE') as any,
+          auctionId: si.auction?.id ?? null,
+          slotInstanceId: si.id,
+        },
+      });
+      invCnt++;
+    }
+    if (slotCnt || invCnt) console.log(`✅ 인벤토리 보충 — 선수슬롯 ${slotCnt}건 / 재고 ${invCnt}건`);
+  } catch (e) {
+    console.warn('Warning: 인벤토리 보충 실패 (non-fatal):', e);
   }
 }
 
