@@ -801,7 +801,7 @@ router.get('/:id/event-results', authenticate, async (req: any, res, next) => {
 router.post('/:id/event-results', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
   try {
     const { id } = req.params;
-    const { eventName, eventDate, category, rank, score, totalRounds, summary, source } = req.body;
+    const { eventName, eventDate, tour, category, rank, score, totalRounds, summary, source } = req.body;
     if (!eventName || !eventDate) {
       res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'eventName, eventDate 필수' } });
       return;
@@ -811,6 +811,7 @@ router.post('/:id/event-results', authenticate, authorize('ADMIN'), async (req: 
         athleteId: id,
         eventName,
         eventDate: new Date(eventDate),
+        tour: tour || null,
         category: category || null,
         rank: rank ?? null,
         score: score || null,
@@ -831,6 +832,7 @@ router.patch('/event-results/:resultId', authenticate, authorize('ADMIN'), async
       data: {
         ...(req.body.eventName != null && { eventName: req.body.eventName }),
         ...(req.body.eventDate && { eventDate: new Date(req.body.eventDate) }),
+        ...(req.body.tour !== undefined && { tour: req.body.tour || null }),
         ...(req.body.category !== undefined && { category: req.body.category }),
         ...(req.body.rank !== undefined && { rank: req.body.rank }),
         ...(req.body.score !== undefined && { score: req.body.score }),
