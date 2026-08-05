@@ -3189,3 +3189,17 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/frontend/src/data/orexStore.ts` (신규), `src/pages/store/FanStoreOrex*.tsx` (신규 3)
 - `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`, `src/pages/GrowthMarket.tsx`
+
+## [2026-08-05] the GUYS 팬스토어 4개 화면 신설 (시안 기준)
+
+### 변경 사항
+- `/fan-store/the-guys` 메인 (그린 히어로 + 내 혜택 패널 + 협업 일정 + 상품 6종 + 구매 안내)
+- `/fan-store/the-guys/:productId` 상세 (팬 할인가·사이즈·적립 1%·선수 응원 3% 타일·해시태그)
+- `/fan-store/the-guys/ar` AR 뷰어 (촬영=이미지 저장, 공유/코드 복사 실동작)
+- `/fan-store/the-guys/ar/download` AR 이미지팩 — 정사각/스토리/월페이퍼 3종 실파일 생성
+  (`public/growth-market/ar/`), PNG·MP4는 준비중 표시
+- 성장마켓 the GUYS 카드/인기상품 연결. 구매·장바구니는 "오픈 준비 중"(전시용)
+
+### 영향받는 파일
+- `src/frontend/src/data/guysStore.ts` (신규), `src/pages/store/FanStoreGuys*.tsx` (신규 3)
+- `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`
