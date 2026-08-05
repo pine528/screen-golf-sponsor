@@ -101,6 +101,8 @@ router.get('/public/:id', async (req: Request, res: Response, next: NextFunction
         // 2026-07 선수화면 개편 확장 필드
         birthDate: true, birthplace: true, weight: true, tourQualification: true,
         activityFields: true, highlights: true, snsStats: true,
+        // 착장 사이즈 — 브랜드가 제품 협찬·패치 제작에 쓰는 항목이라 상세에 함께 내려준다
+        sizes: true,
         isActive: true, kycStatus: true,
         sport: { select: { code: true, name: true, parentCode: true } },
       },
