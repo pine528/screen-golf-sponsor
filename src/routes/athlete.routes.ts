@@ -994,6 +994,8 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
       height, region, debutYear, affiliation, sportType, sportId, isActive,
       kycStatus, blockedCategories,
       education, awards, career,
+      // 선수 프로필 수집 양식 항목 — 관리자 대행 입력용
+      tour, tourQualification, birthDate, birthplace, weight, activityFields, sizes, snsStats,
     } = req.body || {};
     const data: any = {};
     if (name !== undefined) data.name = name;
@@ -1056,6 +1058,23 @@ router.patch('/admin/:id', authenticate, authorize('ADMIN'), async (req: Request
     if (sportId !== undefined) data.sportId = sportId || null;
     if (typeof isActive === 'boolean') data.isActive = isActive;
     if (kycStatus !== undefined) data.kycStatus = kycStatus;
+
+    // 프로필 수집 양식 항목 (문자열은 빈 값이면 null, JSON은 그대로 저장)
+    if (tour !== undefined) data.tour = tour || null;
+    if (tourQualification !== undefined) data.tourQualification = tourQualification || null;
+    if (birthDate !== undefined) data.birthDate = birthDate || null;
+    if (birthplace !== undefined) data.birthplace = birthplace || null;
+    if (weight !== undefined) {
+      const w = weight === '' || weight === null ? null : Number(weight);
+      if (w !== null && (isNaN(w) || w < 30 || w > 200)) {
+        res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '체중은 30~200kg 범위' } });
+        return;
+      }
+      data.weight = w;
+    }
+    if (activityFields !== undefined) data.activityFields = activityFields ?? undefined;
+    if (sizes !== undefined) data.sizes = sizes ?? undefined;
+    if (snsStats !== undefined) data.snsStats = snsStats ?? undefined;
 
     if (Object.keys(data).length === 0) {
       res.status(400).json({ success: false, data: null, error: { code: 'INVALID_REQUEST', message: '변경할 필드가 없습니다.' } });
