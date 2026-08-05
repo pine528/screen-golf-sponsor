@@ -163,7 +163,7 @@ export class SlotInstanceService {
       throw new ConflictError('Slot instance already exists for this event/athlete/slot combination');
     }
 
-    return prisma.slotInstance.create({
+    const created = await prisma.slotInstance.create({
       data: {
         ...data,
         reservePrice: data.reservePrice || template.defaultReservePrice,
@@ -174,6 +174,39 @@ export class SlotInstanceService {
         slotTemplate: true,
       },
     });
+
+    // 선수 상세의 구매 화면은 SlotInstance가 아니라 AthleteSlot + SlotInventory를 읽는다.
+    // 인스턴스만 만들면 도식·슬롯 목록에 나타나지 않으므로 여기서 함께 만들어 준다.
+    try {
+      const price = Number(created.directBuyPrice ?? created.reservePrice ?? template.defaultReservePrice);
+      const athleteSlot = await prisma.athleteSlot.upsert({
+        where: { athleteId_slotTemplateId: { athleteId: data.athleteId, slotTemplateId: data.slotTemplateId } },
+        update: {},
+        create: {
+          athleteId: data.athleteId,
+          slotTemplateId: data.slotTemplateId,
+          basePrice: price,
+          baseGrade: template.grade as any,
+          saleEnabled: true,
+          approvalRequired: false,
+        },
+        select: { id: true },
+      });
+      await prisma.slotInventory.create({
+        data: {
+          athleteSlotId: athleteSlot.id,
+          startDate: created.event.dateStart,
+          endDate: created.event.dateEnd,
+          status: 'AVAILABLE',
+          slotInstanceId: created.id,
+        },
+      });
+    } catch (e) {
+      // 재고 생성 실패가 슬롯 생성 자체를 막지는 않는다 (seed의 보충 단계가 다시 채운다)
+      console.warn('Warning: 슬롯 재고 생성 실패 (non-fatal):', e);
+    }
+
+    return created;
   }
 
   async findById(id: string) {
