@@ -3177,3 +3177,15 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/frontend/src/pages/GrowthMarket.tsx`, `src/data/growthMarket.ts`, `src/components/HomeGrowthMarket.tsx`
 - `src/frontend/public/growth-market/*`, `public/brands/hoi-bakery-wordmark.png`
+
+## [2026-08-05] OREX 팬스토어 4개 화면 신설 (시안 기준)
+
+### 변경 사항
+- `/fan-store/orex` 스토어 메인 (히어로 + 필터 + 랭킹 상품 그리드 8종)
+- `/fan-store/orex/:productId` 상품 상세 (할인코드 복사, 팬포인트 조회, 결제방법, 예상 적립)
+- `/fan-store/orex/ar` 선수 AR 보기 (photoar.elgrim.kr 링크 2종), `/ar/download` 이미지 다운로드
+- 성장마켓 OREX 카드/인기상품 → 팬스토어로 연결. 구매·장바구니는 "오픈 준비 중" 안내(전시용)
+
+### 영향받는 파일
+- `src/frontend/src/data/orexStore.ts` (신규), `src/pages/store/FanStoreOrex*.tsx` (신규 3)
+- `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`, `src/pages/GrowthMarket.tsx`
