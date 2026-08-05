@@ -3203,3 +3203,18 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/frontend/src/data/guysStore.ts` (신규), `src/pages/store/FanStoreGuys*.tsx` (신규 3)
 - `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`
+
+## [2026-08-06] 호이베이커리 팬스토어 5개 화면 신설 (시안 기준)
+
+### 변경 사항
+- `/fan-store/hoi-bakery` 메인 (히어로 + 나의 팬포인트 패널 + 상품 6종 + 구매 안내)
+- `/fan-store/hoi-bakery/products` 전체 목록 (카테고리·가격·배송 유형 필터, 상품 8종)
+- `/fan-store/hoi-bakery/:productId` 상세 (팬 코드 HOIFAN10 할인액, 구매 보호 문구)
+- `/fan-store/hoi-bakery/ar` + `/ar/download` — AR 이미지 3종 실파일 생성·다운로드
+- 성장마켓 호이 카드 연결 (OREX·the GUYS·호이 세 스토어 모두 오픈)
+- 상품명 정정: 마카롱&마들렌 → 피낭시에&마들렌 (시안 확인). 구매·장바구니는 "오픈 준비 중"(전시용)
+
+### 영향받는 파일
+- `src/frontend/src/data/hoiStore.ts` (신규), `src/pages/store/FanStoreHoi*.tsx` (신규 4)
+- `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`
+- `src/frontend/public/growth-market/ar/bae-jinri-*.jpg` (신규 3)
