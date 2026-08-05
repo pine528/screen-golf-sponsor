@@ -3165,3 +3165,15 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/frontend/src/pages/SponsorshipSlots.tsx` (신규)
 - `src/frontend/src/App.tsx`, `src/components/PublicHeader.tsx`, `src/components/Breadcrumb.tsx`, `src/pages/Home.tsx`
+
+## [2026-08-05] 성장마켓(프로 × 브랜드) 시안 기준 UI 재구성
+
+### 변경 사항
+- 팬스토어 카드 가로형 재구성 (메인: 텍스트 좌/사진 우 + 하단 상품 스트립, /growth-market: 사진 좌/정보 중/썸네일 우)
+- 선수 사진 브랜드 패치 합성 제거 (원본 사용), 배진리 투명 PNG 흰 배경 flatten, 염돈웅 워터마크 크롭
+- 호이베이커리 가로형 워드마크 로고 추가 (`brands/hoi-bakery-wordmark.png`)
+- 시안 기준 전시용 상품 9종 (정가/판매가) — API 실상품 등록 시 자동 우선, 전시용은 구매 동선 없음
+
+### 영향받는 파일
+- `src/frontend/src/pages/GrowthMarket.tsx`, `src/data/growthMarket.ts`, `src/components/HomeGrowthMarket.tsx`
+- `src/frontend/public/growth-market/*`, `public/brands/hoi-bakery-wordmark.png`
