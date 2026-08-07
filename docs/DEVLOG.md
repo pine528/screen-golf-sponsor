@@ -3218,3 +3218,12 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - `src/frontend/src/data/hoiStore.ts` (신규), `src/pages/store/FanStoreHoi*.tsx` (신규 4)
 - `src/frontend/src/App.tsx`, `src/components/Breadcrumb.tsx`, `src/data/growthMarket.ts`
 - `src/frontend/public/growth-market/ar/bae-jinri-*.jpg` (신규 3)
+
+## [2026-08-06] 박은수 프로 대회 성적 추가 (운영 DB)
+
+### 변경 사항
+- 2026 제주삼다수 마스터스 — 1·2라운드 합계 +18, 124위 (KLPGA 정규투어, totalRounds 2)
+- 관리자 API(`POST /athletes/:id/event-results`)로 운영 DB 직접 등록, 공개 API 노출 확인
+
+### 참고
+- 코드 변경 없음 (데이터만). eventDate는 2026-08-02로 기재
