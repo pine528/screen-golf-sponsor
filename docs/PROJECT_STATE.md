@@ -853,3 +853,11 @@ Notification (NotificationType enum)
 ---
 
 *이 문서는 200~300줄 내로 유지. 상세 내용은 코드 또는 DEVLOG 참고.*
+
+## AI 간편 매칭 (2026-08-10, 핸드오프 v1.0 P0)
+- 규칙 기반 추천 (LLM 순위 결정 없음): Hard Filter → 실데이터 피처 → 가중치 100점 → 패키지 → reason code
+- API: `POST /ai-match/preview`(후보 수) · `POST /ai-match/requests`(추천 생성+스냅샷 저장) · `GET /ai-match/requests/:id`
+- 테이블: `ai_match_requests` (input + results JSON 스냅샷, 재현성 보장)
+- 화면: `/ai-match`(입력) → `/ai-match/:id`(TOP3 결과) → `/compare`(3명 비교) → `/proposal/:athleteId`(제안서·상담·계약 연결)
+- 원칙: 임의 수치 미표기 — 팔로워·팬 관심·슬롯·가격 실측값만, 미수집은 null/'수집 중' + 신뢰도(HIGH/MEDIUM/LOW)
+- 성장마켓 선수 목록은 `aiMatch.service.ts`의 GROWTH_MARKET_ATHLETES 상수 — 팬스토어 추가 시 갱신 필요

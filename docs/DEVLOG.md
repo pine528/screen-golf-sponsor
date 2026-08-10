@@ -3227,3 +3227,19 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 
 ### 참고
 - 코드 변경 없음 (데이터만). eventDate는 2026-08-02로 기재
+
+## [2026-08-10] AI 간편 매칭 신설 (핸드오프 v1.0 P0)
+
+### 변경 사항
+- Backend: `ai_match_requests` 테이블 + 규칙 기반 추천 엔진(`aiMatch.service.ts`) + API 3종
+  - Hard Filter(판매 가능 슬롯·예산·SNS·경매 가용) → 가중치 점수(§3.2) → 패키지(§5.1 예산 배분) → reason code(§13.1)
+  - 선호 선수 +5 보너스/탈락 사유 표기, 데이터 신뢰도 별도 표기, 추천 스냅샷 저장(재현성)
+- Frontend: 4개 화면(입력/결과/비교/제안) + GNB 'AI 간편 매칭' + 브레드크럼
+  - AC-01(필수 미완료 CTA 비활성), AC-04(score·confidence·reason·기준일), AC-06(비교 3명), AC-08(360px) 충족
+  - 제안서 인쇄(print), 상담 요청(/contact 연결), 바로 계약(선수 상세 ?slot=CODE 딥링크)
+- 임의 수치 금지: 예상 노출 등 미표기, 실측값만 사용
+- vite proxy 타깃 env화(VITE_PROXY_TARGET) — 로컬에서 운영 API 검증용
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260810_ai_match/`, `src/services/aiMatch.service.ts`, `src/routes/aiMatch.routes.ts`, `src/routes/index.ts`
+- `src/frontend/src/pages/aimatch/*` (신규 4), `src/App.tsx`, `src/components/PublicHeader.tsx`, `src/components/Breadcrumb.tsx`, `src/services/api.ts`, `vite.config.ts`
