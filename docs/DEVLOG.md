@@ -3263,3 +3263,18 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 변경 사항
 - 본인 요청: 레슨 '활동 중'으로 변경, GTOUR는 활동 안 함으로 제외 (인스타그램은 유지)
 - 관리자 API PATCH로 반영, 공개 API 확인. 코드 변경 없음
+
+## [2026-08-11] SIE(선수 인텔리전스) 코어 적용 — AI 간편 매칭 엔진 v2 (핸드오프 v2.0)
+
+### 변경 사항
+- Backend `aiMatch.service.ts` 재작성 (scoringVersion sie-mvp-2026-08-11):
+  - 역할별 서브 점수 6종(Patch/SNS/PR/Commerce/Fan/LongTerm) + HybridFit — cohort percentile 정규화, time-decay, 결측=confidence 감점
+  - 목적별 가중치 매트릭스(§7.1)로 최종 점수 합성, 역할 분류 5종(§5.1)
+  - reason마다 내부 실측 evidence 연결(AC-04), risks[]·alternative_plan·confidence 수치(§6.3)
+  - sourceStatus로 뉴스/YouTube/Instagram 미연동 정직 표기 (P1/P4 예정)
+- Frontend: 역할 배지·신뢰도 %·조사 소스 박스(결과), 채널 적합도 바·근거 보기·리스크·대안(제안), 단계별 분석 문구(입력)
+- 운영 검증: TOP3 역할 분류·서브 점수·근거 3건·리스크 반환 확인, 구 스냅샷 하위호환
+
+### 영향받는 파일
+- `src/backend/src/services/aiMatch.service.ts`
+- `src/frontend/src/pages/aimatch/AiMatch.tsx`, `AiMatchResults.tsx`, `AiMatchProposal.tsx`
