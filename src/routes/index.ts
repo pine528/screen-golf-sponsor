@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
 import brandRoutes from './brand.routes';
+import aiMatchRoutes from './aiMatch.routes';
 import athleteRoutes from './athlete.routes';
 import eventRoutes from './event.routes';
 import slotRoutes from './slot.routes';
@@ -59,6 +60,7 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/brands', brandRoutes);
 router.use('/athletes', athleteRoutes);
+router.use('/ai-match', aiMatchRoutes);
 router.use('/events', eventRoutes);
 router.use('/slots', slotRoutes);
 router.use('/proposals', proposalRoutes);

@@ -147,32 +147,32 @@ model Athlete {
   primarySponsors   Json?     @map("primary_sponsors")
   blockedCategories String[]  @map("blocked_categories")
   // SPONPIK 론칭 4. 권장 데이터 항목 — 구조화 필드
-  height            Int?      // 신장 (cm)
-  region            String?   // 출신/거주 지역
-  debutYear         Int?      @map("debut_year")    // 데뷔 연도 (예: 2018)
-  affiliation       String?   // 소속팀/소속사 (tour와 별개의 소속) — 프로필 '소속' 항목
+  height            Int? // 신장 (cm)
+  region            String? // 출신/거주 지역
+  debutYear         Int?      @map("debut_year") // 데뷔 연도 (예: 2018)
+  affiliation       String? // 소속팀/소속사 (tour와 별개의 소속) — 프로필 '소속' 항목
   // SPONPIK 선수 프로필 구조화 — bio 줄글을 항목별로 분리 (소속=affiliation / 학력 / 수상 / 경력)
-  education         String?   // 학력 (예: 공주대 교육대학원 석사 · 중등 2급 정교사(체육))
-  awards            String?   // 수상 (예: 대전광역시장배 준우승 · KPGA 프론티어투어 4위)
-  career            String?   // 경력 (예: 전 GDR아카데미 대전스마트시티점 프로)
+  education         String? // 학력 (예: 공주대 교육대학원 석사 · 중등 2급 정교사(체육))
+  awards            String? // 수상 (예: 대전광역시장배 준우승 · KPGA 프론티어투어 4위)
+  career            String? // 경력 (예: 전 GDR아카데미 대전스마트시티점 프로)
   // 2026-07 선수화면 개편 — 엑셀 프로필 양식 기반 확장 필드
-  birthDate         String?   @map("birth_date")        // 생년월일 표기 (예: 1996.07.30)
-  birthplace        String?                             // 출신지역 (region=거주지와 구분)
-  weight            Int?                                // 체중 (kg)
+  birthDate         String?   @map("birth_date") // 생년월일 표기 (예: 1996.07.30)
+  birthplace        String? // 출신지역 (region=거주지와 구분)
+  weight            Int? // 체중 (kg)
   tourQualification String?   @map("tour_qualification") // 투어 자격 (예: KPGA TOUR PRO, KLPGA 정회원)
-  activityFields    Json?     @map("activity_fields")   // 현재 활동분야 {tour1,gtour,lesson,proAm,sns,youtube,tour2,etc}
-  highlights        Json?                               // 주요 이력 bullet 배열 (string[])
-  snsStats          Json?     @map("sns_stats")         // {instagramFollowers, youtubeChannel, youtubeSubs} (원문 문자열)
-  sponsorSlots      Json?     @map("sponsor_slots")     // 엑셀 후원가능 슬롯 {슬롯명: bool} (9월 대회 경매용)
-  sizes             Json?                               // {hat, top, glove, shoe} (협찬 제작용)
+  activityFields    Json?     @map("activity_fields") // 현재 활동분야 {tour1,gtour,lesson,proAm,sns,youtube,tour2,etc}
+  highlights        Json? // 주요 이력 bullet 배열 (string[])
+  snsStats          Json?     @map("sns_stats") // {instagramFollowers, youtubeChannel, youtubeSubs} (원문 문자열)
+  sponsorSlots      Json?     @map("sponsor_slots") // 엑셀 후원가능 슬롯 {슬롯명: bool} (9월 대회 경매용)
+  sizes             Json? // {hat, top, glove, shoe} (협찬 제작용)
   // 추천 선수 노출 (2026-07 항목2 — 운영 지정 리스트만 추천 캐러셀/메인 노출)
   isRecommended     Boolean   @default(false) @map("is_recommended")
-  recommendOrder    Int?      @map("recommend_order")   // 추천 정렬 (낮을수록 먼저)
+  recommendOrder    Int?      @map("recommend_order") // 추천 정렬 (낮을수록 먼저)
   // 선수가 직접 프로필을 수정한 시각 (운영 일괄 작업은 반영하지 않음 — 목록의 UPDATE 뱃지 기준)
   profileUpdatedAt  DateTime? @map("profile_updated_at")
-  sportType         String?   @map("sport_type")    // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
+  sportType         String?   @map("sport_type") // 종목 (Sport.code 참조; 1차: GOLF/SCREEN_GOLF)
   sportId           String?   @map("sport_id")
-  isActive          Boolean   @default(true) @map("is_active")  // 운영 활성/비활성 (관리자 토글, docx 4. status)
+  isActive          Boolean   @default(true) @map("is_active") // 운영 활성/비활성 (관리자 토글, docx 4. status)
   kycStatus         KycStatus @default(NOT_SUBMITTED) @map("kyc_status")
   kycDocuments      Json?     @map("kyc_documents")
   bankAccount       Json?     @map("bank_account")
@@ -195,7 +195,7 @@ model Athlete {
   withdrawalRequests  WithdrawalRequest[]
   donationsReceived   Donation[]
   agencyRequests      AgencyAthleteRequest[]
-  eventResults        AthleteEventResult[]   // GTOUR 등 외부 경기결과 (docx 3-6)
+  eventResults        AthleteEventResult[] // GTOUR 등 외부 경기결과 (docx 3-6)
 
   // Full Funnel relations
   promoCodes    PromoCode[]
@@ -208,9 +208,9 @@ model Athlete {
   mentions       AthleteMention[]
 
   // ROI 자동/수동 수집 (docx §6 C-1, C-3 미구현 항목 보강)
-  mediaExposures      AthleteMediaExposure[]
-  followerSnapshots   AthleteFollowerSnapshot[]
-  newsArticles        AthleteNewsArticle[]
+  mediaExposures    AthleteMediaExposure[]
+  followerSnapshots AthleteFollowerSnapshot[]
+  newsArticles      AthleteNewsArticle[]
 
   // 2026-07 개편 Phase 1 — 슬롯 인벤토리·후원상품
   athleteSlots        AthleteSlot[]
@@ -381,7 +381,7 @@ model BrandRegistrationRequest {
 model Sport {
   id           String   @id @default(uuid())
   code         String   @unique // GOLF / SCREEN_GOLF / BASEBALL / SOCCER / VOLLEYBALL ...
-  name         String   // "골프", "스크린골프", "야구", "축구", "배구" ...
+  name         String // "골프", "스크린골프", "야구", "축구", "배구" ...
   parentCode   String?  @map("parent_code") // 상위 카테고리 (예: SCREEN_GOLF -> GOLF)
   description  String?
   iconUrl      String?  @map("icon_url")
@@ -414,7 +414,7 @@ model Event {
   venue            String?
   status           EventStatus @default(UPCOMING)
   // SPONPIK 론칭 3-2/3-3 — 대회 카테고리/예선/표시순서/관리자 활성화 토글
-  category         String?     // 정규투어 / 시드전 / 드림투어 / 점프투어 / 챔피언스 / 친선전 등
+  category         String? // 정규투어 / 시드전 / 드림투어 / 점프투어 / 챔피언스 / 친선전 등
   qualifyingDate   DateTime?   @map("qualifying_date") // 예선 일자
   displayOrder     Int         @default(0) @map("display_order") // 노출 우선순위 (낮을수록 상단)
   isActive         Boolean     @default(true) @map("is_active") // 관리자 활성화 토글
@@ -595,27 +595,27 @@ enum SlotStatus {
 }
 
 model SlotInstance {
-  id              String     @id @default(uuid())
-  eventId         String     @map("event_id")
-  athleteId       String     @map("athlete_id")
-  slotTemplateId  String     @map("slot_template_id")
-  reservePrice    Int        @map("reserve_price")
-  status          SlotStatus @default(OPEN)
-  overrideSpecs   Json?      @map("override_specs")
+  id              String       @id @default(uuid())
+  eventId         String       @map("event_id")
+  athleteId       String       @map("athlete_id")
+  slotTemplateId  String       @map("slot_template_id")
+  reservePrice    Int          @map("reserve_price")
+  status          SlotStatus   @default(OPEN)
+  overrideSpecs   Json?        @map("override_specs")
   // SPONPIK 론칭 — 슬롯 표시 보조 필드 (관리자 우선 정책)
-  slotName        String?    @map("slot_name") // 노출용 슬롯명 (없으면 SlotTemplate.name 사용)
-  slotOrder       Int?       @map("slot_order") // 정렬 순서 (낮을수록 상단)
-  isActive        Boolean    @default(true) @map("is_active") // 운영자 비활성화 토글
+  slotName        String?      @map("slot_name") // 노출용 슬롯명 (없으면 SlotTemplate.name 사용)
+  slotOrder       Int?         @map("slot_order") // 정렬 순서 (낮을수록 상단)
+  isActive        Boolean      @default(true) @map("is_active") // 운영자 비활성화 토글
   // Sale Mode Fields
-  enableAuction   Boolean    @default(true) @map("enable_auction")
-  enableDirectBuy Boolean    @default(false) @map("enable_direct_buy")
-  directBuyPrice  Decimal?   @map("direct_buy_price") @db.Decimal(18, 0)
-  auctionMinBid   Decimal?   @map("auction_min_bid") @db.Decimal(18, 0)
-  auctionEndAt    DateTime?  @map("auction_end_at")
+  enableAuction   Boolean      @default(true) @map("enable_auction")
+  enableDirectBuy Boolean      @default(false) @map("enable_direct_buy")
+  directBuyPrice  Decimal?     @map("direct_buy_price") @db.Decimal(18, 0)
+  auctionMinBid   Decimal?     @map("auction_min_bid") @db.Decimal(18, 0)
+  auctionEndAt    DateTime?    @map("auction_end_at")
   // 판매 방식 (선수 선택): AUCTION 경매 / DIRECT 즉시구매 / INQUIRY 슬롯만 오픈 후 스폰픽 협의
   saleMode        SlotSaleMode @default(AUCTION) @map("sale_mode")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
   event        Event        @relation(fields: [eventId], references: [id])
   athlete      Athlete      @relation(fields: [athleteId], references: [id])
@@ -639,23 +639,23 @@ enum AuctionStatus {
 }
 
 model Auction {
-  id              String        @id @default(uuid())
-  slotInstanceId  String        @unique @map("slot_instance_id")
-  startAt         DateTime      @map("start_at")
-  endAt           DateTime      @map("end_at")
-  originalEndAt   DateTime      @map("original_end_at")
-  softCloseSec    Int           @default(120) @map("soft_close_sec")
-  maxExtensionSec Int           @default(600) @map("max_extension_sec")
-  totalExtended   Int           @default(0) @map("total_extended")
-  minBidIncrement Int           @default(10000) @map("min_bid_increment")
+  id                  String        @id @default(uuid())
+  slotInstanceId      String        @unique @map("slot_instance_id")
+  startAt             DateTime      @map("start_at")
+  endAt               DateTime      @map("end_at")
+  originalEndAt       DateTime      @map("original_end_at")
+  softCloseSec        Int           @default(120) @map("soft_close_sec")
+  maxExtensionSec     Int           @default(600) @map("max_extension_sec")
+  totalExtended       Int           @default(0) @map("total_extended")
+  minBidIncrement     Int           @default(10000) @map("min_bid_increment")
   // §12.5 첫 유효입찰 이후에도 즉시구매를 유지할지 (관리자 예외 설정)
-  allowBuyNowAfterBid Boolean   @default(false) @map("allow_buy_now_after_bid")
-  currentPrice    Int           @default(0) @map("current_price")
-  status          AuctionStatus @default(SCHEDULED)
-  winningBidId    String?       @map("winning_bid_id")
-  isFeatured      Boolean       @default(false) @map("is_featured")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  allowBuyNowAfterBid Boolean       @default(false) @map("allow_buy_now_after_bid")
+  currentPrice        Int           @default(0) @map("current_price")
+  status              AuctionStatus @default(SCHEDULED)
+  winningBidId        String?       @map("winning_bid_id")
+  isFeatured          Boolean       @default(false) @map("is_featured")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
   slotInstance SlotInstance @relation(fields: [slotInstanceId], references: [id])
   bids         Bid[]
@@ -2776,19 +2776,19 @@ model PromoCode {
 // ============================================
 
 model TrackingLink {
-  id         String   @id @default(uuid())
-  campaignId String   @map("campaign_id")
-  brandId    String   @map("brand_id")
-  athleteId  String   @map("athlete_id")
+  id          String   @id @default(uuid())
+  campaignId  String   @map("campaign_id")
+  brandId     String   @map("brand_id")
+  athleteId   String   @map("athlete_id")
   contentId   String?  @map("content_id") // SNS 게시물 등
   contentType String?  @map("content_type") // INSTAGRAM | YOUTUBE | BLOG | TIKTOK | OTHER (wireframe TABLE 11)
-  shortCode  String   @unique @map("short_code") // nanoid 6자
-  longUrl    String   @map("long_url") // 실제 랜딩 URL (미니스토어 + UTM)
-  qrUrl      String?  @map("qr_url") // QR PNG CDN URL
-  clickCount Int      @default(0) @map("click_count")
-  status     String   @default("ACTIVE")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  shortCode   String   @unique @map("short_code") // nanoid 6자
+  longUrl     String   @map("long_url") // 실제 랜딩 URL (미니스토어 + UTM)
+  qrUrl       String?  @map("qr_url") // QR PNG CDN URL
+  clickCount  Int      @default(0) @map("click_count")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   campaign Campaign @relation(fields: [campaignId], references: [id])
   brand    Brand    @relation(fields: [brandId], references: [id])
@@ -2905,14 +2905,14 @@ model FunnelEvent {
 // ============================================
 
 model FunnelOrderAuditLog {
-  id           String   @id @default(uuid())
-  orderId      String   @map("order_id")
-  adminUserId  String   @map("admin_user_id")
-  action       String // ADJUST_AMOUNT | REATTRIBUTE | STATUS_CHANGE | NOTE
-  beforeJson   Json     @map("before_json")
-  afterJson    Json     @map("after_json")
-  reason       String?
-  createdAt    DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  orderId     String   @map("order_id")
+  adminUserId String   @map("admin_user_id")
+  action      String // ADJUST_AMOUNT | REATTRIBUTE | STATUS_CHANGE | NOTE
+  beforeJson  Json     @map("before_json")
+  afterJson   Json     @map("after_json")
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([orderId, createdAt])
   @@index([adminUserId, createdAt])
@@ -3115,7 +3115,7 @@ model YoutubeChannel {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  athlete Athlete       @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   videos  YoutubeVideo[]
 
   @@index([channelId])
@@ -3123,18 +3123,18 @@ model YoutubeChannel {
 }
 
 model YoutubeVideo {
-  id            String   @id @default(uuid())
-  channelDbId   String   @map("channel_db_id")
-  videoId       String   @unique @map("video_id")
-  title         String
-  description   String?
-  thumbnailUrl  String?  @map("thumbnail_url")
-  publishedAt   DateTime @map("published_at")
-  viewCount     Int      @default(0) @map("view_count")
-  likeCount     Int      @default(0) @map("like_count")
-  commentCount  Int      @default(0) @map("comment_count")
-  durationSec   Int?     @map("duration_sec")
-  lastSyncedAt  DateTime @default(now()) @map("last_synced_at")
+  id           String   @id @default(uuid())
+  channelDbId  String   @map("channel_db_id")
+  videoId      String   @unique @map("video_id")
+  title        String
+  description  String?
+  thumbnailUrl String?  @map("thumbnail_url")
+  publishedAt  DateTime @map("published_at")
+  viewCount    Int      @default(0) @map("view_count")
+  likeCount    Int      @default(0) @map("like_count")
+  commentCount Int      @default(0) @map("comment_count")
+  durationSec  Int?     @map("duration_sec")
+  lastSyncedAt DateTime @default(now()) @map("last_synced_at")
 
   channel YoutubeChannel @relation(fields: [channelDbId], references: [id], onDelete: Cascade)
 
@@ -3148,42 +3148,42 @@ model YoutubeVideo {
 // ============================================
 
 enum MentionStatus {
-  PENDING   // 자동 검색으로 발견된 후보 (확정 대기)
-  APPROVED  // 본인/관리자가 출연 확정
-  REJECTED  // 무관한 영상으로 판정
+  PENDING // 자동 검색으로 발견된 후보 (확정 대기)
+  APPROVED // 본인/관리자가 출연 확정
+  REJECTED // 무관한 영상으로 판정
 }
 
 enum MentionSource {
-  AUTO_SEARCH    // YouTube search API로 자동 발견
-  MANUAL         // 운영자가 수동 추가
-  SELF_REPORTED  // 선수 본인이 URL 붙여넣기
+  AUTO_SEARCH // YouTube search API로 자동 발견
+  MANUAL // 운영자가 수동 추가
+  SELF_REPORTED // 선수 본인이 URL 붙여넣기
 }
 
 model AthleteMention {
-  id              String         @id @default(uuid())
-  athleteId       String         @map("athlete_id")
-  videoId         String         @map("video_id") // YouTube videoId
+  id             String        @id @default(uuid())
+  athleteId      String        @map("athlete_id")
+  videoId        String        @map("video_id") // YouTube videoId
   // 영상/채널 메타 (캐시)
-  channelId       String?        @map("channel_id")
-  channelTitle    String?        @map("channel_title")
-  videoTitle      String         @map("video_title")
-  videoThumbnail  String?        @map("video_thumbnail")
-  publishedAt     DateTime       @map("published_at")
+  channelId      String?       @map("channel_id")
+  channelTitle   String?       @map("channel_title")
+  videoTitle     String        @map("video_title")
+  videoThumbnail String?       @map("video_thumbnail")
+  publishedAt    DateTime      @map("published_at")
   // 통계 (cron 갱신)
-  viewCount       Int            @default(0) @map("view_count")
-  likeCount       Int            @default(0) @map("like_count")
-  commentCount    Int            @default(0) @map("comment_count")
+  viewCount      Int           @default(0) @map("view_count")
+  likeCount      Int           @default(0) @map("like_count")
+  commentCount   Int           @default(0) @map("comment_count")
   // 큐레이션 메타
-  status          MentionStatus  @default(PENDING)
-  source          MentionSource  @default(AUTO_SEARCH)
-  approvedBy      String?        @map("approved_by") // userId
-  approvedAt      DateTime?      @map("approved_at")
-  rejectedReason  String?        @map("rejected_reason")
-  lastSyncedAt    DateTime       @default(now()) @map("last_synced_at")
-  syncStatus      String         @default("OK") @map("sync_status")
-  syncError       String?        @map("sync_error")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  status         MentionStatus @default(PENDING)
+  source         MentionSource @default(AUTO_SEARCH)
+  approvedBy     String?       @map("approved_by") // userId
+  approvedAt     DateTime?     @map("approved_at")
+  rejectedReason String?       @map("rejected_reason")
+  lastSyncedAt   DateTime      @default(now()) @map("last_synced_at")
+  syncStatus     String        @default("OK") @map("sync_status")
+  syncError      String?       @map("sync_error")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
@@ -3200,21 +3200,21 @@ model AthleteMention {
 // ============================================
 
 model AthleteMediaExposure {
-  id                       String    @id @default(uuid())
-  athleteId                String    @map("athlete_id")
+  id                    String   @id @default(uuid())
+  athleteId             String   @map("athlete_id")
   // docx §6 C-1 표시 항목
-  broadcastCount           Int       @default(0)  @map("broadcast_count")           // 중계 노출 횟수
-  broadcastSeconds         Int       @default(0)  @map("broadcast_seconds")         // 중계 노출 시간(초)
-  patchExposureEstimate    Int       @default(0)  @map("patch_exposure_estimate")   // 패치/로고 노출 추정 횟수
-  articleMentions          Int       @default(0)  @map("article_mentions")          // 기사/외부 언급 수 (수동, 자동은 newsArticles 별도)
-  highlightCount           Int       @default(0)  @map("highlight_count")           // 하이라이트 노출 수
+  broadcastCount        Int      @default(0) @map("broadcast_count") // 중계 노출 횟수
+  broadcastSeconds      Int      @default(0) @map("broadcast_seconds") // 중계 노출 시간(초)
+  patchExposureEstimate Int      @default(0) @map("patch_exposure_estimate") // 패치/로고 노출 추정 횟수
+  articleMentions       Int      @default(0) @map("article_mentions") // 기사/외부 언급 수 (수동, 자동은 newsArticles 별도)
+  highlightCount        Int      @default(0) @map("highlight_count") // 하이라이트 노출 수
   // 메타
-  periodStart              DateTime  @map("period_start")                            // 측정 기간 시작
-  periodEnd                DateTime  @map("period_end")                              // 측정 기간 종료
-  source                   String    @default("MANUAL")  // MANUAL | GTOUR_API | CRAWLER | AI_VIDEO
-  notes                    String?   // 관리자 메모
-  createdAt                DateTime  @default(now()) @map("created_at")
-  updatedAt                DateTime  @updatedAt @map("updated_at")
+  periodStart           DateTime @map("period_start") // 측정 기간 시작
+  periodEnd             DateTime @map("period_end") // 측정 기간 종료
+  source                String   @default("MANUAL") // MANUAL | GTOUR_API | CRAWLER | AI_VIDEO
+  notes                 String? // 관리자 메모
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
@@ -3228,12 +3228,12 @@ model AthleteMediaExposure {
 // ============================================
 
 model AthleteFollowerSnapshot {
-  id              String   @id @default(uuid())
-  athleteId       String   @map("athlete_id")
-  source          String   // YOUTUBE | INSTAGRAM | TWITTER (확장 가능)
-  followerCount   Int      @map("follower_count")   // 해당 시점 팔로워/구독자 수
-  totalViews      BigInt?  @map("total_views")      // 해당 시점 누적 조회수 (옵션)
-  capturedAt      DateTime @default(now()) @map("captured_at")
+  id            String   @id @default(uuid())
+  athleteId     String   @map("athlete_id")
+  source        String // YOUTUBE | INSTAGRAM | TWITTER (확장 가능)
+  followerCount Int      @map("follower_count") // 해당 시점 팔로워/구독자 수
+  totalViews    BigInt?  @map("total_views") // 해당 시점 누적 조회수 (옵션)
+  capturedAt    DateTime @default(now()) @map("captured_at")
 
   athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
@@ -3248,16 +3248,16 @@ model AthleteFollowerSnapshot {
 // ============================================
 
 model AthleteNewsArticle {
-  id              String   @id @default(uuid())
-  athleteId       String   @map("athlete_id")
-  title           String
-  url             String
-  publisher       String?  // 매체명 (예: 조선일보, 뉴시스)
-  publishedAt     DateTime @map("published_at")
-  description     String?  @db.Text  // 본문 일부 (검색 결과 snippet)
-  source          String   @default("NAVER_NEWS")  // NAVER_NEWS | GOOGLE_NEWS | MANUAL
-  language        String?  @default("ko")
-  capturedAt      DateTime @default(now()) @map("captured_at")
+  id          String   @id @default(uuid())
+  athleteId   String   @map("athlete_id")
+  title       String
+  url         String
+  publisher   String? // 매체명 (예: 조선일보, 뉴시스)
+  publishedAt DateTime @map("published_at")
+  description String?  @db.Text // 본문 일부 (검색 결과 snippet)
+  source      String   @default("NAVER_NEWS") // NAVER_NEWS | GOOGLE_NEWS | MANUAL
+  language    String?  @default("ko")
+  capturedAt  DateTime @default(now()) @map("captured_at")
 
   athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
@@ -3443,28 +3443,28 @@ model Proposal {
   durationType ProductDurationType @map("duration_type") // MONTHS_6 / MONTHS_12
 
   // 2단계 슬롯 (athleteSlotId 배열 + 우선순위)
-  desiredSlots      Json?    @map("desired_slots")
-  allowAlternative  Boolean  @default(true) @map("allow_alternative") // 대체 슬롯 허용
+  desiredSlots     Json?   @map("desired_slots")
+  allowAlternative Boolean @default(true) @map("allow_alternative") // 대체 슬롯 허용
 
   // 3단계 활동
-  minAppearances Int?  @map("min_appearances") // 최소 출전 횟수
-  snsActivity    Json? @map("sns_activity")
-  storeVisits    Json? @map("store_visits")
+  minAppearances  Int?  @map("min_appearances") // 최소 출전 횟수
+  snsActivity     Json? @map("sns_activity")
+  storeVisits     Json? @map("store_visits")
   corporateEvents Json? @map("corporate_events")
-  contentShoots  Json? @map("content_shoots")
+  contentShoots   Json? @map("content_shoots")
 
   // 4단계 권리
-  imageUsageScope  String?  @map("image_usage_scope")
-  imageUsageMonths Int?     @map("image_usage_months")
+  imageUsageScope    String? @map("image_usage_scope")
+  imageUsageMonths   Int?    @map("image_usage_months")
   allowSecondaryEdit Boolean @default(false) @map("allow_secondary_edit")
-  allowPaidMedia   Boolean  @default(false) @map("allow_paid_media") // 광고 집행
-  categoryExclusive Boolean @default(false) @map("category_exclusive") // 업종 독점
+  allowPaidMedia     Boolean @default(false) @map("allow_paid_media") // 광고 집행
+  categoryExclusive  Boolean @default(false) @map("category_exclusive") // 업종 독점
 
   // 5단계 예산
-  totalBudget    Int      @map("total_budget")
+  totalBudget     Int     @map("total_budget")
   installmentPlan Json?   @map("installment_plan") // 분할 결제 계획
   additionalCosts Json?   @map("additional_costs")
-  brandNote      String?  @map("brand_note")
+  brandNote       String? @map("brand_note")
 
   // 검토 결과
   reviewNote  String?   @map("review_note")
@@ -3477,8 +3477,8 @@ model Proposal {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  brand   Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  athlete Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  brand   Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  athlete Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   history ProposalHistory[]
 
   @@index([brandId, status])
@@ -3488,15 +3488,15 @@ model Proposal {
 
 // §14.3 수정 이력은 모두 저장한다
 model ProposalHistory {
-  id         String         @id @default(uuid())
-  proposalId String         @map("proposal_id")
+  id         String          @id @default(uuid())
+  proposalId String          @map("proposal_id")
   fromStatus ProposalStatus? @map("from_status")
-  toStatus   ProposalStatus @map("to_status")
-  actorId    String?        @map("actor_id") // 변경한 사용자
-  actorRole  String?        @map("actor_role")
+  toStatus   ProposalStatus  @map("to_status")
+  actorId    String?         @map("actor_id") // 변경한 사용자
+  actorRole  String?         @map("actor_role")
   note       String?
   changes    Json? // 변경된 필드 스냅샷
-  createdAt  DateTime       @default(now()) @map("created_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
@@ -3546,18 +3546,18 @@ enum SubstitutionStatus {
 }
 
 model Deliverable {
-  id         String            @id @default(uuid())
-  contractId String?           @map("contract_id")
-  proposalId String?           @map("proposal_id")
-  athleteId  String            @map("athlete_id")
-  brandId    String            @map("brand_id")
-  type       DeliverableType
-  title      String
-  targetCount    Int           @default(1) @map("target_count")
-  completedCount Int           @default(0) @map("completed_count")
-  dueDate    DateTime?         @map("due_date")
-  status     DeliverableStatus @default(PENDING)
-  note       String?
+  id             String            @id @default(uuid())
+  contractId     String?           @map("contract_id")
+  proposalId     String?           @map("proposal_id")
+  athleteId      String            @map("athlete_id")
+  brandId        String            @map("brand_id")
+  type           DeliverableType
+  title          String
+  targetCount    Int               @default(1) @map("target_count")
+  completedCount Int               @default(0) @map("completed_count")
+  dueDate        DateTime?         @map("due_date")
+  status         DeliverableStatus @default(PENDING)
+  note           String?
 
   // 대체이행 (OPS-07/08)
   substitutionType   SubstitutionType?   @map("substitution_type")
@@ -3595,4 +3595,19 @@ model DeliverableEvidence {
 
   @@index([deliverableId, status])
   @@map("deliverable_evidence")
+}
+
+// ── AI 간편 매칭 (핸드오프 v1.0 §10) ──────────────────────────────
+// 입력 조건과 추천 결과를 스냅샷으로 함께 저장한다 (§10.1 재현성 원칙).
+// 추천 시점의 선수 지표·슬롯 가격이 이후에 바뀌어도 과거 요청/제안서는 당시 값을 유지한다.
+model AiMatchRequest {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id") // 로그인 사용자 (비로그인 요청 허용)
+  input     Json // 브랜드 유형·목적·선호 방식·선호 선수·예산·옵션
+  results   Json? // 추천 스냅샷 { recommendations[], excludedPreferred[], dataAsOf, ruleVersion }
+  status    String   @default("COMPLETED") // COMPLETED | EMPTY | ERROR
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("ai_match_requests")
 }
