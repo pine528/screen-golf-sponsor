@@ -3243,3 +3243,10 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/backend/prisma/schema.prisma`, `prisma/migrations/20260810_ai_match/`, `src/services/aiMatch.service.ts`, `src/routes/aiMatch.routes.ts`, `src/routes/index.ts`
 - `src/frontend/src/pages/aimatch/*` (신규 4), `src/App.tsx`, `src/components/PublicHeader.tsx`, `src/components/Breadcrumb.tsx`, `src/services/api.ts`, `vite.config.ts`
+
+## [2026-08-10] 신한투자증권 GTOUR 6차 대회 성적 5건 추가 (운영 DB)
+
+### 변경 사항
+- 2026 신한투자증권 GTOUR 6차 대회 (2026-08-08, GTOUR 정규투어, 1·2라운드):
+  염돈웅 공동 2위 -16 · 이성훈 공동 2위 -16 · 이용희 공동 14위 -13 · 금동호 공동 24위 -10 · 장정우 공동 39위 -7
+- 관리자 API로 등록, 중복 확인 후 삽입, 공개 API 노출 확인. 코드 변경 없음
