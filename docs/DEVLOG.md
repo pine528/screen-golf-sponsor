@@ -3325,3 +3325,10 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - HYBRID 상향 보정(hybrid×0.9 floor)이 목적별 가중치를 덮어써 TOP이 항상 동일하던 결함 제거
 - 선호 방식 가용성 보너스 추가(경매 +4/직접 +3/월·연간 +3)
 - 운영 검증: 노출→김수아2, 팬스토어·SNS→이용희, 장기→김다훈2, 대회테스트→김수아2 — 조합별 순위 분화 확인
+
+## [2026-08-12] AI 간편 매칭 브랜드 전용 전환 + 브랜드 맞춤 1단계
+
+### 변경 사항
+- Backend: preview/requests 생성 BRAND 로그인 필수, 조회는 작성 브랜드/ADMIN만(403). GET /ai-match/brand-context 신설(업종→brandType 매핑·최근 요청·협업 선수 수). 브랜드-선수 계약 이력 +4 가점(PAST_COLLABORATION reason+evidence)
+- Frontend: 4개 화면 브랜드 게이트(로그인/등록 CTA), 브랜드 컨텍스트 프리필 + 「브랜드명」 맞춤 배지
+- 운영 검증: 비로그인 401/403, 브랜드 로그인 플로우·프리필·배지 확인 (brand@example.com)
