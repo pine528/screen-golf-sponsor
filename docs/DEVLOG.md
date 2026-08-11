@@ -3278,3 +3278,9 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/backend/src/services/aiMatch.service.ts`
 - `src/frontend/src/pages/aimatch/AiMatch.tsx`, `AiMatchResults.tsx`, `AiMatchProposal.tsx`
+
+## [2026-08-11] 이정우 프로 현재 소속 정정 (운영 DB)
+
+### 변경 사항
+- 본인 요청: 현재 소속 "KPGA 투어프로" → "KPGA 프로" (affiliation, 대전 계정 261641ad)
+- 관리자 API PATCH, 공개 API 반영 확인. 코드 변경 없음
