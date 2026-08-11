@@ -3294,3 +3294,16 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 
 ### 영향받는 파일
 - `src/backend/prisma/seed.ts`
+
+## [2026-08-11] 모바일 전면 개편 — 앱형 탭 바 + 선택 즉시 반영 구매 동선
+
+### 변경 사항
+- 하단 탭 바(MobileTabBar) 신설 — 홈·경매·AI 매칭·마켓·마이, 공개 페이지 공용(lg 미만), body 여백 자동
+- 통합 구매화면: 선수 요약 모바일 숨김, 기간·유형 퀵 선택 상단 배치, 하단 상시 요약 바(선택 즉시 반영), 구성 바텀시트
+- 홈: 성장마켓·투표 카드 가로 스와이프, 경매 현황판 참여 지표 모바일 숨김
+- AI 매칭: 비교 담기 모바일 피드백 바, CTA들 탭 바 위 오프셋
+- 375px 전수 검증(가로 스크롤·바 정렬) + 1280px 회귀 없음 확인
+
+### 영향받는 파일
+- `src/frontend/src/components/MobileTabBar.tsx` (신규), `PublicHeader.tsx`, `purchase/UnifiedPurchase.tsx`, `LiveAuctionBoard.tsx`, `HomeGrowthMarket.tsx`, `HomeVoteSection.tsx`
+- `src/pages/aimatch/AiMatch.tsx`, `AiMatchResults.tsx`, `src/pages/ProposalNew.tsx`, `src/index.css`
