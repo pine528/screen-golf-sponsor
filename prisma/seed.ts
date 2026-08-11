@@ -983,6 +983,7 @@ async function mergeDuplicateAthleteAccounts() {
   // [본인 실계정(유지), 우리가 만든 계정(삭제)]
   const TARGETS: [string, string][] = [
     ['duaehsdnd@naver.com', 'youmdonwoong@sponpik.com'], // 염돈웅 (2026-07-29 본인 가입)
+    ['rndwltkgkd@naver.com', 'leejungwoo@sponpik.com'], // 이정우 (2026-08-11 본인 가입, 대전)
   ];
 
   for (const [realEmail, placeholderEmail] of TARGETS) {
