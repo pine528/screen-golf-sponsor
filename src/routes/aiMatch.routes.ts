@@ -1,12 +1,20 @@
 /**
- * AI 간편 매칭 API (핸드오프 v1.0 §9.1)
+ * AI 간편 매칭 API (핸드오프 v1.0 §9.1 · SIE v2.0)
  *
- * 공개 엔드포인트 — 비로그인 브랜드도 체험 가능. 로그인 시 userId를 함께 기록한다.
- * 추천 결과는 요청 레코드에 스냅샷으로 저장되어 URL 공유/재방문 시 동일하게 재현된다.
+ * 2026-08-12: 브랜드 회원 전용으로 전환 (사용자 결정).
+ *  - preview/requests 생성: BRAND 로그인 필수
+ *  - 조회: 요청을 만든 브랜드 본인 또는 ADMIN만 (§13 RBAC)
+ *  - brand-context: 가입 브랜드의 업종·최근 요청·협업 이력 → 입력 프리필/개인화
  */
 import { Router, Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { previewMatch, createMatchRequest, getMatchRequest, AiMatchInput } from '../services/aiMatch.service';
+import { authenticate, authorize } from '../middleware/auth';
+import {
+  previewMatch,
+  createMatchRequest,
+  getMatchRequest,
+  getBrandContext,
+  AiMatchInput,
+} from '../services/aiMatch.service';
 
 const router = Router();
 
@@ -38,20 +46,16 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
   };
 }
 
-/** 로그인 토큰이 있으면 userId 추출 (없어도 통과) */
-function optionalUserId(req: Request): string | undefined {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return undefined;
+/** GET /ai-match/brand-context — 가입 브랜드 정보 기반 프리필/개인화 컨텍스트 */
+router.get('/brand-context', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
   try {
-    const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET || 'secret') as any;
-    return decoded?.userId || decoded?.sub;
-  } catch {
-    return undefined;
-  }
-}
+    const data = await getBrandContext(req.user.id);
+    res.json({ success: true, data, error: null, request_id: req.requestId });
+  } catch (e) { next(e); }
+});
 
-/** POST /ai-match/preview — 현재 입력값으로 예상 후보 수 */
-router.post('/preview', async (req: Request, res: Response, next: NextFunction) => {
+/** POST /ai-match/preview — 현재 입력값으로 예상 후보 수 (브랜드 전용) */
+router.post('/preview', authenticate, authorize('BRAND'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { input, error } = parseInput(req.body);
     if (!input) {
@@ -63,28 +67,33 @@ router.post('/preview', async (req: Request, res: Response, next: NextFunction) 
   } catch (e) { next(e); }
 });
 
-/** POST /ai-match/requests — 추천 요청 생성 + 결과 반환 */
-router.post('/requests', async (req: Request, res: Response, next: NextFunction) => {
+/** POST /ai-match/requests — 추천 요청 생성 + 결과 반환 (브랜드 전용, 브랜드 개인화 반영) */
+router.post('/requests', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
   try {
     const { input, error } = parseInput(req.body);
     if (!input) {
       res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: error }, data: null });
       return;
     }
-    const data = await createMatchRequest(input, optionalUserId(req));
-    res.json({ success: true, data, error: null, request_id: (req as any).requestId });
+    const data = await createMatchRequest(input, req.user.id);
+    res.json({ success: true, data, error: null, request_id: req.requestId });
   } catch (e) { next(e); }
 });
 
-/** GET /ai-match/requests/:id — 저장된 추천 스냅샷 조회 */
-router.get('/requests/:id', async (req: Request, res: Response, next: NextFunction) => {
+/** GET /ai-match/requests/:id — 스냅샷 조회 (작성 브랜드 본인 또는 관리자, §13 RBAC) */
+router.get('/requests/:id', authenticate, async (req: any, res: Response, next: NextFunction) => {
   try {
     const data = await getMatchRequest(req.params.id);
     if (!data) {
       res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: '추천 요청을 찾을 수 없습니다' }, data: null });
       return;
     }
-    res.json({ success: true, data, error: null, request_id: (req as any).requestId });
+    const isOwner = data.userId && data.userId === req.user.id;
+    if (!isOwner && req.user.role !== 'ADMIN') {
+      res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: '본인 브랜드의 추천만 조회할 수 있습니다' }, data: null });
+      return;
+    }
+    res.json({ success: true, data, error: null, request_id: req.requestId });
   } catch (e) { next(e); }
 });
 

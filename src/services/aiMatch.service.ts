@@ -426,6 +426,45 @@ function sourceStatus() {
   };
 }
 
+/* ── 브랜드 컨텍스트 (§7 Brand Brief · §10 brand_preference_profile 1단계) ── */
+
+/** 브랜드 업종 문자열 → 매칭 brandType 매핑 */
+function mapBrandType(category?: string | null): string {
+  const c = (category || '').toLowerCase();
+  if (/화장|뷰티|코스메/.test(c)) return 'BEAUTY';
+  if (/식품|음료|외식|푸드|베이커리|커피|f&b/.test(c)) return 'FOOD';
+  if (/패션|의류|어패럴|웨어/.test(c)) return 'FASHION';
+  if (/건강|헬스|제약|영양|피트니스|건기식/.test(c)) return 'HEALTH';
+  return 'ETC';
+}
+
+/** 가입 브랜드의 업종·최근 요청·협업 이력 — 입력 프리필과 개인화에 사용 */
+export async function getBrandContext(userId: string) {
+  const brand = await prisma.brand.findUnique({ where: { userId }, select: { id: true, name: true, category: true } });
+  if (!brand) return null;
+  const [lastReq, contracts] = await Promise.all([
+    prisma.aiMatchRequest.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { input: true, createdAt: true } }),
+    prisma.contract.findMany({ where: { brandId: brand.id }, select: { athleteId: true }, take: 50 }),
+  ]);
+  return {
+    brandName: brand.name,
+    category: brand.category,
+    suggestedBrandType: mapBrandType(brand.category),
+    lastInput: lastReq?.input || null,
+    lastRequestAt: lastReq?.createdAt || null,
+    collaboratedAthleteCount: new Set(contracts.map((c) => c.athleteId)).size,
+  };
+}
+
+/** 브랜드의 기존 협업(계약) 선수 집합 — 재협업 가점용 */
+async function priorAthletesOf(userId?: string): Promise<Set<string>> {
+  if (!userId) return new Set();
+  const brand = await prisma.brand.findUnique({ where: { userId }, select: { id: true } });
+  if (!brand) return new Set();
+  const contracts = await prisma.contract.findMany({ where: { brandId: brand.id }, select: { athleteId: true }, take: 100 });
+  return new Set(contracts.map((c) => c.athleteId));
+}
+
 /* ── 공개 API ── */
 
 export async function previewMatch(input: AiMatchInput) {
@@ -434,7 +473,11 @@ export async function previewMatch(input: AiMatchInput) {
 }
 
 export async function createMatchRequest(input: AiMatchInput, userId?: string) {
-  const { candidates, excluded } = await buildCandidates(input);
+  const [{ candidates, excluded }, priorAthletes, brandCtx] = await Promise.all([
+    buildCandidates(input),
+    priorAthletesOf(userId),
+    userId ? getBrandContext(userId) : Promise.resolve(null),
+  ]);
   const dataAsOf = new Date().toISOString();
 
   // 목적별 가중치 합성 (복수 목적은 평균)
@@ -467,6 +510,26 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     if (input.preferredMethod === 'AUCTION' && c.hasAuction) matchScore += 4;
     else if (input.preferredMethod === 'DIRECT' && c.hasDirect) matchScore += 3;
     else if (['MONTHLY', 'YEARLY'].includes(input.preferredMethod) && c.slots.length >= 3) matchScore += 3;
+
+    // 브랜드 개인화 (§10 1단계) — 이 브랜드와 실제 계약 이력이 있는 선수 가점
+    if (priorAthletes.has(c.athlete.id)) {
+      matchScore += 4;
+      const ev = {
+        evidenceId: `ev-${c.athlete.id.slice(0, 8)}-past_collab`,
+        sourceType: 'INTERNAL' as const,
+        sourceGrade: 'S' as const,
+        metric: 'past_collaboration',
+        label: '우리 브랜드 협업 이력',
+        value: '계약 이력 있음',
+        dataAsOf,
+      };
+      evidence.push(ev);
+      reasons.unshift({
+        code: 'PAST_COLLABORATION',
+        text: `${brandCtx?.brandName || '귀사'}와 실제 협업(계약) 이력이 있는 선수로, 재협업 시 온보딩이 빠릅니다.`,
+        evidenceIds: [ev.evidenceId],
+      });
+    }
 
     const preferred = (input.preferredAthleteIds || []).includes(c.athlete.id);
     if (preferred) matchScore += 5; // §3.3 선호 보너스
@@ -521,6 +584,7 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     candidateCount: candidates.length,
     goalWeights: w,
     sourceStatus: sourceStatus(),
+    brand: brandCtx ? { name: brandCtx.brandName, category: brandCtx.category } : null,
     recommendations: top,
     excludedPreferred: excluded,
   };
@@ -535,5 +599,5 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
 export async function getMatchRequest(id: string) {
   const req = await prisma.aiMatchRequest.findUnique({ where: { id } });
   if (!req) return null;
-  return { requestId: req.id, status: req.status, input: req.input, createdAt: req.createdAt, ...(req.results as any) };
+  return { requestId: req.id, userId: req.userId, status: req.status, input: req.input, createdAt: req.createdAt, ...(req.results as any) };
 }
