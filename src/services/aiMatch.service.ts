@@ -15,7 +15,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const RULE_VERSION = 'sie-mvp-2026-08-11';
+export const RULE_VERSION = 'sie-mvp-2026-08-12';
 
 /* ── 입력 (Brand Brief, §7) ── */
 export interface AiMatchInput {
@@ -457,11 +457,17 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     const pkg = buildPackage(c, input, roleType);
     const risks = buildRisks(c, conf);
 
-    // 최종 점수 = 목적별 가중 합성 (HYBRID 역할이면 hybrid 점수 반영)
+    // 최종 점수 = 목적별 가중 합성만 사용.
+    // (이전의 'HYBRID면 hybrid 점수로 상향' 보정은 데이터 풍부 선수가 어떤 목적에서든
+    //  동일 순위로 고정되는 문제를 만들어 제거 — 2026-08-12. 역할 배지는 유지)
     let matchScore =
       (w.patch * scores.patch + w.sns * scores.sns + w.pr * scores.pr +
         w.commerce * scores.commerce + w.fan * scores.fan + w.longTerm * scores.longTerm) / 100;
-    if (roleType === 'HYBRID') matchScore = Math.max(matchScore, scores.hybrid * 0.9);
+    // 선호 방식 가용성 보너스 (0~4) — 방식 선택이 순위에 소폭 반영되도록
+    if (input.preferredMethod === 'AUCTION' && c.hasAuction) matchScore += 4;
+    else if (input.preferredMethod === 'DIRECT' && c.hasDirect) matchScore += 3;
+    else if (['MONTHLY', 'YEARLY'].includes(input.preferredMethod) && c.slots.length >= 3) matchScore += 3;
+
     const preferred = (input.preferredAthleteIds || []).includes(c.athlete.id);
     if (preferred) matchScore += 5; // §3.3 선호 보너스
 
