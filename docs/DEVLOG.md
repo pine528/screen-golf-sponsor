@@ -3318,3 +3318,10 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 
 ### 영향받는 파일
 - `src/frontend/src/pages/AuctionDetail.tsx`, `src/pages/store/FanStore{Orex,Guys,Hoi}Product.tsx`
+
+## [2026-08-12] SIE 순위 고정 결함 수정 (sie-mvp-2026-08-12)
+
+### 변경 사항
+- HYBRID 상향 보정(hybrid×0.9 floor)이 목적별 가중치를 덮어써 TOP이 항상 동일하던 결함 제거
+- 선호 방식 가용성 보너스 추가(경매 +4/직접 +3/월·연간 +3)
+- 운영 검증: 노출→김수아2, 팬스토어·SNS→이용희, 장기→김다훈2, 대회테스트→김수아2 — 조합별 순위 분화 확인
