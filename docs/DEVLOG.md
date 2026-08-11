@@ -3307,3 +3307,14 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/frontend/src/components/MobileTabBar.tsx` (신규), `PublicHeader.tsx`, `purchase/UnifiedPurchase.tsx`, `LiveAuctionBoard.tsx`, `HomeGrowthMarket.tsx`, `HomeVoteSection.tsx`
 - `src/pages/aimatch/AiMatch.tsx`, `AiMatchResults.tsx`, `src/pages/ProposalNew.tsx`, `src/index.css`
+
+## [2026-08-11] 모바일 개편 2차 — 거래 화면 하단 고정 CTA 확대
+
+### 변경 사항
+- 전 페이지(28개 라우트) 375px 자동 진단(puppeteer): 가로 스크롤 0건 확인
+- 경매 상세: LIVE 시 하단 고정 입찰 바(현재가·남은 시간·입찰/로그인 CTA)
+- 팬스토어 상품 상세 3종: 하단 고정 구매 바(상품명·가격·팬 할인가 구매)
+- 모든 바 탭 바 위(bottom-14) 정렬. 목록 페이지 1열은 모바일 표준 패턴으로 유지
+
+### 영향받는 파일
+- `src/frontend/src/pages/AuctionDetail.tsx`, `src/pages/store/FanStore{Orex,Guys,Hoi}Product.tsx`
