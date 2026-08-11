@@ -3284,3 +3284,13 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 변경 사항
 - 본인 요청: 현재 소속 "KPGA 투어프로" → "KPGA 프로" (affiliation, 대전 계정 261641ad)
 - 관리자 API PATCH, 공개 API 반영 확인. 코드 변경 없음
+
+## [2026-08-11] 이정우 프로 중복 계정 통합
+
+### 변경 사항
+- 본인 가입 계정(rndwltkgkd@naver.com, 2026-08-11)에 기존 큐레이션 프로필(leejungwoo@sponpik.com) 연결
+- 빈 중복 선수행 삭제, 플레이스홀더 유저 삭제 (seed mergeDuplicateAthleteAccounts 패턴, 멱등)
+- 운영 확인: 이정우 계정 1개 · 본인 이메일 · 프로필(KPGA 프로/대전) 유지
+
+### 영향받는 파일
+- `src/backend/prisma/seed.ts`
