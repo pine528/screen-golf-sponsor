@@ -34,8 +34,9 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
   if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max <= 0) return { error: '예산 범위를 입력해주세요' };
   if (min > max) return { error: '예산 하한이 상한보다 클 수 없습니다' };
   // v3 심층 입력 (전부 선택)
-  const { companyName, brandName, brandDescription, currentChannels, audience, desiredActions, recommendationStyle, excludedAthleteIds, brandProfile } = body || {};
+  const { companyName, brandName, brandDescription, currentChannels, audience, desiredActions, recommendationStyle, excludedAthleteIds, brandProfile, portfolioMode } = body || {};
   const STYLES = new Set(['BEST', 'BALANCED', 'DISCOVERY']);
+  const PORTFOLIO_MODES = new Set(['AUTO', 'SINGLE', 'MULTI']);
   return {
     input: {
       brandType,
@@ -56,6 +57,7 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
       desiredActions: Array.isArray(desiredActions) ? desiredActions.slice(0, 3) : undefined,
       recommendationStyle: STYLES.has(recommendationStyle) ? recommendationStyle : undefined,
       excludedAthleteIds: Array.isArray(excludedAthleteIds) ? excludedAthleteIds.slice(0, 20) : undefined,
+      portfolioMode: PORTFOLIO_MODES.has(portfolioMode) ? portfolioMode : undefined,
       brandProfile: brandProfile && typeof brandProfile === 'object' ? brandProfile : undefined,
     },
   };

@@ -15,7 +15,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const RULE_VERSION = 'deep-match-v3-2026-08-12';
+export const RULE_VERSION = 'deep-match-v3.1-2026-08-12';
 
 /* ── 입력 (Brand Brief, §7 · 심층매칭 v3 §2) ── */
 export interface AiMatchInput {
@@ -37,6 +37,8 @@ export interface AiMatchInput {
   /** BEST(최적) | BALANCED(균형) | DISCOVERY(새 선수 발견) — §5.3 */
   recommendationStyle?: 'BEST' | 'BALANCED' | 'DISCOVERY';
   excludedAthleteIds?: string[];
+  /** 선수 구성 — AUTO(AI 판단) | SINGLE(1명 집중) | MULTI(2~3명 조합) — §12.3 */
+  portfolioMode?: 'AUTO' | 'SINGLE' | 'MULTI';
   /** 사용자가 승인한 Brand Profile snapshot (§9.1) */
   brandProfile?: any;
 }
@@ -96,7 +98,7 @@ interface Evidence {
 
 interface CandidateRaw {
   athlete: any;
-  slots: { code: string; name: string; price: number; grade: string | null }[];
+  slots: { code: string; name: string; price: number; grade: string | null; saleMode: string; saleModeLabel: string }[];
   minSlotPrice: number;
   followers: number | null;
   recentResultDays: number | null;
@@ -146,7 +148,7 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
         },
       },
       eventResults: { where: { status: 'APPROVED' }, orderBy: { eventDate: 'desc' }, take: 20 },
-      slotInstances: { where: { status: 'OPEN' }, select: { saleMode: true, enableAuction: true } },
+      slotInstances: { where: { status: 'OPEN' }, select: { slotTemplateId: true, saleMode: true, enableAuction: true, enableDirectBuy: true } },
       _count: { select: { favoritedBy: true, mediaExposures: true, newsArticles: true, contracts: true } },
     },
   });
@@ -156,9 +158,24 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
   const preferredSet = new Set(input.preferredAthleteIds || []);
 
   for (const a of athletes) {
+    // 슬롯별 실제 판매방식 — 선수 단위가 아니라 '그 슬롯'의 OPEN 인스턴스 기준 (2026-08-12 오표기 수정)
+    const instBySlotTemplate = new Map(a.slotInstances.map((si) => [si.slotTemplateId, si]));
     const slots = a.athleteSlots
       .filter((s) => s.inventories.length > 0)
-      .map((s) => ({ code: s.slotTemplate.code, name: s.customName || s.slotTemplate.name, price: s.basePrice, grade: s.baseGrade }))
+      .map((s) => {
+        const inst = instBySlotTemplate.get(s.slotTemplateId);
+        const saleMode = inst?.saleMode === 'AUCTION' || (inst?.enableAuction && !inst?.enableDirectBuy) ? 'AUCTION'
+          : inst && !inst.enableAuction && !inst.enableDirectBuy ? 'INQUIRY'
+          : 'DIRECT';
+        return {
+          code: s.slotTemplate.code,
+          name: s.customName || s.slotTemplate.name,
+          price: s.basePrice,
+          grade: s.baseGrade,
+          saleMode,
+          saleModeLabel: saleMode === 'AUCTION' ? '라이브 경매' : saleMode === 'INQUIRY' ? '협의' : '직접 구매',
+        };
+      })
       .sort((x, y) => slotVisibility(y.code) - slotVisibility(x.code));
 
     const reject = (reason: string) => {
@@ -411,13 +428,24 @@ function buildPackage(c: CandidateRaw, input: AiMatchInput, roleType: string) {
     slotTotal = cheapest.price;
   }
 
-  const method = input.preferredMethod === 'AI_RECOMMEND' ? (c.hasAuction ? 'AUCTION' : 'DIRECT') : input.preferredMethod;
+  // 후원 방식은 선수 단위가 아니라 '실제로 담긴 슬롯'의 판매방식 기준으로 표기한다
+  // (2026-08-12 수정 — 직접 구매 슬롯 패키지가 '라이브 경매'로 오표기되던 문제)
+  const modes = new Set(chosen.map((s) => s.saleMode));
+  const method =
+    input.preferredMethod === 'AI_RECOMMEND'
+      ? (modes.has('AUCTION') && modes.size === 1 ? 'AUCTION' : 'DIRECT')
+      : input.preferredMethod;
+  const methodLabel =
+    ['MONTHLY', 'YEARLY'].includes(method) ? (method === 'YEARLY' ? '연간 계약' : '월간 계약')
+      : modes.size > 1 ? '직접 구매 + 라이브 경매'
+        : chosen[0]?.saleModeLabel || (method === 'AUCTION' ? '라이브 경매' : '직접 구매');
   const snsCount = roleType === 'SOCIAL_FIRST' || roleType === 'HYBRID' ? { feedPosts: 2, storyPosts: 2 } : { feedPosts: 1, storyPosts: 1 };
   const sns = input.options.includeSns && c.snsActive ? snsCount : null;
   const growthMarket = input.options.includeGrowthMarket && c.growthMarket ? { brands: c.growthMarket.brands } : null;
 
   return {
     method,
+    methodLabel,
     duration: ['MONTHLY', 'YEARLY'].includes(method) ? (method === 'YEARLY' ? '연간' : '월간') : '대회 1회',
     slots: chosen,
     slotTotal,
@@ -718,6 +746,41 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     toSlot('DISCOVERY_PICK', 'DISCOVERY PICK', '새로운 고적합 후보', discovery, discovery?.finalScore ?? null),
   ];
 
+  /* ── v3 §12.3 멀티 선수 포트폴리오 — 1명 집중 vs 역할 분산 (예산 내) ── */
+  const portfolioMode = input.portfolioMode || 'AUTO';
+  let portfolio: any = null;
+  if (best) {
+    const single = {
+      athleteId: best.athleteId, name: best.name, profileImageUrl: best.profileImageUrl,
+      total: best.package?.priceConfirmed ?? 0,
+      slots: (best.package?.slots || []).map((sl: any) => ({ name: sl.name, price: sl.price, saleModeLabel: sl.saleModeLabel })),
+    };
+    let multi: any = null;
+    if (portfolioMode !== 'SINGLE') {
+      const members: any[] = [];
+      let total = 0;
+      const addMember = (r: any, role: string, pickSlot: (ss: any[]) => any) => {
+        if (!r?.athleteId || members.some((m) => m.athleteId === r.athleteId)) return;
+        const ss = r.package?.slots || [];
+        const slot = pickSlot(ss);
+        if (!slot) return;
+        if (total + slot.price > input.budget.max) return;
+        members.push({
+          athleteId: r.athleteId, name: r.name, profileImageUrl: r.profileImageUrl, role,
+          slot: { name: slot.name, price: slot.price, saleModeLabel: slot.saleModeLabel },
+        });
+        total += slot.price;
+      };
+      addMember(patch || best, '패치 노출', (ss) => ss[0]); // 가장 가시성 높은 슬롯
+      addMember(social, 'SNS 콘텐츠', (ss) => [...ss].sort((a, b) => a.price - b.price)[0]); // 최저가 슬롯
+      addMember(discovery || hybrid, '보조 노출·확장', (ss) => [...ss].sort((a, b) => a.price - b.price)[0]);
+      if (members.length >= 2) {
+        multi = { members, total, note: '역할별 대표 슬롯 1개 기준 — SNS·성장마켓 구성은 상담 시 확정됩니다' };
+      }
+    }
+    portfolio = { mode: portfolioMode, single, multi };
+  }
+
   // 대안 (§13 alternative_plan): 1안과 다른 역할의 최상위 선수
   const top = reranked.slice(0, 10).map((r, i, arr) => {
     if (i === 0) {
@@ -738,6 +801,7 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     brand: brandCtx ? { name: brandCtx.brandName, category: brandCtx.category } : null,
     brandProfileUsed: input.brandProfile ? true : false,
     roleSlots,
+    portfolio,
     recommendations: top,
     excludedPreferred: excluded,
     excludedByBrand: [...excludeSet],
