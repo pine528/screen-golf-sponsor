@@ -862,5 +862,6 @@ Notification (NotificationType enum)
 - 원칙: 임의 수치 미표기 — 팔로워·팬 관심·슬롯·가격 실측값만, 미수집은 null/'수집 중' + 신뢰도(HIGH/MEDIUM/LOW)
 - 성장마켓 선수 목록은 `aiMatch.service.ts`의 GROWTH_MARKET_ATHLETES 상수 — 팬스토어 추가 시 갱신 필요
 - 2026-08-12 심층매칭 v3: Brand Analyzer(URL 규칙 추출+승인)·역할별 5슬롯(BEST/PATCH/SOCIAL/HYBRID/DISCOVERY)·반복노출 페널티+다양성 λ·선호/제외 피드백
+- 2026-08-12 v3.1: 슬롯별 saleModeLabel(라이브 경매/직접 구매/협의) + package.methodLabel(혼합 시 '직접 구매 + 라이브 경매') — 선수 단위 오표기 수정. portfolioMode(AUTO/SINGLE/MULTI) + 2~3명 역할 분산 portfolio 응답
 - 2026-08-12 브랜드 전용 전환: BRAND 로그인 필수, brand-context 프리필, 협업 이력 가점(§10 1단계)
 - 2026-08-11 SIE v2 적용: 역할별 점수(Patch/SNS/PR/Commerce/Fan/LongTerm) + 목적별 재가중 + 역할 분류 + evidence 연결 + risks/대안. 외부 커넥터(뉴스·YouTube·인스타)는 미연동 표기(P1/P4)

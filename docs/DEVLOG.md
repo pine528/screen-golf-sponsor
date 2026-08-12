@@ -3348,3 +3348,20 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 ### 영향받는 파일
 - `src/backend/prisma/schema.prisma`, `migrations/20260812_deep_match_v3/`, `services/{aiMatch,brandAnalyzer}.service.ts`, `routes/aiMatch.routes.ts`
 - `src/frontend/src/pages/aimatch/{AiMatch,AiMatchResults}.tsx`, `services/api.ts`
+
+## [2026-08-12] 심층매칭 v3.1 — 슬롯별 판매방식 표기 + 멀티 선수 포트폴리오
+
+### 변경 사항
+- 판매방식 오표기 수정: 직접구매 슬롯(예: 김수아2 모자챙 상단 90만원)이 제안서에 '라이브 경매'로 표기되던 결함.
+  원인은 패키지 방식을 선수 단위 경매 보유 여부로 결정한 것 — 슬롯마다 OPEN 인스턴스의 saleMode 기준
+  saleModeLabel(라이브 경매/직접 구매/협의)을 부착하고, package.method/methodLabel은 선택된 슬롯들의
+  실제 모드로 결정(혼합 시 '직접 구매 + 라이브 경매')
+- 멀티 선수 포트폴리오(§12.3): 입력 portfolioMode(AUTO/SINGLE/MULTI) + 역할 슬롯 기반 2~3명 조합
+  (패치 노출·SNS 콘텐츠·보조 노출, 예산 상한 내) portfolio 응답. 프론트 입력 '선수 구성' 칩 +
+  결과 '선수 구성 제안' 카드(1명 집중 vs 역할 분산 비교)
+- 운영 검증: 김수아2 모자챙 상단 90만원 → '직접 구매' 정상, 고예산 혼합 패키지 → '직접 구매 + 라이브 경매',
+  MULTI → 장정우+이용희 합계 180만(상한 200만 내), SINGLE → multi null
+
+### 영향받는 파일
+- `src/backend/src/services/aiMatch.service.ts` (deep-match-v3.1-2026-08-12), `routes/aiMatch.routes.ts`
+- `src/frontend/src/pages/aimatch/{AiMatch,AiMatchResults,AiMatchProposal}.tsx`
