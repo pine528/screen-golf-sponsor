@@ -96,6 +96,8 @@ model Brand {
   kycStatus    KycStatus @default(NOT_SUBMITTED) @map("kyc_status")
   kycDocuments Json?     @map("kyc_documents")
   penaltyScore Int       @default(0) @map("penalty_score")
+  // AI 심층매칭 v3 — 승인된 Brand Profile snapshot (§9.1). approved=true인 값만 매칭 Feature로 사용
+  matchProfile Json?     @map("match_profile")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -3610,4 +3612,19 @@ model AiMatchRequest {
 
   @@index([userId, createdAt])
   @@map("ai_match_requests")
+}
+
+// ── AI 심층매칭 v3 (§9) — 브랜드별 선수 선호/제외 피드백 ──────────
+// '이 선수 제외'는 이후 모든 요청에서 hard exclude, '선호'는 가점 (§8)
+model BrandAthletePreference {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id") // 브랜드 계정 userId
+  athleteId  String   @map("athlete_id")
+  preference String // PREFER | EXCLUDE
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, athleteId])
+  @@map("brand_athlete_preferences")
 }

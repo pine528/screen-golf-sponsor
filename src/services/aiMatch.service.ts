@@ -15,9 +15,9 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const RULE_VERSION = 'sie-mvp-2026-08-12';
+export const RULE_VERSION = 'deep-match-v3-2026-08-12';
 
-/* ── 입력 (Brand Brief, §7) ── */
+/* ── 입력 (Brand Brief, §7 · 심층매칭 v3 §2) ── */
 export interface AiMatchInput {
   brandType: string; // BEAUTY | FOOD | FASHION | HEALTH | LOCAL | ETC
   goals: string[]; // BRAND_AWARENESS | SNS_CONTENT | FAN_STORE | LONG_TERM | EVENT_TEST
@@ -25,7 +25,24 @@ export interface AiMatchInput {
   preferredAthleteIds: string[];
   budget: { min: number; max: number };
   options: { includeSns: boolean; includeGrowthMarket: boolean; performanceGuarantee50: boolean };
+  /* ── v3 심층 입력 (전부 선택 — v1 요청과 하위호환) ── */
+  companyName?: string;
+  brandName?: string;
+  brandDescription?: string;
+  /** INSTAGRAM | YOUTUBE | HOMESHOPPING | D2C | OFFLINE | PR */
+  currentChannels?: string[];
+  audience?: { ages?: string[]; gender?: string };
+  /** SEARCH | SITE_VISIT | NEW_CUSTOMER | PURCHASE | SNS_ENGAGE | STORE_VISIT */
+  desiredActions?: string[];
+  /** BEST(최적) | BALANCED(균형) | DISCOVERY(새 선수 발견) — §5.3 */
+  recommendationStyle?: 'BEST' | 'BALANCED' | 'DISCOVERY';
+  excludedAthleteIds?: string[];
+  /** 사용자가 승인한 Brand Profile snapshot (§9.1) */
+  brandProfile?: any;
 }
+
+/** 추천 스타일 → 다양성 계수 λ (§5.3) */
+const DIVERSITY_LAMBDA: Record<string, number> = { BEST: 0.15, BALANCED: 0.35, DISCOVERY: 0.55 };
 
 /** 성장마켓 팬스토어 운영 선수 (프론트 큐레이션과 동기화 — data/growthMarket.ts) */
 const GROWTH_MARKET_ATHLETES: Record<string, { brands: string[] }> = {
@@ -440,20 +457,79 @@ function mapBrandType(category?: string | null): string {
 
 /** 가입 브랜드의 업종·최근 요청·협업 이력 — 입력 프리필과 개인화에 사용 */
 export async function getBrandContext(userId: string) {
-  const brand = await prisma.brand.findUnique({ where: { userId }, select: { id: true, name: true, category: true } });
+  const brand = await prisma.brand.findUnique({
+    where: { userId },
+    select: { id: true, name: true, category: true, website: true, description: true, matchProfile: true },
+  });
   if (!brand) return null;
-  const [lastReq, contracts] = await Promise.all([
+  const [lastReq, contracts, prefRows] = await Promise.all([
     prisma.aiMatchRequest.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { input: true, createdAt: true } }),
     prisma.contract.findMany({ where: { brandId: brand.id }, select: { athleteId: true }, take: 50 }),
+    prisma.brandAthletePreference.findMany({ where: { userId }, select: { athleteId: true, preference: true } }),
   ]);
   return {
     brandName: brand.name,
     category: brand.category,
+    website: brand.website,
+    registeredDescription: brand.description,
     suggestedBrandType: mapBrandType(brand.category),
+    /** v3 §13 — 저장된 승인 Brand Profile (재방문 시 불러오기) */
+    savedProfile: brand.matchProfile || null,
     lastInput: lastReq?.input || null,
     lastRequestAt: lastReq?.createdAt || null,
     collaboratedAthleteCount: new Set(contracts.map((c) => c.athleteId)).size,
+    excludedAthleteIds: prefRows.filter((p) => p.preference === 'EXCLUDE').map((p) => p.athleteId),
+    preferredAthleteIds: prefRows.filter((p) => p.preference === 'PREFER').map((p) => p.athleteId),
   };
+}
+
+/** 승인된 Brand Profile 저장 (§11-9 · AC-02: 승인값만 매칭 Feature) */
+export async function saveBrandProfile(userId: string, profile: any) {
+  const brand = await prisma.brand.findUnique({ where: { userId }, select: { id: true } });
+  if (!brand) return null;
+  const snapshot = { ...profile, approved: true, dataAsOf: new Date().toISOString() };
+  await prisma.brand.update({ where: { id: brand.id }, data: { matchProfile: snapshot } });
+  return snapshot;
+}
+
+/** 선수 선호/제외 피드백 (§8) — 다음 요청부터 즉시 반영 (AC-06) */
+export async function setAthletePreference(userId: string, athleteId: string, preference: 'PREFER' | 'EXCLUDE' | 'CLEAR', reason?: string) {
+  if (preference === 'CLEAR') {
+    await prisma.brandAthletePreference.deleteMany({ where: { userId, athleteId } });
+    return { athleteId, preference: 'CLEAR' };
+  }
+  await prisma.brandAthletePreference.upsert({
+    where: { userId_athleteId: { userId, athleteId } },
+    update: { preference, reason: reason || null },
+    create: { userId, athleteId, preference, reason: reason || null },
+  });
+  return { athleteId, preference };
+}
+
+async function preferencesOf(userId?: string): Promise<{ prefer: Set<string>; exclude: Set<string> }> {
+  if (!userId) return { prefer: new Set(), exclude: new Set() };
+  const rows = await prisma.brandAthletePreference.findMany({ where: { userId } });
+  return {
+    prefer: new Set(rows.filter((r) => r.preference === 'PREFER').map((r) => r.athleteId)),
+    exclude: new Set(rows.filter((r) => r.preference === 'EXCLUDE').map((r) => r.athleteId)),
+  };
+}
+
+/** 최근 요청 노출 이력 (§5.2 repeat_exposure) — 최근 5개 요청의 상위 8명 노출 횟수 */
+async function exposureHistoryOf(userId?: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (!userId) return map;
+  const recent = await prisma.aiMatchRequest.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: { results: true },
+  });
+  for (const r of recent) {
+    const recs: any[] = (r.results as any)?.recommendations || [];
+    for (const rec of recs.slice(0, 8)) map.set(rec.athleteId, (map.get(rec.athleteId) || 0) + 1);
+  }
+  return map;
 }
 
 /** 브랜드의 기존 협업(계약) 선수 집합 — 재협업 가점용 */
@@ -473,12 +549,18 @@ export async function previewMatch(input: AiMatchInput) {
 }
 
 export async function createMatchRequest(input: AiMatchInput, userId?: string) {
-  const [{ candidates, excluded }, priorAthletes, brandCtx] = await Promise.all([
+  const [{ candidates: allCandidates, excluded }, priorAthletes, brandCtx, prefs, exposure] = await Promise.all([
     buildCandidates(input),
     priorAthletesOf(userId),
     userId ? getBrandContext(userId) : Promise.resolve(null),
+    preferencesOf(userId),
+    exposureHistoryOf(userId),
   ]);
   const dataAsOf = new Date().toISOString();
+
+  // v3 §8 — 브랜드가 제외한 선수는 hard exclude (AC-06)
+  const excludeSet = new Set([...(input.excludedAthleteIds || []), ...prefs.exclude]);
+  const candidates = allCandidates.filter((c) => !excludeSet.has(c.athlete.id));
 
   // 목적별 가중치 합성 (복수 목적은 평균)
   const goalKeys = input.goals.filter((g) => GOAL_WEIGHTS[g]);
@@ -490,6 +572,20 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     },
     { patch: 0, sns: 0, pr: 0, commerce: 0, fan: 0, longTerm: 0 },
   );
+
+  // v3 §4 — 원하는 행동(KPI)·현재 채널 gap으로 가중치 보정 후 100으로 재정규화
+  const actions = new Set(input.desiredActions || []);
+  if (actions.has('PURCHASE')) { w.commerce += 8; w.fan += 2; }
+  if (actions.has('SNS_ENGAGE')) { w.sns += 8; }
+  if (actions.has('SEARCH') || actions.has('SITE_VISIT') || actions.has('NEW_CUSTOMER')) { w.pr += 4; w.patch += 4; }
+  if (actions.has('STORE_VISIT')) { w.patch += 3; w.fan += 3; }
+  const channels = new Set(input.currentChannels || []);
+  if (channels.size > 0) {
+    if (!channels.has('INSTAGRAM') && !channels.has('YOUTUBE')) w.sns += 5; // 인물·SNS 콘텐츠 gap 보완 (§4 marketing_gap)
+    if (!channels.has('PR')) w.pr += 3;
+  }
+  const wSum = w.patch + w.sns + w.pr + w.commerce + w.fan + w.longTerm;
+  for (const k of Object.keys(w) as (keyof typeof w)[]) w[k] = (w[k] / wSum) * 100;
 
   const scored = candidates.map((c) => {
     const { scores, features } = buildSubScores(c, candidates, input);
@@ -531,8 +627,8 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
       });
     }
 
-    const preferred = (input.preferredAthleteIds || []).includes(c.athlete.id);
-    if (preferred) matchScore += 5; // §3.3 선호 보너스
+    const preferred = (input.preferredAthleteIds || []).includes(c.athlete.id) || prefs.prefer.has(c.athlete.id);
+    if (preferred) matchScore += 5; // §3.3 / v3 §8 선호 보너스
 
     return {
       athleteId: c.athlete.id,
@@ -541,6 +637,7 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
       tourQualification: c.athlete.tourQualification,
       profileImageUrl: c.athlete.profileImageUrl,
       isFeatured: c.athlete.isFeatured,
+      baseScore: Math.min(100, Math.round(matchScore)),
       matchScore: Math.min(100, Math.round(matchScore)),
       confidence: conf.level,
       confidenceValue: conf.value,
@@ -565,11 +662,64 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
         growthMarketBrands: c.growthMarket?.brands || null,
       },
     };
-  })
-  .sort((a, b) => b.matchScore - a.matchScore || a.metrics.minSlotPrice - b.metrics.minSlotPrice);
+  });
+
+  /* ── v3 §5.2 Diversity Re-ranker: base → penalty/bonus → final (AC-04·AC-10 audit 가능) ── */
+  const style = input.recommendationStyle || 'BALANCED';
+  const lambda = DIVERSITY_LAMBDA[style] ?? 0.35;
+  const lambdaScale = lambda / 0.35; // BALANCED 기준 배율
+  const baseSorted = [...scored].sort((a, b) => b.baseScore - a.baseScore);
+  const p70 = baseSorted[Math.floor(baseSorted.length * 0.3)]?.baseScore ?? 0; // 상위 30 percentile (AC-05 품질 threshold)
+
+  const reranked = scored
+    .map((r) => {
+      const exposureCount = exposure.get(r.athleteId) || 0;
+      const repeatPenalty = Math.min(12, exposureCount * 4) * lambdaScale;
+      const isDiscovery = exposureCount === 0 && r.baseScore >= p70;
+      const discoveryBonus = isDiscovery ? 6 * lambdaScale : 0;
+      const finalScore = Math.min(100, Math.round(r.baseScore - repeatPenalty + discoveryBonus));
+      return {
+        ...r,
+        matchScore: finalScore,
+        finalScore,
+        exposureCount,
+        isDiscovery,
+        penalties: { repeatExposure: Math.round(repeatPenalty * 10) / 10 },
+        bonuses: { discovery: Math.round(discoveryBonus * 10) / 10, preference: r.preferred ? 5 : 0 },
+      };
+    })
+    .sort((a, b) => b.finalScore - a.finalScore || a.metrics.minSlotPrice - b.metrics.minSlotPrice);
+
+  /* ── v3 §6 역할별 추천 슬롯 — 같은 선수는 한 역할에만 (AC-03), threshold 미달 시 비움 ── */
+  const used = new Set<string>();
+  const pickRole = (cond: (r: any) => boolean, sortBy: (r: any) => number) => {
+    const pool = reranked.filter((r) => !used.has(r.athleteId) && cond(r));
+    if (pool.length === 0) return null;
+    const pickd = pool.sort((a, b) => sortBy(b) - sortBy(a))[0];
+    used.add(pickd.athleteId);
+    return pickd;
+  };
+  const toSlot = (role: string, label: string, desc: string, r: any, roleScore: number | null) =>
+    r
+      ? { role, label, desc, athleteId: r.athleteId, name: r.name, profileImageUrl: r.profileImageUrl, tour: r.tour, roleScore, finalScore: r.finalScore, confidence: r.confidence, subScores: r.subScores, reasonSummary: r.reasons?.[0]?.text || null, evidenceCount: (r.evidence || []).length, budget: r.package?.priceConfirmed ?? null, isDiscovery: r.isDiscovery }
+      : { role, label, desc, athleteId: null, emptyReason: '기준을 충족하는 후보가 부족합니다' };
+
+  const best = pickRole(() => true, (r) => r.finalScore);
+  const patch = pickRole((r) => r.subScores.patch >= 55, (r) => r.subScores.patch);
+  const social = pickRole((r) => r.subScores.sns >= 55, (r) => r.subScores.sns);
+  const hybrid = pickRole((r) => r.subScores.patch >= 50 && r.subScores.sns >= 50, (r) => r.subScores.hybrid);
+  const discovery = pickRole((r) => r.isDiscovery, (r) => r.finalScore);
+
+  const roleSlots = [
+    toSlot('BEST_MATCH', 'BEST MATCH', '종합 적합 · 안정형', best, best?.finalScore ?? null),
+    toSlot('PATCH_PICK', 'PATCH PICK', '방송·대회 노출 특화', patch, patch?.subScores.patch ?? null),
+    toSlot('SOCIAL_PICK', 'SOCIAL PICK', 'SNS 콘텐츠 특화', social, social?.subScores.sns ?? null),
+    toSlot('HYBRID_PICK', 'HYBRID PICK', '패치 + SNS 균형', hybrid, hybrid?.subScores.hybrid ?? null),
+    toSlot('DISCOVERY_PICK', 'DISCOVERY PICK', '새로운 고적합 후보', discovery, discovery?.finalScore ?? null),
+  ];
 
   // 대안 (§13 alternative_plan): 1안과 다른 역할의 최상위 선수
-  const top = scored.slice(0, 10).map((r, i, arr) => {
+  const top = reranked.slice(0, 10).map((r, i, arr) => {
     if (i === 0) {
       const alt = arr.find((x) => x.roleType !== r.roleType);
       return { ...r, alternative: alt ? { athleteId: alt.athleteId, name: alt.name, roleLabel: alt.roleLabel, matchScore: alt.matchScore } : null };
@@ -583,10 +733,14 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     dataAsOf,
     candidateCount: candidates.length,
     goalWeights: w,
+    diversityMode: style,
     sourceStatus: sourceStatus(),
     brand: brandCtx ? { name: brandCtx.brandName, category: brandCtx.category } : null,
+    brandProfileUsed: input.brandProfile ? true : false,
+    roleSlots,
     recommendations: top,
     excludedPreferred: excluded,
+    excludedByBrand: [...excludeSet],
   };
 
   const req = await prisma.aiMatchRequest.create({

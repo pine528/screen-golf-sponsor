@@ -13,8 +13,11 @@ import {
   createMatchRequest,
   getMatchRequest,
   getBrandContext,
+  saveBrandProfile,
+  setAthletePreference,
   AiMatchInput,
 } from '../services/aiMatch.service';
+import { analyzeBrandUrls } from '../services/brandAnalyzer.service';
 
 const router = Router();
 
@@ -30,6 +33,9 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
   const min = Number(budget?.min), max = Number(budget?.max);
   if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max <= 0) return { error: '예산 범위를 입력해주세요' };
   if (min > max) return { error: '예산 하한이 상한보다 클 수 없습니다' };
+  // v3 심층 입력 (전부 선택)
+  const { companyName, brandName, brandDescription, currentChannels, audience, desiredActions, recommendationStyle, excludedAthleteIds, brandProfile } = body || {};
+  const STYLES = new Set(['BEST', 'BALANCED', 'DISCOVERY']);
   return {
     input: {
       brandType,
@@ -42,6 +48,15 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
         includeGrowthMarket: !!options?.includeGrowthMarket,
         performanceGuarantee50: !!options?.performanceGuarantee50,
       },
+      companyName: typeof companyName === 'string' ? companyName.slice(0, 100) : undefined,
+      brandName: typeof brandName === 'string' ? brandName.slice(0, 100) : undefined,
+      brandDescription: typeof brandDescription === 'string' ? brandDescription.slice(0, 1000) : undefined,
+      currentChannels: Array.isArray(currentChannels) ? currentChannels.slice(0, 8) : undefined,
+      audience: audience && typeof audience === 'object' ? { ages: audience.ages?.slice?.(0, 4), gender: audience.gender } : undefined,
+      desiredActions: Array.isArray(desiredActions) ? desiredActions.slice(0, 3) : undefined,
+      recommendationStyle: STYLES.has(recommendationStyle) ? recommendationStyle : undefined,
+      excludedAthleteIds: Array.isArray(excludedAthleteIds) ? excludedAthleteIds.slice(0, 20) : undefined,
+      brandProfile: brandProfile && typeof brandProfile === 'object' ? brandProfile : undefined,
     },
   };
 }
@@ -50,6 +65,47 @@ function parseInput(body: any): { input?: AiMatchInput; error?: string } {
 router.get('/brand-context', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
   try {
     const data = await getBrandContext(req.user.id);
+    res.json({ success: true, data, error: null, request_id: req.requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /ai-match/brand-analyze — URL 기반 Brand Analyzer (v3 §4, 규칙 기반) */
+router.post('/brand-analyze', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const urls = Array.isArray(req.body?.urls)
+      ? req.body.urls.filter((u: any) => typeof u?.url === 'string' && u.url.length < 500).slice(0, 6)
+      : [];
+    if (urls.length === 0) {
+      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: '분석할 URL을 입력해주세요' }, data: null });
+      return;
+    }
+    const data = await analyzeBrandUrls(urls);
+    res.json({ success: true, data, error: null, request_id: req.requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /ai-match/brand-profile — 사용자가 확인·수정한 Brand Profile 승인 저장 (AC-02) */
+router.post('/brand-profile', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const profile = req.body?.profile;
+    if (!profile || typeof profile !== 'object') {
+      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: '프로필 내용이 필요합니다' }, data: null });
+      return;
+    }
+    const data = await saveBrandProfile(req.user.id, profile);
+    res.json({ success: true, data, error: null, request_id: req.requestId });
+  } catch (e) { next(e); }
+});
+
+/** POST /ai-match/feedback — 선수 선호/제외 피드백 (v3 §8, AC-06) */
+router.post('/feedback', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const { athleteId, action, reason } = req.body || {};
+    if (typeof athleteId !== 'string' || !['PREFER', 'EXCLUDE', 'CLEAR'].includes(action)) {
+      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: 'athleteId와 action(PREFER/EXCLUDE/CLEAR)이 필요합니다' }, data: null });
+      return;
+    }
+    const data = await setAthletePreference(req.user.id, athleteId, action, reason);
     res.json({ success: true, data, error: null, request_id: req.requestId });
   } catch (e) { next(e); }
 });
