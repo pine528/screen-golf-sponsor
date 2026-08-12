@@ -3332,3 +3332,19 @@ SPONPIK 1차 론칭 가능. 영상 자동 분석은 Phase 후속(수동 입력 �
 - Backend: preview/requests 생성 BRAND 로그인 필수, 조회는 작성 브랜드/ADMIN만(403). GET /ai-match/brand-context 신설(업종→brandType 매핑·최근 요청·협업 선수 수). 브랜드-선수 계약 이력 +4 가점(PAST_COLLABORATION reason+evidence)
 - Frontend: 4개 화면 브랜드 게이트(로그인/등록 CTA), 브랜드 컨텍스트 프리필 + 「브랜드명」 맞춤 배지
 - 운영 검증: 비로그인 401/403, 브랜드 로그인 플로우·프리필·배지 확인 (brand@example.com)
+
+## [2026-08-12] AI 심층매칭 v3 (핸드오프 v3.0 P0)
+
+### 변경 사항
+- Backend (deep-match-v3-2026-08-12):
+  - brands.match_profile + brand_athlete_preferences 마이그레이션
+  - Brand Analyzer: URL 공개 메타데이터 규칙 추출(LLM 미사용 명시), SSRF 가드(사설IP/localhost/file 차단·리다이렉트 3·500KB·8초), 승인값만 Feature(AC-02)
+  - Diversity Re-ranker(§5.2): 반복노출 페널티(최근 5요청, 0~12)·디스커버리 보너스(무노출+상위 30퍼센타일)·추천 스타일 λ(0.15/0.35/0.55). penalties/bonuses 응답(AC-10)
+  - 역할별 슬롯: BEST/PATCH/SOCIAL/HYBRID/DISCOVERY — 선수 중복 금지(AC-03), threshold 미달 시 '적합 후보 부족'(AC-05)
+  - KPI·채널 gap 가중치 보정, 선호/제외 피드백 API(즉시 hard exclude, AC-06)
+- Frontend: 입력 4섹션(브랜드·URL 분석·승인 카드·마케팅/KPI/스타일) + 브리프 준비도 %, 역할별 결과 카드 5종, '추천을 더 잘 맞춰주세요' 재추천 패널, '이 선수 제외'
+- 운영 검증: 역할 5슬롯 전원 상이(김수아2/장정우/이용희/박은수/홍지우 — DISCOVERY 신규발견), 반복 페널티 -12 실동작, SSRF 3종 차단, E2E(로그인→준비도 90%→제출→5/5 배지), 375px 통과(AC-11)
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma`, `migrations/20260812_deep_match_v3/`, `services/{aiMatch,brandAnalyzer}.service.ts`, `routes/aiMatch.routes.ts`
+- `src/frontend/src/pages/aimatch/{AiMatch,AiMatchResults}.tsx`, `services/api.ts`
