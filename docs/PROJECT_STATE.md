@@ -865,3 +865,27 @@ Notification (NotificationType enum)
 - 2026-08-12 v3.1: 슬롯별 saleModeLabel(라이브 경매/직접 구매/협의) + package.methodLabel(혼합 시 '직접 구매 + 라이브 경매') — 선수 단위 오표기 수정. portfolioMode(AUTO/SINGLE/MULTI) + 2~3명 역할 분산 portfolio 응답
 - 2026-08-12 브랜드 전용 전환: BRAND 로그인 필수, brand-context 프리필, 협업 이력 가점(§10 1단계)
 - 2026-08-11 SIE v2 적용: 역할별 점수(Patch/SNS/PR/Commerce/Fan/LongTerm) + 목적별 재가중 + 역할 분류 + evidence 연결 + risks/대안. 외부 커넥터(뉴스·YouTube·인스타)는 미연동 표기(P1/P4)
+
+## 리디자인 v2.0 — 후원 3경로 (2026-09-01)
+IA: 후원하기 = **직접 PICK** / **추천 PICK** / **디지털 파트너 월 구독** 3경로. 모두 승인 선행(결제는 선수 승인 후).
+
+### 직접 PICK — `/sponsor/pick`
+- 화면: 선수 선택 → 슬롯 선택(`/:athleteId/slots`) → 후원 구성(`/:athleteId/configure`) → 기존 신청 상태·결제
+- API `/direct-pick`: `options` · `athletes`(+`/:id`, `/:id/slots`) · `POST quote`
+- 정책표는 `directPick.service.ts` 한 곳: 기간(대회1회/30일/6개월/12개월) · 유형(APPAREL/SNS/STORE/BUNDLE)
+  · 추가활동 5종 · 구매방식(BUY_NOW/AUCTION/PROPOSAL). 6·12개월은 경매 금지
+- 가격 = 슬롯 월 단가 × 개월수 + 추가 활동. 신청 시에도 서버가 같은 표로 재계산(§14.4) 후 snapshot 고정
+- 신청은 `POST /applications` 재사용 (`sourceType=DIRECT_PICK`, `config`)
+
+### 디지털 파트너 월 구독 — `/digital-partner`
+- 화면: 소개 → 모집 선수(`/athletes`) → 상품 선택(`/athletes/:id`) → 승인·계약·결제(`/applications/:id`)
+- API `/digital-partner`: `plans` · `athletes`(+`/:id`) · `applications`(생성/조회/`review`/`checkout`) · `subscriptions` · `athlete/requests`
+- 플랜 START 49,000 / GROW 99,000 / PLUS 199,000 · 12개월 약정 · 최초 조회 시 자동 시딩
+- 상태: SUBMITTED → ATHLETE_APPROVED → ACTIVE (승인 유효 72h, 승인 전 결제 차단, 브랜드 중복 신청 차단)
+- **경기복·대회 현장 부착 미포함**을 전 화면에 고지(UX-02)
+
+### 선수 승인함 — `/athlete/requests`
+슬롯 신청(ApplicationItem)과 디지털 구독 신청을 한 화면에서 승인/조정/거절. 거절·조정은 사유 필수(BR-04).
+
+### 표기 원칙 (LEG-06 유지)
+산출 근거가 없는 지표는 화면에 넣지 않는다 — 시안의 '팬 온도'는 미표시.

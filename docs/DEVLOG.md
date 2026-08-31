@@ -908,3 +908,49 @@
 - Media Value Multiple(MEV÷후원비)은 브랜드별 후원비 미확인으로 '—' 표기
 - TV 동시 송출 가치는 공식 시청자료 확보 전까지 미산정, 잠재 도달수는 8/29 기준 유튜브 조회수
 - 판독 수준 구분 명시: 글자 판독 7개 브랜드 / 위치·형태 확인 3개(염돈웅 엘렌실라·시너스홀딩스, 배진리 엘그림)
+
+## [2026-09-01] 리디자인 v2.0 — 디지털 파트너 월 구독 · 직접 PICK 전체 흐름
+
+### 변경 사항
+
+**디지털 파트너 월 구독 (핸드오프 v1.0 §5)**
+- 백엔드: `DigitalPlan` / `AthleteDigitalInventory` / `DigitalApplication` 3모델 + `/api/digital-partner` 9엔드포인트
+  - 플랜 START 49,000 / GROW 99,000 / PLUS 199,000 (12개월 약정, 최초 조회 시 자동 시딩)
+  - 신청 → 선수 승인 → 계약·첫 결제(ACTIVE) 상태머신, 승인 유효기간 72h
+  - 승인 전 결제 차단(UX-04) · 브랜드 중복 신청 차단 · 잔여 수량 차감
+- 프론트 4화면: 모집 선수 목록 / 상품 선택 / 승인·계약·결제 / 선수 승인함 디지털 섹션
+- 전 화면에 "경기복 · 대회 현장 부착 미포함" 고지(UX-02)
+
+**직접 PICK (시안 img_12~14)**
+- 백엔드 `directPick.service.ts` + `/api/direct-pick` 5엔드포인트
+  - `options`: 기간(대회1회/30일/6개월/12개월) · 유형(착장/SNS/매장·방문/통합) ·
+    추가활동 5종 · 구매방식(직접구매/경매/제안) 정책표를 한 곳에서 관리
+  - `quote`: 슬롯 월 단가 × 기간(개월) + 추가 활동 — 서버 재계산(§14.4)
+  - 6·12개월 장기 상품 경매 차단
+- `submitApplication`에 `sourceType=DIRECT_PICK` + `config` 지원.
+  신청 시에도 같은 정책표로 다시 계산하고 구성 내용을 snapshot에 고정(BR-05)
+- 프론트 3화면(선수 선택 → 슬롯 선택 → 후원 구성) → 기존 신청 상태·결제 화면으로 연결
+- 헤더 메가메뉴 · 모바일 드로어 · 메인 히어로의 "직접 PICK" CTA를 `/sponsor/pick`으로 연결
+
+### 검증 (운영 API E2E)
+- 디지털: 신청 SUBMITTED → 승인 전 결제 차단 OK → 중복 신청 차단 OK → 승인 → ACTIVE
+  (2026-08-31~2027-08-31, 다음 결제 2026-10-01) → 중복 결제 차단 OK → 재고 GROW 9/10 차감
+- 직접 PICK: 12개월 견적 = 월 900,000 × 12 검증 OK · 장기 경매 차단 OK ·
+  신청 서버금액 1,200,000 = 견적 일치 OK · 승인 전 결제 차단 OK → 승인 → ACTIVE
+- 브라우저: 3화면 렌더링 · 슬롯 선택 · 추가활동/기간 변경 시 서버 재견적 반영 확인
+
+### 영향받는 파일
+- `src/backend/src/services/{digitalPartner,directPick,application}.service.ts`
+- `src/backend/src/routes/{digitalPartner,directPick,application,index}.routes.ts`
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260901_sponsorship_application/`
+- `src/frontend/src/pages/digital/{DigitalAthletes,DigitalApply,DigitalApplicationStatus}.tsx`
+- `src/frontend/src/pages/pick/{PickAthletes,PickSlots,PickConfigure}.tsx`
+- `src/frontend/src/pages/athlete/AthleteRequests.tsx`, `src/pages/DigitalPartner.tsx`
+- `src/frontend/src/{App.tsx,services/api.ts,components/PublicHeader.tsx,pages/Home.tsx}`
+
+### 확인 필요 (운영 결정 대기)
+- 기간 요금 규칙: 현재 "슬롯 월 단가 × 개월수"(대회 1회 = 1개월 단가 기준).
+  장기 할인 등 다른 정책이면 `directPick.service.ts`의 `DURATIONS` 표만 고치면 된다.
+- 추가 활동 요율은 시안 명시가(15만~70만) 그대로 적용. 선수별 차등이 필요하면 별도 테이블 필요.
+- 시안의 '팬 온도'는 산출 근거가 없어 미표시(LEG-06). 도식 후면(등) 뷰는 후면 실루엣 이미지가
+  없어 목록 필터('등' 탭)로만 제공.
