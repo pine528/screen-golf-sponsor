@@ -616,6 +616,17 @@ class VoteV2Service {
         return { participation, microRewardPaid: rewardPaid };
       });
 
+      /* 팬온도 적립 — 투표 대상 선수가 지정된 경우에만 (멱등, 실패해도 참여는 유지) */
+      const playerId = (vote.target as any)?.playerId;
+      if (playerId) {
+        try {
+          const { awardVote } = await import('./fanEngage.service');
+          await awardVote(playerId, userId, voteId);
+        } catch (e) {
+          console.error('[voteV2] 팬온도 적립 실패', e);
+        }
+      }
+
       return result;
     } catch (error: any) {
       // P2002: Unique constraint violation (이미 참여함)

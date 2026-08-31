@@ -56,6 +56,11 @@ model User {
   donationsSent        Donation[]        @relation("DonationFrom")
   pointWithdrawals     PointWithdrawal[] @relation("PointWithdrawals")
   processedWithdrawals PointWithdrawal[] @relation("ProcessedPointWithdrawals")
+  communityPosts       AthleteCommunityPost[] @relation("CommunityPosts")
+  communityComments    CommunityComment[]     @relation("CommunityComments")
+  communityLikes       CommunityLike[]        @relation("CommunityLikes")
+  fanBrandSuggestions  FanBrandSuggestion[]   @relation("FanBrandSuggestions")
+  temperatureEvents    FanTemperatureEvent[]  @relation("FanTemperatureEvents")
 
   // 본인인증 정보
   realName               String?   @map("real_name")
@@ -192,6 +197,9 @@ model Athlete {
   applicationItems    ApplicationItem[]
   digitalInventories  AthleteDigitalInventory[]
   digitalApplications DigitalApplication[]
+  communityPosts      AthleteCommunityPost[]
+  brandSuggestions    FanBrandSuggestion[]
+  temperatureEvents   FanTemperatureEvent[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -1208,6 +1216,8 @@ enum PointTxReason {
   // 사용자 투표 생성
   VOTE_CREATE_SEED // 투표 생성 시드머니 (차감)
   VOTE_CREATE_SEED_REFUND // 투표 취소 시 시드머니 환불
+  // 팬 참여 (커뮤니티·팬레터·브랜드 추천)
+  FAN_ENGAGE_REWARD // 팬 참여 활동 적립
 }
 
 model PointWallet {
@@ -3819,4 +3829,106 @@ model DigitalApplication {
   @@index([brandUserId, createdAt])
   @@index([athleteId, status])
   @@map("digital_applications")
+}
+
+// ============================================
+// 팬 참여 — 커뮤니티 · 팬레터 · 브랜드 추천 · 팬온도 (리디자인 v2.0 §팬 참여)
+// ============================================
+
+/// 선수 커뮤니티 글 (선수 소식 / 팬 응원 / 팬레터 / 경기 이야기 / 브랜드 추천)
+model AthleteCommunityPost {
+  id           String   @id @default(uuid())
+  athleteId    String   @map("athlete_id")
+  authorUserId String?  @map("author_user_id")
+  authorRole   String   @default("FAN") @map("author_role") // ATHLETE | FAN | ADMIN
+  type         String   @default("CHEER") // NOTICE | CHEER | LETTER | MATCH_TALK | BRAND
+  content      String
+  imageUrl     String?  @map("image_url")
+  /// 팬레터는 선수와 작성자 본인만 열람
+  isPrivate    Boolean  @default(false) @map("is_private")
+  likeCount    Int      @default(0) @map("like_count")
+  commentCount Int      @default(0) @map("comment_count")
+  isHidden     Boolean  @default(false) @map("is_hidden")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  athlete  Athlete            @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  author   User?              @relation(name: "CommunityPosts", fields: [authorUserId], references: [id], onDelete: SetNull)
+  comments CommunityComment[]
+  likes    CommunityLike[]
+
+  @@index([athleteId, createdAt])
+  @@index([authorUserId, createdAt])
+  @@map("athlete_community_posts")
+}
+
+model CommunityComment {
+  id           String   @id @default(uuid())
+  postId       String   @map("post_id")
+  authorUserId String   @map("author_user_id")
+  content      String
+  isHidden     Boolean  @default(false) @map("is_hidden")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  post   AthleteCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User                 @relation(name: "CommunityComments", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("community_comments")
+}
+
+model CommunityLike {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post AthleteCommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User                 @relation(name: "CommunityLikes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("community_likes")
+}
+
+/// 팬이 선수에게 제안하는 협업 브랜드 — 검토 후 브랜드 적합도에 반영
+model FanBrandSuggestion {
+  id         String    @id @default(uuid())
+  athleteId  String    @map("athlete_id")
+  fanUserId  String    @map("fan_user_id")
+  category   String
+  brandName  String?   @map("brand_name")
+  reason     String?
+  status     String    @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewedBy String?   @map("reviewed_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  fan     User    @relation(name: "FanBrandSuggestions", fields: [fanUserId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, status])
+  @@index([fanUserId, createdAt])
+  @@map("fan_brand_suggestions")
+}
+
+/// 팬온도 원장 — 활동 1건 = 1행. 온도는 이 행들의 합이며 임의 보정하지 않는다.
+/// deltaMilli 는 0.001°C 단위 정수 (부동소수 누적 오차 방지).
+/// (athleteId, userId, source, refType, refId) 유니크로 중복 적립을 막는다.
+model FanTemperatureEvent {
+  id         String   @id @default(uuid())
+  athleteId  String   @map("athlete_id")
+  userId     String   @map("user_id")
+  source     String // VOTE | LETTER | COMMUNITY | STORE | BRAND_SUGGEST
+  deltaMilli Int      @map("delta_milli")
+  refType    String   @map("ref_type")
+  refId      String   @map("ref_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  user    User    @relation(name: "FanTemperatureEvents", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, userId, source, refType, refId], name: "unique_temperature_event")
+  @@index([athleteId, createdAt])
+  @@index([userId, athleteId])
+  @@map("fan_temperature_events")
 }
