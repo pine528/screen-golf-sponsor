@@ -17,11 +17,14 @@ export const APPROVAL_WINDOW_HOURS = 72;
 const VAT_RATE = 0.1;
 
 export interface SubmitInput {
+  sourceType?: 'RECOMMEND_PICK' | 'DIRECT_PICK';
   sourceId?: string;      // AiMatchRequest.id
   planKey?: string;
   planName?: string;
   durationMonths?: number;
   items: { athleteId: string; slotInstanceId?: string; slotCode?: string; slotName?: string; role?: string }[];
+  /** 직접 PICK 후원 구성 — 금액은 이 값으로 서버에서 다시 계산한다 (§14.4) */
+  config?: { durationCode?: string; productType?: string; transactionType?: string; addOns?: string[] };
   snapshot?: any;
 }
 
@@ -43,6 +46,19 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
     throw Object.assign(new Error('현재 후원 신청이 불가능한 선수가 포함되어 있습니다'), { status: 409 });
   }
 
+  /* 직접 PICK 구성 — 기간 배수·추가 활동 요율도 서버 정책표에서 읽는다 (§14.4) */
+  const { DURATIONS, ADD_ONS, TRANSACTION_TYPES } = await import('./directPick.service');
+  const cfg = input.config;
+  const cfgDuration = cfg ? (DURATIONS.find((d) => d.code === cfg.durationCode) || DURATIONS[0]) : null;
+  const cfgAddOns = cfg ? ADD_ONS.filter((a) => (cfg.addOns || []).includes(a.code)) : [];
+  const cfgAddOnAmount = cfgAddOns.reduce((sum, a) => sum + a.price, 0);
+  if (cfg?.transactionType && !TRANSACTION_TYPES.some((t) => t.code === cfg.transactionType)) {
+    throw Object.assign(new Error('구매 방식이 올바르지 않습니다'), { status: 400 });
+  }
+  if (cfg && cfg.transactionType === 'AUCTION' && ['MONTHS_6', 'MONTHS_12'].includes(cfgDuration!.code)) {
+    throw Object.assign(new Error('6개월 이상 장기 상품은 경매로 판매하지 않습니다'), { status: 400 });
+  }
+
   /* 슬롯 가격·판매 상태 서버 재검증 (§14.4) */
   const priced: { athleteId: string; slotInstanceId?: string; slotCode?: string; slotName?: string; role?: string; price: number }[] = [];
   for (const it of input.items) {
@@ -60,7 +76,7 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
       orderBy: { basePrice: 'asc' },
     });
     if (!slot) throw Object.assign(new Error(`선택한 슬롯을 판매 중이 아닙니다 (${it.slotName || it.slotCode || ''})`), { status: 409 });
-    price = slot.basePrice;
+    price = cfgDuration ? slot.basePrice * cfgDuration.months + cfgAddOnAmount : slot.basePrice;
     slotName = slot.customName || slot.slotTemplate.name;
 
     // OPEN 상태 인스턴스가 있으면 연결 (없어도 신청 자체는 가능 — 협의 상품)
@@ -74,7 +90,7 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
     priced.push({ ...it, slotInstanceId, slotName, price });
   }
 
-  const months = Math.max(1, Math.min(12, input.durationMonths || 1));
+  const months = cfgDuration ? cfgDuration.months : Math.max(1, Math.min(12, input.durationMonths || 1));
   const total = priced.reduce((s, p) => s + p.price, 0);
   const vat = Math.round(total * VAT_RATE);
   const due = new Date(Date.now() + APPROVAL_WINDOW_HOURS * 3600 * 1000);
@@ -82,7 +98,7 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
   const app = await prisma.sponsorshipApplication.create({
     data: {
       brandUserId,
-      sourceType: 'RECOMMEND_PICK',
+      sourceType: input.sourceType === 'DIRECT_PICK' ? 'DIRECT_PICK' : 'RECOMMEND_PICK',
       sourceId: input.sourceId,
       planKey: input.planKey,
       planName: input.planName,
@@ -90,7 +106,18 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
       totalAmount: total,
       vatAmount: vat,
       durationMonths: months,
-      snapshot: (input.snapshot ?? undefined) as Prisma.InputJsonValue | undefined,
+      snapshot: ((cfg
+        ? {
+            ...(input.snapshot || {}),
+            config: {
+              duration: cfgDuration,
+              productType: cfg.productType || null,
+              transactionType: cfg.transactionType || 'BUY_NOW',
+              addOns: cfgAddOns,
+              addOnAmount: cfgAddOnAmount,
+            },
+          }
+        : input.snapshot) ?? undefined) as Prisma.InputJsonValue | undefined,
       submittedAt: new Date(),
       approvalDueAt: due,
       items: {

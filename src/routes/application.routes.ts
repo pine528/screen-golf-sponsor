@@ -24,11 +24,13 @@ router.post('/', authenticate, authorize('BRAND'), async (req: any, res: Respons
   try {
     const app = await submitApplication(
       {
+        sourceType: req.body?.sourceType === 'DIRECT_PICK' ? 'DIRECT_PICK' : 'RECOMMEND_PICK',
         sourceId: req.body?.sourceId,
         planKey: req.body?.planKey,
         planName: req.body?.planName,
         durationMonths: Number(req.body?.durationMonths) || 1,
         items: Array.isArray(req.body?.items) ? req.body.items.slice(0, 4) : [],
+        config: req.body?.config,
         snapshot: req.body?.snapshot,
       },
       req.user.id,
