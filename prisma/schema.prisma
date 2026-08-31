@@ -189,6 +189,7 @@ model Athlete {
   sport               Sport?                 @relation(fields: [sportId], references: [id])
   slotInstances       SlotInstance[]
   contracts           Contract[]
+  applicationItems    ApplicationItem[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -3627,4 +3628,99 @@ model BrandAthletePreference {
 
   @@unique([userId, athleteId])
   @@map("brand_athlete_preferences")
+}
+
+// ══════════════════════════════════════════════════════════════
+// 추천 PICK 신청·승인 (핸드오프 v1.0 §9 · §14.2)
+//   기존 Contract(경매 기반)와 별개로, 복수 선수 조합 신청과
+//   선수별 개별 승인을 다루기 위한 모델.
+// ══════════════════════════════════════════════════════════════
+
+enum SponsorshipApplicationStatus {
+  DRAFT
+  SUBMITTED
+  PARTIAL_APPROVAL
+  APPROVED
+  REJECTED
+  PAYMENT_PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ApplicationItemStatus {
+  PENDING
+  APPROVED
+  NEEDS_REVISION
+  REJECTED
+  EXPIRED
+}
+
+model SponsorshipApplication {
+  id            String                       @id @default(uuid())
+  brandUserId   String                       @map("brand_user_id")
+  brandId       String?                      @map("brand_id")
+  sourceType    String                       @default("RECOMMEND_PICK") @map("source_type") // RECOMMEND_PICK | DIRECT_PICK
+  sourceId      String?                      @map("source_id") // AiMatchRequest.id
+  planKey       String?                      @map("plan_key") // STABLE | BALANCED | CHALLENGE
+  planName      String?                      @map("plan_name")
+  status        SponsorshipApplicationStatus @default(SUBMITTED)
+  totalAmount   Int                          @default(0) @map("total_amount") // 공급가 합계(월)
+  vatAmount     Int                          @default(0) @map("vat_amount")
+  durationMonths Int                         @default(1) @map("duration_months")
+  snapshot      Json? // 추천 결과·가격·조건 스냅샷 (BR-05 계약 스냅샷 고정)
+  submittedAt   DateTime?                    @map("submitted_at")
+  approvalDueAt DateTime?                    @map("approval_due_at") // 승인 유효기간 (기본 72h)
+  paidAt        DateTime?                    @map("paid_at")
+  createdAt     DateTime                     @default(now()) @map("created_at")
+  updatedAt     DateTime                     @updatedAt @map("updated_at")
+
+  items   ApplicationItem[]
+  reviews ApplicationReview[]
+
+  @@index([brandUserId, createdAt])
+  @@index([status])
+  @@map("sponsorship_applications")
+}
+
+model ApplicationItem {
+  id             String                @id @default(uuid())
+  applicationId  String                @map("application_id")
+  athleteId      String                @map("athlete_id")
+  slotInstanceId String?               @map("slot_instance_id")
+  slotCode       String?               @map("slot_code")
+  slotName       String?               @map("slot_name")
+  role           String? // 패치 노출 | SNS 콘텐츠 | 보조 노출·확장
+  price          Int                   @default(0)
+  status         ApplicationItemStatus @default(PENDING)
+  reasonCode     String?               @map("reason_code")
+  comment        String?
+  reviewedAt     DateTime?             @map("reviewed_at")
+  reviewedBy     String?               @map("reviewed_by")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  application SponsorshipApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  athlete     Athlete                @relation(fields: [athleteId], references: [id])
+
+  @@index([applicationId])
+  @@index([athleteId, status])
+  @@map("application_items")
+}
+
+model ApplicationReview {
+  id            String   @id @default(uuid())
+  applicationId String   @map("application_id")
+  itemId        String?  @map("item_id")
+  actorId       String?  @map("actor_id")
+  actorRole     String?  @map("actor_role")
+  action        String // SUBMIT | APPROVE | REVISION | REJECT | PAY | CANCEL
+  reasonCode    String?  @map("reason_code")
+  comment       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  application SponsorshipApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@map("application_reviews")
 }
