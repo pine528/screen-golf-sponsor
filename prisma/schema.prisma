@@ -190,6 +190,8 @@ model Athlete {
   slotInstances       SlotInstance[]
   contracts           Contract[]
   applicationItems    ApplicationItem[]
+  digitalInventories  AthleteDigitalInventory[]
+  digitalApplications DigitalApplication[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -3723,4 +3725,98 @@ model ApplicationReview {
 
   @@index([applicationId, createdAt])
   @@map("application_reviews")
+}
+
+// ══════════════════════════════════════════════════════════════
+// 디지털 파트너 월 구독 (핸드오프 v1.0 §8.1)
+//   경기복 부착 없이 온라인·팬스토어·등록매장에서 12개월 사용하는 상품.
+//   신청·승인은 SponsorshipApplication과 별개로 구독 전용 흐름을 쓴다.
+// ══════════════════════════════════════════════════════════════
+
+enum DigitalApplicationStatus {
+  DRAFT
+  SUBMITTED
+  NEEDS_REVISION
+  ATHLETE_APPROVED
+  REJECTED
+  PAYMENT_PENDING
+  ACTIVE
+  PAST_DUE
+  CANCEL_SCHEDULED
+  EXPIRED
+}
+
+model DigitalPlan {
+  id           String   @id @default(uuid())
+  code         String   @unique // START | GROW | PLUS
+  name         String
+  monthlyPrice Int      @map("monthly_price")
+  termMonths   Int      @default(12) @map("term_months")
+  benefits     Json?
+  exclusions   Json?
+  capacity     Int      @default(10) // 선수당 기본 모집 수량
+  sortOrder    Int      @default(0) @map("sort_order")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  applications DigitalApplication[]
+
+  @@map("digital_plans")
+}
+
+model AthleteDigitalInventory {
+  id                String   @id @default(uuid())
+  athleteId         String   @map("athlete_id")
+  planCode          String   @map("plan_code")
+  capacity          Int      @default(10)
+  reserved          Int      @default(0) // 승인/구독 중 수량
+  priceMultiplier   Decimal  @default(1.0) @map("price_multiplier") @db.Decimal(4, 2)
+  allowedCategories Json?    @map("allowed_categories")
+  isOpen            Boolean  @default(true) @map("is_open")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, planCode])
+  @@index([athleteId])
+  @@map("athlete_digital_inventories")
+}
+
+model DigitalApplication {
+  id            String                   @id @default(uuid())
+  brandUserId   String                   @map("brand_user_id")
+  athleteId     String                   @map("athlete_id")
+  planId        String                   @map("plan_id")
+  planCode      String                   @map("plan_code")
+  status        DigitalApplicationStatus @default(SUBMITTED)
+  monthlyAmount Int                      @map("monthly_amount")
+  termMonths    Int                      @default(12) @map("term_months")
+  category      String?
+  region        String?
+  homepage      String?
+  storeCount    Int?                     @map("store_count")
+  logoUrl       String?                  @map("logo_url")
+  scopes        Json? // ['WEB_SNS','FANSTORE','STORE_POP']
+  brandMessage  String?                  @map("brand_message")
+  reasonCode    String?                  @map("reason_code")
+  comment       String?
+  submittedAt   DateTime?                @map("submitted_at")
+  approvalDueAt DateTime?                @map("approval_due_at")
+  reviewedAt    DateTime?                @map("reviewed_at")
+  reviewedBy    String?                  @map("reviewed_by")
+  effectiveFrom DateTime?                @map("effective_from")
+  effectiveTo   DateTime?                @map("effective_to")
+  nextBillingAt DateTime?                @map("next_billing_at")
+  paidAt        DateTime?                @map("paid_at")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt @map("updated_at")
+
+  athlete Athlete     @relation(fields: [athleteId], references: [id])
+  plan    DigitalPlan @relation(fields: [planId], references: [id])
+
+  @@index([brandUserId, createdAt])
+  @@index([athleteId, status])
+  @@map("digital_applications")
 }
