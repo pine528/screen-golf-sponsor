@@ -954,3 +954,50 @@
 - 추가 활동 요율은 시안 명시가(15만~70만) 그대로 적용. 선수별 차등이 필요하면 별도 테이블 필요.
 - 시안의 '팬 온도'는 산출 근거가 없어 미표시(LEG-06). 도식 후면(등) 뷰는 후면 실루엣 이미지가
   없어 목록 필터('등' 탭)로만 제공.
+
+## [2026-09-01] 리디자인 v2.0 — 팬 참여 4화면 (팬스토어 · 커뮤니티 · VOTE · 팬포인트)
+
+### 변경 사항
+
+**백엔드 — 팬온도 원장 도입**
+- 모델 5종: `AthleteCommunityPost` / `CommunityComment` / `CommunityLike` /
+  `FanBrandSuggestion` / `FanTemperatureEvent`
+- 팬온도 = `FanTemperatureEvent.deltaMilli` 합 ÷ 1000. 활동 1건 = 1행이며 임의 보정이 없다(LEG-06).
+  `(선수, 유저, 활동, refType, refId)` 유니크 + P2002 graceful 로 중복 적립을 차단한다.
+- 활동 1건당 정책은 `ENGAGE_RULES` 한 표에서만 관리:
+  VOTE +0.2℃/+20P · 팬레터 +0.3℃/+30P · 커뮤니티 +0.25℃/+5P ·
+  팬스토어 +0.1℃/구매금액 1% · 브랜드 추천 +0.1℃/+10P
+- `/api/fan-engage`: rules · athletes · athletes/:id/temperature · posts(작성·좋아요·댓글) ·
+  brand-suggestions(제출·집계) · me
+- 팬레터(`isPrivate`)는 선수 본인과 작성자만 목록에 보인다
+- 투표 참여 시 `target.playerId` 선수의 팬온도를 적립(멱등, 실패해도 참여는 유지)
+- `PointTxReason.FAN_ENGAGE_REWARD` 추가 + 멱등 마이그레이션 SQL
+
+**프론트 4화면**
+- `/fan/store` 팬스토어 — 선수x브랜드 협업 스토어, 팬 혜택·팬포인트 1%·팬온도, 디지털 파트너 연결
+- `/fan/community/:athleteId` 선수 커뮤니티 — 응원 글 · 팬레터 · 좋아요 · 브랜드 추천 +
+  팬온도 구성 비율(원장 기준)
+- `/fan/vote` 팬 VOTE — 마감 전 투표 우선, 마감 건은 '집계 중', 참여 반영 3단계 안내
+- `/fan/points` 팬포인트 — 잔액 · 적립 경로(공개 정책표) · 내가 올린 팬온도 · 최근 내역
+- 헤더 팬 참여 메가메뉴를 4항목으로 교체
+
+### 검증 (운영 API E2E)
+- 응원 글/팬레터/댓글/좋아요/브랜드 추천 전 경로 정상
+- 비로그인 팬레터 비노출 OK · 좋아요 토글 OK · 재조회 시 팬온도 불변 OK
+- 배진리 팬온도 0.0 → 0.9℃ (0.25 + 0.3 + 0.25 + 0.1, 규칙표와 일치)
+  구성 팬레터 33% / 커뮤니티 56% / 브랜드추천 11%
+- 브라우저: 4화면 렌더링 · 비로그인 상태 처리 · 콘솔 오류 없음
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260901_fan_engage/`
+- `src/backend/src/services/{fanEngage,voteV2}.service.ts`
+- `src/backend/src/routes/{fanEngage,index}.routes.ts`
+- `src/frontend/src/pages/fanhub/{FanStore,FanCommunity,FanVote,FanPoints}.tsx`
+- `src/frontend/src/{App.tsx,services/api.ts,components/PublicHeader.tsx,data/growthMarket.ts}`
+
+### 확인 필요 (운영 결정 대기)
+- 팬온도 건당 상승치: 시안이 명시한 VOTE +0.2℃ / 팬스토어 +0.1℃를 기준으로 잡고,
+  나머지는 시안의 구성 가중치(VOTE 35 / 팬레터 30 / 커뮤니티 25 / 팬스토어 10) 비율로 정했다.
+  다른 값이면 `fanEngage.service.ts`의 `ENGAGE_RULES` 표만 고치면 된다.
+- 시안의 '목표 40.0℃' 같은 상한·목표선은 근거가 없어 넣지 않았다.
+- 커뮤니티 글 신고·숨김(`isHidden`)은 필드만 두고 운영 화면은 아직 없다.

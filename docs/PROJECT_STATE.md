@@ -889,3 +889,19 @@ IA: 후원하기 = **직접 PICK** / **추천 PICK** / **디지털 파트너 월
 
 ### 표기 원칙 (LEG-06 유지)
 산출 근거가 없는 지표는 화면에 넣지 않는다 — 시안의 '팬 온도'는 미표시.
+
+## 팬 참여 — 팬온도 (2026-09-01)
+IA: 팬 참여 = **팬 VOTE** / **선수 커뮤니티** / **팬스토어** / **팬포인트**.
+
+- 화면: `/fan/vote` · `/fan/community/:athleteId` · `/fan/store` · `/fan/points`
+- API `/fan-engage`: `rules` · `athletes` · `athletes/:id/temperature` ·
+  `athletes/:id/posts`(GET/POST) · `posts/:id/like` · `posts/:id/comments`(GET/POST) ·
+  `athletes/:id/brand-suggestions`(GET/POST) · `me`
+- **팬온도** = `FanTemperatureEvent` 원장의 `deltaMilli` 합 ÷ 1000 (0.001℃ 단위 정수).
+  활동 1건 = 1행, `(선수·유저·활동·refType·refId)` 유니크로 중복 적립 차단. 임의 보정 없음(LEG-06).
+- 활동 1건당 정책은 `fanEngage.service.ts`의 `ENGAGE_RULES` 한 표:
+  VOTE +0.2℃/+20P · 팬레터 +0.3℃/+30P · 커뮤니티 +0.25℃/+5P ·
+  팬스토어 +0.1℃/구매 1% · 브랜드 추천 +0.1℃/+10P
+- 팬레터는 `isPrivate=true` — 선수 본인과 작성자만 열람
+- 포인트 적립은 기존 `pointService.adjustPoints`(원장+트랜잭션+멱등) 재사용,
+  사유는 `FAN_ENGAGE_REWARD`
