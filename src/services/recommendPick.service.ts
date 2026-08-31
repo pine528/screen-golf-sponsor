@@ -91,10 +91,10 @@ const PLAN_META: Record<Plan, { name: string; tagline: string; budgetRatio: numb
   CHALLENGE: { name: '도전형', tagline: '성장 가능성 우선', budgetRatio: 1.05 },
 };
 
-/** 후보 1명 → 안에 들어갈 라인 아이템 */
-function toMember(r: any, role: string) {
+/** 후보 1명 → 안에 들어갈 라인 아이템. slot을 지정하면 그 슬롯으로 구성한다. */
+function toMember(r: any, role: string, chosen?: any) {
   const slots: any[] = r.package?.slots || [];
-  const slot = slots[0];
+  const slot = chosen || slots[0];
   return {
     athleteId: r.athleteId,
     name: r.name,
@@ -120,18 +120,28 @@ function toMember(r: any, role: string) {
  */
 function buildPlans(reranked: any[], budget: { min: number; max: number }) {
   const used = new Set<string>();
+  /**
+   * 예산 안에서 선수와 슬롯을 함께 고른다.
+   * package.slots는 가시성 높은 순으로 정렬되어 있으므로 앞에서부터 시도하고,
+   * 남은 예산에 맞지 않으면 더 저렴한 슬롯으로 내려간다 (§6.5 예산 최적화).
+   */
   const take = (pool: any[], count: number, max: number) => {
-    const out: any[] = [];
+    const out: { r: any; slot: any }[] = [];
     let total = 0;
     for (const r of pool) {
       if (out.length >= count) break;
       if (used.has(r.athleteId)) continue;
-      const price = r.package?.slots?.[0]?.price ?? 0;
-      if (price <= 0) continue;
-      if (total + price > max) continue;
-      out.push(r);
+      const slots: any[] = (r.package?.slots || []).filter((s: any) => (s?.price ?? 0) > 0);
+      if (slots.length === 0) continue;
+      // 남은 예산: 아직 못 채운 자리 수를 감안해 1인당 상한을 둔다
+      const remainingSeats = count - out.length;
+      const perSeatCap = Math.max((max - total) / remainingSeats, 0);
+      const affordable = slots.filter((s) => s.price <= Math.max(perSeatCap, max - total));
+      const slot = affordable[0] || [...slots].sort((a, b) => a.price - b.price)[0];
+      if (!slot || total + slot.price > max) continue;
+      out.push({ r, slot });
       used.add(r.athleteId);
-      total += price;
+      total += slot.price;
     }
     return { picked: out, total };
   };
@@ -154,7 +164,7 @@ function buildPlans(reranked: any[], budget: { min: number; max: number }) {
     const { picked, total } = take(pool, wanted, cap);
     if (picked.length === 0) return;
 
-    const members = picked.map((r, i) => toMember(r, ROLES[i] || '추가 노출'));
+    const members = picked.map((p, i) => toMember(p.r, ROLES[i] || '추가 노출', p.slot));
     const followers = members.reduce((s, m) => s + (m.followers || 0), 0);
     const channels = new Set<string>();
     members.forEach((m) => { if (m.slot) channels.add('경기 착장'); if ((m.followers || 0) > 0) channels.add('SNS'); });
