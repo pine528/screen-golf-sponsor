@@ -240,6 +240,22 @@ export async function createRecommendPick(input: RecommendPickInput, userId?: st
   const ranked: any[] = engine.recommendations || [];
   const plans = buildPlans(ranked, budget);
 
+  /* 예산 불일치 안내 (§2.4) — 조합을 못 만들면 최소 필요 금액과 완화안을 준다 */
+  const slotPrices = ranked
+    .flatMap((r) => (r.package?.slots || []).map((s: any) => s?.price))
+    .filter((p: any) => typeof p === 'number' && p > 0);
+  const minRequired = slotPrices.length ? Math.min(...slotPrices) : null;
+  const budgetGap = plans.length === 0 && minRequired
+    ? {
+        minRequired,
+        message: `현재 조건에서는 선수 1명 기준 최소 ${minRequired.toLocaleString()}원이 필요합니다.`,
+        options: [
+          { key: 'RAISE_BUDGET', label: `예산을 ${Math.ceil(minRequired / 100000) * 10}만원 이상으로 올리기` },
+          { key: 'DIGITAL', label: '디지털 파트너 월 구독으로 시작하기 (월 49,000원~)' },
+        ],
+      }
+    : null;
+
   return {
     requestId: engine.requestId,
     version: RECOMMEND_PICK_VERSION,
@@ -256,7 +272,8 @@ export async function createRecommendPick(input: RecommendPickInput, userId?: st
     },
     plans,
     /* 후보가 부족하면 3안을 억지로 만들지 않는다 (§12.4 Cold start) */
-    partial: plans.length < 3,
+    partial: plans.length > 0 && plans.length < 3,
+    budgetGap,
     sourceStatus: engine.sourceStatus,
   };
 }
