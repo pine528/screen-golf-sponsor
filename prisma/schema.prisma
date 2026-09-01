@@ -203,6 +203,10 @@ model Athlete {
   offerProducts       AthleteOfferProduct[]
   directPickItems     DirectPickItem[]
   offerAthletes       OfferAthlete[]
+  tempSnapshots       FanTemperatureSnapshot[]
+  fanContributions    FanContribution[]
+  fanLetters          FanLetter[]
+  fanStores           FanStore[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -1245,12 +1249,21 @@ model PointLedgerTx {
   refType      String        @map("ref_type")
   refId        String        @map("ref_id")
   description  String?
+  /// 원장 상태 (§7.4) — PENDING | AVAILABLE | RESERVED | USED | REVERSED | EXPIRED
+  status       String        @default("AVAILABLE")
+  /// 적립 확정일 + 유효기간 (기본 12개월). 사용·차감 거래는 null
+  expiresAt    DateTime?     @map("expires_at")
+  confirmedAt  DateTime?     @map("confirmed_at")
+  /// 정정·회수 시 원거래 참조 (삭제 대신 상태 전이)
+  originalTxId String?       @map("original_tx_id")
+  athleteId    String?       @map("athlete_id")
   createdAt    DateTime      @default(now()) @map("created_at")
 
   user User @relation(name: "PointLedgerTxs", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, reason, refType, refId], name: "unique_point_tx")
   @@index([userId, createdAt])
+  @@index([status, expiresAt])
   @@map("point_ledger_txs")
 }
 
@@ -3902,7 +3915,14 @@ model FanBrandSuggestion {
   category   String
   brandName  String?   @map("brand_name")
   reason     String?
-  status     String    @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  /// 이해관계 자가표시 (§9.1) — NONE | SELF | FAMILY | AFFILIATED
+  interest   String    @default("NONE")
+  /// 공개범위 — 기본 비공개, 승인된 요약만 공개 (§9.1)
+  isPublic   Boolean   @default(false) @map("is_public")
+  /// 파이프라인 (§9.1) — RECEIVED | REVIEWING | DELIVERED | INTERESTED | ADOPTED | HOLD | CLOSED
+  /// (구 데이터의 PENDING/ACCEPTED/REJECTED 는 화면에서 RECEIVED/ADOPTED/CLOSED 로 읽는다)
+  status     String    @default("RECEIVED")
+  statusNote String?   @map("status_note")
   reviewedAt DateTime? @map("reviewed_at")
   reviewedBy String?   @map("reviewed_by")
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -3922,10 +3942,16 @@ model FanTemperatureEvent {
   id         String   @id @default(uuid())
   athleteId  String   @map("athlete_id")
   userId     String   @map("user_id")
-  source     String // VOTE | LETTER | COMMUNITY | STORE | BRAND_SUGGEST
+  source     String // VOTE | LETTER | COMMUNITY | STORE | BRAND_SUGGEST | FAVORITE | ATHLETE_REPLY
   deltaMilli Int      @map("delta_milli")
   refType    String   @map("ref_type")
   refId      String   @map("ref_id")
+  /// 유효성 (§5.5) — VALID | PENDING_REVIEW | INVALID
+  validity   String   @default("VALID")
+  /// 어뷰징 위험도 0~100 (§15.1)
+  riskScore  Int      @default(0) @map("risk_score")
+  /// 금액성 활동의 원값 (스토어 구매액 등) — 로그 스케일 환산에 쓴다
+  amount     Int?
   createdAt  DateTime @default(now()) @map("created_at")
 
   athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
@@ -4289,3 +4315,199 @@ model OfferAudit {
   @@index([offerId, createdAt])
   @@map("offer_audits")
 }
+
+// ============================================
+// 팬 참여 v1.0 — 팬온도 스냅샷 · 기여도 · 응원편지 · 연말 캠페인
+// (핸드오프 v1.0 2026-08-22 §6 · §9 · §12)
+// ============================================
+
+/// 팬온도 일배치 스냅샷 — 산식 버전과 함께 저장해 과거 리포트를 재현한다 (§12.1)
+model FanTemperatureSnapshot {
+  id             String   @id @default(uuid())
+  athleteId      String   @map("athlete_id")
+  /// 0~100 공개 온도 (소수 1자리)
+  score          Float
+  /// 구성요소별 정규화 점수 {activeFans,vote,community,store,continuity,athleteReply}
+  components     Json
+  sampleSize     Int      @map("sample_size")
+  confidence     Float    @default(1)
+  penalties      Float    @default(0)
+  formulaVersion String   @map("formula_version")
+  /// 계산 기준일 (KST 날짜)
+  date           DateTime
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, date, formulaVersion])
+  @@index([athleteId, date])
+  @@map("fan_temperature_snapshots")
+}
+
+/// 팬 개인의 선수별 기여도 (§12) — 구매액이 아니라 활동 다양성·지속성 중심
+model FanContribution {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  athleteId      String    @map("athlete_id")
+  /// 0~100
+  score          Float     @default(0)
+  level          Int       @default(1)
+  /// 참여한 활동 영역 수 (VOTE / 커뮤니티 / 스토어·후원 / 브랜드추천)
+  diversity      Int       @default(0)
+  /// 최근 4주 중 활동한 주 수
+  streakWeeks    Int       @default(0) @map("streak_weeks")
+  letters        Int       @default(0)
+  voteCount      Int       @default(0) @map("vote_count")
+  postCount      Int       @default(0) @map("post_count")
+  storeCount     Int       @default(0) @map("store_count")
+  recommendCount Int       @default(0) @map("recommend_count")
+  firstActiveAt  DateTime? @map("first_active_at")
+  lastActivityAt DateTime? @map("last_activity_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, athleteId])
+  @@index([athleteId, score])
+  @@map("fan_contributions")
+}
+
+/// 응원편지 (§9.2) — 월 2회, 공개/비공개. 선수는 월 1회 감사 메시지로 갈음할 수 있다
+model FanLetter {
+  id           String    @id @default(uuid())
+  athleteId    String    @map("athlete_id")
+  userId       String    @map("user_id")
+  title        String?
+  content      String
+  imageUrl     String?   @map("image_url")
+  isPublic     Boolean   @default(true) @map("is_public")
+  /// AutoMod 결과 (§10.2) — PUBLISHED | PENDING | BLOCKED
+  status       String    @default("PUBLISHED")
+  moderationNote String? @map("moderation_note")
+  /// 선수 감사 메시지 (개별 답장 의무 없음)
+  thanksAt     DateTime? @map("thanks_at")
+  thanksText   String?   @map("thanks_text")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, createdAt])
+  @@index([userId, createdAt])
+  @@map("fan_letters")
+}
+
+/// 연말 팬 이름 광고 캠페인 (§9.3) — 시즌형 보상 캠페인
+model FanAdCampaign {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  season      String
+  startAt     DateTime  @map("start_at")
+  endAt       DateTime  @map("end_at")
+  /// 심사 가중치 {activity,continuity,letter,mission}
+  criteria    Json?
+  status      String    @default("OPEN") // OPEN | JUDGING | CLOSED | CANCELLED
+  notice      String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("fan_ad_campaigns")
+}
+
+// ============================================
+// 팬스토어 v1.0 — 외부몰 연결형 (핸드오프 v1.0 2026-08-22 §8)
+// MVP는 SPONPIK 내부 결제를 하지 않는다. 협업 스토리·혜택을 보여주고 브랜드몰로 보낸다.
+// 외부몰 주문을 SPONPIK 주문처럼 표시하지 않는 것이 이 모델의 핵심 제약이다 (§8.2).
+// ============================================
+
+/// 선수 x 브랜드 협업 스토어
+model FanStore {
+  id            String    @id @default(uuid())
+  athleteId     String    @map("athlete_id")
+  brandId       String?   @map("brand_id")
+  /// 브랜드 표시명 (미등록 브랜드도 협업 가능)
+  brandName     String    @map("brand_name")
+  slug          String    @unique
+  title         String
+  summary       String?
+  /// 협업 이유 — 팬이 "왜 이 브랜드인지" 이해할 수 있게 (§8.2)
+  story         String?
+  heroImageUrl  String?   @map("hero_image_url")
+  /// 혜택과 제휴코드 (§8.1 제휴코드 모델)
+  benefitLabel  String?   @map("benefit_label")
+  benefitCode   String?   @map("benefit_code")
+  benefitDesc   String?   @map("benefit_desc")
+  /// 판매·배송·환불 책임주체. 화면에 반드시 노출한다 (§8.2 · §8.4)
+  responsible   String    @default("BRAND") // BRAND | SPONPIK
+  sellerName    String?   @map("seller_name")
+  sellerContact String?   @map("seller_contact")
+  /// 외부몰 기본 이동 주소
+  externalUrl   String?   @map("external_url")
+  status        String    @default("DRAFT") // DRAFT | PUBLISHED | CLOSED
+  startAt       DateTime? @map("start_at")
+  endAt         DateTime? @map("end_at")
+  viewCount     Int       @default(0) @map("view_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  athlete  Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  products FanStoreProduct[]
+  clicks   FanStoreClick[]
+
+  @@index([status, startAt])
+  @@index([athleteId])
+  @@map("fan_stores")
+}
+
+/// 스토어에 진열되는 상품 — 가격·배송·반품·판매자·광고성 표시가 모두 필수다 (§8.2)
+model FanStoreProduct {
+  id            String   @id @default(uuid())
+  storeId       String   @map("store_id")
+  name          String
+  imageUrl      String?  @map("image_url")
+  description   String?
+  price         Int
+  originalPrice Int?     @map("original_price")
+  /// 외부몰 상품 주소
+  externalUrl   String   @map("external_url")
+  shippingInfo  String?  @map("shipping_info")
+  returnInfo    String?  @map("return_info")
+  sellerName    String?  @map("seller_name")
+  stockNote     String?  @map("stock_note")
+  /// 광고성 표시 (§8.2) — 협찬·유료광고 여부
+  isSponsored   Boolean  @default(true) @map("is_sponsored")
+  /// 구매확정 후 적립률 (§7.2 STORE_PURCHASE). null 이면 적립 없음
+  pointRate     Float?   @map("point_rate")
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  store  FanStore        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  clicks FanStoreClick[]
+
+  @@index([storeId, sortOrder])
+  @@map("fan_store_products")
+}
+
+/// 외부몰 이동 로그 — 익명 click_id 로 전환을 추적한다 (§8.3)
+/// 브랜드 postback 또는 월 정산 파일로 구매확정이 회신되면 confirmedAt 이 채워진다.
+model FanStoreClick {
+  id          String    @id @default(uuid())
+  clickId     String    @unique @map("click_id")
+  storeId     String    @map("store_id")
+  productId   String?   @map("product_id")
+  userId      String?   @map("user_id")
+  utm         String?
+  /// 브랜드 회신 결과
+  confirmedAt DateTime? @map("confirmed_at")
+  amount      Int?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  store   FanStore         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product FanStoreProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
+  @@map("fan_store_clicks")
+}
+
