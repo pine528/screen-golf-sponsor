@@ -110,7 +110,8 @@ export async function listPickAthletes(params: SearchParams) {
       id: true, name: true, tour: true, region: true, profileImageUrl: true,
       isRecommended: true, recommendOrder: true, profileUpdatedAt: true, createdAt: true,
     },
-    take: Math.min(params.limit || 60, 120),
+    /* limit은 '결과 수'다 — 판매 상품이 없는 선수가 걸러지므로 후보는 넉넉히 읽는다 */
+    take: 300,
   });
   if (!athletes.length) return { athletes: [], total: 0 };
 
@@ -215,7 +216,8 @@ export async function listPickAthletes(params: SearchParams) {
   };
   list.sort(sorters[params.sort || 'RECENT'] || sorters.RECENT);
 
-  return { athletes: list, total: list.length };
+  const limit = Math.min(params.limit || 60, 120);
+  return { athletes: list.slice(0, limit), total: list.length };
 }
 
 /* ── 3단계 데이터: 오퍼(슬롯 + 온라인 상품) (§4) ─────────── */
@@ -556,15 +558,23 @@ export async function addItem(draftId: string, input: ItemInput, brandUserId: st
     throw Object.assign(new Error(`한 견적에는 최대 ${MAX_ATHLETES_PER_DRAFT}명까지 담을 수 있습니다`), { status: 400 });
   }
 
+  /* 이미 담은 항목인지 먼저 본다 — 내가 잡은 hold를 남의 선점으로 오인하면 안 된다 */
+  const kind = input.kind || (input.offerCode ? 'ONLINE_PRODUCT' : 'OFFLINE_SLOT');
+  if (kind === 'OFFLINE_SLOT' && input.slotCode) {
+    if (draft.items.some((i) => i.athleteId === input.athleteId && i.slotCode === input.slotCode)) {
+      throw Object.assign(new Error('이미 담은 항목입니다'), { status: 409 });
+    }
+  }
+
   const priced = await priceItem(input);
   if (priced.status === 'CONFLICT' && priced.conflictCode === 'SLOT_TAKEN') {
     throw Object.assign(new Error(priced.conflictNote || '방금 다른 브랜드가 선점했습니다'), { status: 409 });
   }
 
-  const dup = draft.items.some((i) =>
-    i.athleteId === input.athleteId &&
-    (priced.kind === 'OFFLINE_SLOT' ? i.slotCode === priced.slotCode : i.offerProductId === priced.offerProductId));
-  if (dup) throw Object.assign(new Error('이미 담은 항목입니다'), { status: 409 });
+  if (kind === 'ONLINE_PRODUCT'
+    && draft.items.some((i) => i.athleteId === input.athleteId && i.offerProductId === priced.offerProductId)) {
+    throw Object.assign(new Error('이미 담은 항목입니다'), { status: 409 });
+  }
 
   const key = idempotencyKey || `${draftId}:${input.athleteId}:${priced.slotCode || priced.offerProductId}`;
   const expiresAt = new Date(Date.now() + HOLD_MINUTES * 60_000);
