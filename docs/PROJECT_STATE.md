@@ -929,6 +929,32 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 이동 시 익명 `click_id`+UTM 발급, 포인트는 브랜드 구매확정 회신(`store-postback`) 후 적립.
 외부몰 이동 내역을 SPONPIK 주문처럼 표시하지 않는다. 책임주체를 모든 화면에 노출.
 
+## 팬 운영 관리자 A01~A12 (2026-09-01)
+전 구간 `/admin/fan/*` 화면 + `/api/admin/fan/*` API, ADMIN 역할 전용.
+공용 셸 `FanAdminShell` (내비 4그룹: 팬 운영 / 정책 / 커머스 / 분석).
+
+| 화면 | 경로 | 핵심 |
+|---|---|---|
+| A01 대시보드 | `/admin/fan` | KPI 6 · 예외 큐 · 모듈 상태 · 배치 · 활동 로그 |
+| A02·A03 VOTE | `/admin/fan/votes` | 목록·캘린더, 동일 선수 기간 중복 경고, 결과 확인 |
+| A04 검수함 | `/admin/fan/moderation` | P0~P3, SLA, 조치 4종, P3만 일괄 승인 |
+| A05 신고·제재 | `/admin/fan/reports` | 신고자 익명, 영구정지 2인 승인, 이의제기 |
+| A06 팬온도 | `/admin/fan/formula` | 가중치 편집→버전 발행, 이상 징후, 배치 모니터 |
+| A07 포인트 정책 | `/admin/fan/point-policy` | 적립·사용·만료·캠페인, 정책 검증 |
+| A08 포인트 원장 | `/admin/fan/point-ledger` | 원장 대사, 수동 조정 요청→승인 |
+| A09 팬스토어 | `/admin/fan/stores` | UTM·click_id 표시, 게시 전 책임고지 동의 |
+| A10 주문·정산 | `/admin/fan/orders` | 외부몰 전환을 주문과 분리 표기 |
+| A11 브랜드 추천 | `/admin/fan/brand-suggestions` | 6단계 칸반, 이해관계 건 전달 차단 |
+| A12 통합 리포트 | `/admin/fan/report` | KPI 7 · 스토어 퍼널 · 선수 성과 |
+
+**운영 불변식**
+- 팬온도 점수와 포인트 잔액은 직접 수정할 수 없다.
+  점수는 산식 버전 발행 또는 이벤트 제외 후 재계산, 잔액은 원장 거래로만 바뀐다.
+- 영구 정지(`FanSanction.PERMANENT`)와 10,000P 초과 조정(`PointAdjustment`)은
+  요청자와 다른 관리자가 승인해야 적용된다.
+- 모든 조치는 `AdminActionLog`에 사유·조치자·시각을 남긴다.
+- 분모가 0인 지표는 비율을 만들지 않고 null 로 돌려준다 (LEG-06).
+
 ## 직접 선택 PICK v1.0 (2026-09-02) — §리디자인 v2.0 전면 재구성
 9단계: 선수 탐색 → 선수 확인 → 상품 PICK → 조건 구성 → 견적함 → 승인 요청 → 선수 승인 → 결제 → 완료
 

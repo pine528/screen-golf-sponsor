@@ -1164,3 +1164,41 @@
 - 미구현·미정 항목은 `docs/REDESIGN_BACKLOG.md` C6 섹션에 기록.
 - 배치 3종(스냅샷·pending 확정·만료)은 함수만 구현되어 있고 스케줄러 연결이 남아 있음.
 - 관리자 12화면(A01~A12)은 시안 전달 대기.
+
+## [2026-09-01] 팬 운영 관리자 A01~A12
+
+### 변경 사항
+- **관리자 12화면 신규** — 공용 셸(`FanAdminShell`) 기반, 좌측 내비 4그룹(팬 운영/정책/커머스/분석).
+  - A01 팬 운영 대시보드 (KPI 6 · 예외 처리 큐 · 모듈 상태 · 배치 · 최근 활동)
+  - A02 VOTE 목록·캘린더 (동일 선수 기간 중복 경고) / A03 결과 확인 패널
+  - A04 콘텐츠 검수함 (위험도 P0~P3, SLA, 조치 4종, P3 일괄 승인)
+  - A05 신고·제재·이의제기 (신고자 익명, 영구정지 2인 승인, 감사 로그)
+  - A06 팬온도 산식·스냅샷 (가중치 편집→버전 발행, 이상 징후, 배치 모니터)
+  - A07 포인트 정책·캠페인 (적립/사용/만료/캠페인, 정책 검증 4종, 버전 히스토리)
+  - A08 포인트 조정·원장 (원장 대사, 수동 조정 요청→승인, 10,000P 초과 2인 승인)
+  - A09 팬스토어·외부몰·코드 (UTM/click_id 자동 생성 표시, 게시 전 책임고지 동의 필수)
+  - A10 주문·환불·정산 (외부몰 전환을 "주문 아님"으로 분리 표기, CS 담당 구분)
+  - A11 브랜드 추천 파이프라인 (6단계 칸반, 이해관계 표시 건 전달 차단)
+  - A12 통합 성과 리포트 (KPI 7 · 스토어 퍼널 · 선수 성과 · 개인정보 고지)
+
+### 운영 안전장치
+- 팬온도 점수·포인트 잔액은 관리자가 직접 수정할 수 없다.
+  점수는 산식 버전 발행 또는 이벤트 제외 후 재계산, 잔액은 원장 거래로만 변경된다.
+- 영구 정지와 10,000P 초과 조정은 요청자와 다른 관리자가 승인해야 한다.
+- 모든 조치는 `AdminActionLog`에 사유·조치자·시각과 함께 기록된다.
+- 분모가 0인 지표는 비율을 만들지 않고 "집계 중"으로 비운다 (LEG-06).
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` — `FanModerationItem` `FanReport` `FanSanction` `FanAppeal`
+  `FanBatchRun` `FanTempFormula` `PointPolicyVersion` `PointCampaign` `PointAdjustment` 추가
+- `src/backend/prisma/migrations/20260905_fan_admin_v1/migration.sql`
+- `src/backend/src/services/fanAdmin.service.ts` (A01~A05 · A12, 신규)
+- `src/backend/src/services/fanAdminOps.service.ts` (A06~A11, 신규)
+- `src/backend/src/routes/fanAdmin.routes.ts` (신규), `src/backend/src/routes/index.ts`
+- `src/frontend/src/components/fanadmin/FanAdminShell.tsx` (신규)
+- `src/frontend/src/pages/admin/fan/` — 11개 화면 (신규)
+- `src/frontend/src/services/api.ts`, `src/frontend/src/App.tsx`
+
+### 참고
+- API는 전 구간 `/api/admin/fan/*`, ADMIN 역할 전용.
+- 검수 큐 자동 적재·신고 접수 경로 등 남은 항목은 `docs/REDESIGN_BACKLOG.md` C6에 기록.
