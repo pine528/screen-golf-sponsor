@@ -401,6 +401,14 @@ function buildExecutionSteps(offer: any) {
   ];
 }
 
+/** 카드 노출 집계 (§11.4 Impression) — 목록에 보인 상품 id를 모아 한 번에 올린다 */
+export async function trackImpressions(offerIds: string[]) {
+  const ids = [...new Set(offerIds)].slice(0, 50);
+  if (!ids.length) return { counted: 0 };
+  await prisma.offer.updateMany({ where: { id: { in: ids } }, data: { viewCount: { increment: 1 } } });
+  return { counted: ids.length };
+}
+
 /* ── 옵션 가격 (§13.1 POST /offers/:id/quote) ───────── */
 
 export interface QuoteInput {

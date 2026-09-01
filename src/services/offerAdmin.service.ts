@@ -678,7 +678,7 @@ export async function getDashboard(range?: { from?: string; to?: string }) {
   const rows = await prisma.offer.findMany({ include: OFFER_INCLUDE, take: 300 });
   const list = await Promise.all(rows.map(decorateOffer));
 
-  const [cartCount, savedCount, apps] = await Promise.all([
+  const [cartCount, savedCount, allApps] = await Promise.all([
     prisma.offerCartItem.count(),
     prisma.savedOffer.count(),
     prisma.sponsorshipApplication.findMany({
@@ -686,6 +686,9 @@ export async function getDashboard(range?: { from?: string; to?: string }) {
       select: { id: true, status: true, totalAmount: true, createdAt: true, paidAt: true, snapshot: true },
     }),
   ]);
+
+  /* 이 대시보드는 '지금 가능한 후원' 채널만 센다 — 직접 PICK 주문이 섞이면 수치가 틀린다 */
+  const apps = allApps.filter((a) => (a.snapshot as any)?.channel === 'AVAILABLE_OFFERS');
 
   const paid = apps.filter((a) => a.status === 'ACTIVE');
   const impression = list.reduce((s, o) => s + o.viewCount, 0);
@@ -696,6 +699,8 @@ export async function getDashboard(range?: { from?: string; to?: string }) {
   const revenue = paid.reduce((s, a) => s + a.totalAmount, 0);
 
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
+  /* 전환율은 직전 단계 대비다. 상위 단계가 아직 집계되지 않았으면 비율을 만들지 않는다 (LEG-06) */
+  const rate = (a: number, b: number) => (b > 0 ? Math.min(100, pct(a, b)) : null);
 
   /* 일별 매출 */
   const days: { date: string; revenue: number; count: number }[] = [];
@@ -740,18 +745,18 @@ export async function getDashboard(range?: { from?: string; to?: string }) {
       cartCount,
     },
     funnel: [
-      { key: 'IMPRESSION', label: '노출', value: impression, rate: 100 },
-      { key: 'DETAIL', label: '상세조회', value: detail, rate: pct(detail, impression) },
-      { key: 'SAVE', label: '보관 (찜)', value: save, rate: pct(save, detail) },
-      { key: 'CHECKOUT', label: '결제진입', value: checkout, rate: pct(checkout, save) },
-      { key: 'PURCHASE', label: '구매', value: purchase, rate: pct(purchase, checkout) },
+      { key: 'IMPRESSION', label: '노출', value: impression, rate: impression > 0 ? 100 : null },
+      { key: 'DETAIL', label: '상세조회', value: detail, rate: rate(detail, impression) },
+      { key: 'SAVE', label: '보관 (찜)', value: save, rate: rate(save, detail) },
+      { key: 'CHECKOUT', label: '결제진입', value: checkout, rate: rate(checkout, save) },
+      { key: 'PURCHASE', label: '구매', value: purchase, rate: rate(purchase, checkout) },
     ],
     daily: days,
     rates: {
-      saveToBuy: pct(purchase, save),
-      detailToBuy: pct(purchase, detail),
-      checkoutToBuy: pct(purchase, checkout),
-      cancelRate: pct(apps.filter((a) => a.status === 'CANCELLED').length, apps.length),
+      saveToBuy: rate(purchase, save),
+      detailToBuy: rate(purchase, detail),
+      checkoutToBuy: rate(purchase, checkout),
+      cancelRate: rate(apps.filter((a) => a.status === 'CANCELLED').length, apps.length),
       lowStockRatio: pct(list.filter((o) => o.displayStatus === 'LOW_STOCK').length, list.length),
     },
     topOffers: byOffer.slice(0, 3),

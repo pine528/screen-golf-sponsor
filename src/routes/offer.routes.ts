@@ -9,7 +9,7 @@ import {
   CHECKOUT_HOLD_MINUTES, CART_KEEP_DAYS, CART_KEEP_DAYS_GUEST, APPROVAL_SLA_HOURS,
   listOffers, getSections, getOffer, quoteOffer,
   listSaved, saveOffer, unsaveOffer,
-  getCart, addToCart, updateCartItem, removeCartItem, checkoutCart,
+  getCart, addToCart, updateCartItem, removeCartItem, checkoutCart, trackImpressions,
 } from '../services/offer.service';
 
 const router = Router();
@@ -86,6 +86,14 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       sort: req.query.sort as string,
       limit: Number(req.query.limit) || 24,
     }));
+  } catch (e) { next(e); }
+});
+
+/** POST /api/available-offers/impressions — 카드 노출 집계 */
+router.post('/impressions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ids = Array.isArray(req.body?.offerIds) ? req.body.offerIds : [];
+    ok(res, await trackImpressions(ids));
   } catch (e) { next(e); }
 });
 
