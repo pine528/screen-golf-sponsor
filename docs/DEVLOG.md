@@ -1001,3 +1001,59 @@
   다른 값이면 `fanEngage.service.ts`의 `ENGAGE_RULES` 표만 고치면 된다.
 - 시안의 '목표 40.0℃' 같은 상한·목표선은 근거가 없어 넣지 않았다.
 - 커뮤니티 글 신고·숨김(`isHidden`)은 필드만 두고 운영 화면은 아직 없다.
+
+## [2026-09-02] 직접 선택 PICK v1.0 — 9단계 전면 재구성 (핸드오프 v1.0)
+
+### 변경 사항
+
+**백엔드 — 오퍼 · 견적함 · 홀드**
+- 모델 4종: `AthleteOfferProduct` / `DirectPickDraft` / `DirectPickItem` / `InventoryHold`
+- 탐색(§3): 투어·지역·예산·판매방식 필터 + 5종 정렬(최근활동/팬온도/성적/가격/신규).
+  추천 알고리즘 정렬은 쓰지 않는다. 모집상태(OPEN/PARTIAL/CLOSED)·데이터상태(FRESH/DUE/NEW) 반환
+- 퀵프로필(§3.3): 요약·대회성과·활동·후원가능·브랜드이력 5탭 데이터
+- 오퍼(§4): 슬롯 상태머신 8종(AVAILABLE/NEEDS_CONFIRMATION/HOLD/RESERVED/SOLD/AUCTION/BLOCKED/EXPIRED)
+  + taxonomy 그룹·정면/후면 뷰 + 온라인 상품 3종 기본 카탈로그 자동 시딩
+- 견적함(§7): 최대 5명, 한 선수에 복수 상품 허용, 항목별 15분 hold(트랜잭션·idempotency),
+  결제 진입 시 10분 1회 연장
+- 검증(§6.1·§6.3): 가격변경·홀드만료·충돌을 코드별 issue로 반환, 동일 선수 대체 위치 3개 제안
+- ONLINE_ONLY는 `offlineUse=false` 강제 — 요청한 오프라인 사용 범위를 서버가 제거(§12.3)
+- `/direct-pick`: options · athletes · quick-profile · offers · quote ·
+  drafts(생성/조회/목록) · items(담기/수정/삭제/대체안) · extend-hold · validate · submit
+- `submitApplication`에 `presetPrice`·온라인 전용 항목 지원 (한 선수 복수 항목 허용, 상한 20건)
+
+**프론트 — 9화면 (`/sponsor/direct/*`)**
+- 공통 `DirectStepBar`: 9단계 + breadcrumb + 임시저장, 슬롯 상태·충돌 코드 표기 사전
+- 1·2 탐색 + 퀵프로필 레이어 / 3 상품 PICK / 4 조건 구성 / 5 견적함 /
+  6 승인 요청 / 7 선수 승인 / 8 결제 / 9 완료
+- 상태는 색상만이 아니라 아이콘·텍스트로도 구분(§16.2), 미수집 지표는 '정보 확인 필요'
+- 헤더·메인 CTA를 `/sponsor/direct/athletes`로 연결, 이전 `/sponsor/pick/*`는 리다이렉트
+
+### 검증
+- 운영 API E2E 18항목 통과: 온라인전용 오프라인범위 차단 · 12개월 선형가 · 장기 경매 차단 ·
+  담기/hold 반영 · 중복 담기 차단 · 제출 후 수정 차단 · 승인 전 결제 차단 · 결제 · 중복 결제 차단
+- 브라우저 전 구간: 탐색(27명) → 퀵프로필 5탭 → 슬롯+온라인 선택 → 조건 구성(6개월 = 월단가×6,
+  경매 비활성) → 견적함(hold 14:25 카운트다운) → 승인 요청 → 승인 2/2 → 결제 1,980,000원 → 완료
+
+### 작업 중 고친 결함
+- 탐색 `limit`이 DB take로 걸려 판매 상품 없는 선수까지 소진 → 결과가 1명만 나왔다.
+  후보는 넉넉히 읽고 필터·정렬 뒤 limit으로 자르도록 수정
+- 내가 잡은 hold를 내 중복 담기에서 `SLOT_TAKEN`으로 오인 → 중복 검사를 가격 계산보다 먼저 수행
+- 온라인 상품 시딩이 상세 조회에서만 일어나 목록(0종)과 상세(3종)가 불일치 → 목록에서도 일괄 시딩
+- 승인 현황을 '명'으로 세어 1명·2항목이 "2명"으로 보였다 → '건' 단위로 정정
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260902_direct_pick_v1/`
+- `src/backend/src/services/{directPick,application}.service.ts`
+- `src/backend/src/routes/directPick.routes.ts`
+- `src/frontend/src/components/direct/DirectStepBar.tsx`
+- `src/frontend/src/pages/direct/Direct{Athletes,Build,Configure,Cart,Request,Approval,Checkout,Complete}.tsx`
+- `src/frontend/src/{App.tsx,services/api.ts,components/PublicHeader.tsx,pages/Home.tsx}`
+
+### 미구현 / 확인 필요
+- **SPONPIK INDEX**: 시안 카드에 있으나 브랜드 컨텍스트가 있어야 계산되는 값이라 목록에서는 뺐다.
+  컨텍스트 없는 단일 지수 정의가 필요하다.
+- **후면 도식 이미지**: 좌표가 정면만 실측되어 있어 후면 뷰는 '등' 목록으로 대체.
+- **기간 요금 규칙**: "슬롯 월 단가 × 개월수"(대회 1회 = 1개월 단가). 장기 할인 정책 미확정 —
+  `directPick.service.ts`의 `DURATIONS` 표만 고치면 된다.
+- 협의형(NEGOTIATED)·경매 브릿지·비로그인 soft PICK(3개/7일)은 상태만 정의하고 흐름은 미구현.
+- 대체 항목 자동 교체, revision 재승인 흐름은 다음 단계.

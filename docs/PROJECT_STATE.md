@@ -905,3 +905,20 @@ IA: 팬 참여 = **팬 VOTE** / **선수 커뮤니티** / **팬스토어** / **�
 - 팬레터는 `isPrivate=true` — 선수 본인과 작성자만 열람
 - 포인트 적립은 기존 `pointService.adjustPoints`(원장+트랜잭션+멱등) 재사용,
   사유는 `FAN_ENGAGE_REWARD`
+
+## 직접 선택 PICK v1.0 (2026-09-02) — §리디자인 v2.0 전면 재구성
+9단계: 선수 탐색 → 선수 확인 → 상품 PICK → 조건 구성 → 견적함 → 승인 요청 → 선수 승인 → 결제 → 완료
+
+- 화면: `/sponsor/direct/athletes` · `/build/:athleteId` · `/build/:athleteId/configure`
+  · `/cart` · `/request/:draftId` · `/approval/:requestId` · `/checkout/:applicationId` · `/complete/:applicationId`
+- API `/direct-pick`: `options` · `athletes` · `athletes/:id/quick-profile` · `athletes/:id/offers`
+  · `POST quote` · `drafts`(GET/POST, `:id`) · `drafts/:id/items` · `items/:id`(PATCH/DELETE)
+  · `items/:id/alternatives` · `drafts/:id/{extend-hold,validate,submit}`
+- **가격은 서버 quote가 단일 진실원천**(§5.6). 정책표는 `directPick.service.ts` 한 곳:
+  기간 5종 · 판매유형 4종 · 추가활동 7종 · 사용범위 4종 · 슬롯 taxonomy 8그룹
+- **재고**: 항목별 `InventoryHold` 15분(결제 진입 10분 1회 연장), 트랜잭션 + idempotencyKey.
+  `validate`가 가격변경·홀드만료·충돌을 issue 코드로 반환하고 대체 위치 3개를 제안
+- **ONLINE_ONLY**는 `offlineUse=false` 강제 — 오프라인 사용 범위를 서버가 제거(§12.3)
+- 승인·결제는 기존 `SponsorshipApplication` 모듈 재사용(`sourceType=DIRECT_PICK`, `presetPrice`).
+  승인은 **항목 단위**이며 한 선수가 복수 항목을 가질 수 있다
+- 이전 `/sponsor/pick/*` 경로는 새 경로로 리다이렉트
