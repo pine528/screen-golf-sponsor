@@ -699,8 +699,12 @@ export async function getDashboard(range?: { from?: string; to?: string }) {
   const revenue = paid.reduce((s, a) => s + a.totalAmount, 0);
 
   const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : 0);
-  /* 전환율은 직전 단계 대비다. 상위 단계가 아직 집계되지 않았으면 비율을 만들지 않는다 (LEG-06) */
-  const rate = (a: number, b: number) => (b > 0 ? Math.min(100, pct(a, b)) : null);
+  /**
+   * 전환율은 직전 단계 대비다.
+   * 상위 단계가 아직 집계되지 않았거나(0) 하위가 상위보다 크면(집계 시점 불일치)
+   * 100%로 잘라 보여주지 않고 비율 자체를 만들지 않는다 (LEG-06).
+   */
+  const rate = (a: number, b: number) => (b > 0 && a <= b ? pct(a, b) : null);
 
   /* 일별 매출 */
   const days: { date: string; revenue: number; count: number }[] = [];
