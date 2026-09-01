@@ -1,6 +1,7 @@
 # PROJECT_STATE.md - 현재 구현 상태 요약
 
-> 최종 업데이트: 2026-04-29 (SPONPIK 1차 론칭 보강 — 10개 미충족 항목 전부 구현)
+> 최종 업데이트: 2026-09-02 (직접 선택 PICK v1.0 9단계 재구성)
+> 보류 항목·미결정 값은 [docs/REDESIGN_BACKLOG.md](REDESIGN_BACKLOG.md)에 모아둔다.
 
 ---
 
