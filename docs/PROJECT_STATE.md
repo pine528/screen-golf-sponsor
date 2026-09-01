@@ -891,6 +891,32 @@ IA: 후원하기 = **직접 PICK** / **추천 PICK** / **디지털 파트너 월
 ### 표기 원칙 (LEG-06 유지)
 산출 근거가 없는 지표는 화면에 넣지 않는다 — 시안의 '팬 온도'는 미표시.
 
+## SPONPIK 소개 v1.0 (2026-09-01) — §소개 핸드오프 2026-08-22
+소개 5개 메뉴를 계약·성과·권리 데이터에 연결한 신뢰 전환 시스템으로 구현.
+
+- 사용자: `/about/service` `/about/cases`(+`/:slug`) `/about/performance-guarantee`
+  `/about/my-guarantees`(+`/:id/appeal`) `/about/how-it-works` `/about/brands`(+`/:slug`)
+- 관리자: `/admin/about` `pages` `cases` `policies` `judgements` `appeals` `brands`
+  `rights` `analytics` `audit`
+- API: 공개 `/api/about/*`, 관리자 `/api/admin/about/*` (ADMIN 전용)
+
+**공개등급 6단계** (`about.service.ts` `shapeMetric`)
+PUBLIC_EXACT(정확) / PUBLIC_RANGE(범위) / PUBLIC_LABEL(정성) /
+MEMBER_ONLY(로그인) / PARTY_ONLY(계약 당사자) / PRIVATE(미표시).
+볼 수 없는 값은 응답에서 아예 제거한다. 값을 뭉개도 출처·검증상태는 공개한다.
+
+**게시 게이트** (`aboutAdmin.service.ts` `publishGate`) — 다음 중 하나라도 막히면 게시 불가.
+계약 연결 / 지표 출처 / 초상·로고 권리 유효 / 인용문 승인 / 당사자 승인 / 공개범위 지정.
+
+**성과보장**
+- 정책은 버전으로 관리하고 ACTIVE는 수정 불가. 계약은 시점 스냅샷을 복제해 소급을 막는다.
+- 판정: ALL / ANY / WEIGHTED. 필수 데이터 미수집은 0이 아니라 `DATA_PENDING`.
+- 최종 확정 후 잠금. 정정은 reversal + 새 버전으로만.
+- 보완지원은 현금 환급·양도 불가. 발급은 요청자와 다른 관리자 승인 필수.
+
+**권리** — `RightsGrant` 만료 시 게시 자동 차단, 로고는 텍스트로 대체.
+**분석** — 가명 ID만 저장하고 이메일·전화번호 형태는 서버에서 거부한다.
+
 ## 팬 참여 v1.0 (2026-09-01) — §팬참여 핸드오프 2026-08-22
 IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토어** (4축), 진입은 `/fan`.
 

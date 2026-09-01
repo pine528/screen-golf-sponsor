@@ -1202,3 +1202,59 @@
 ### 참고
 - API는 전 구간 `/api/admin/fan/*`, ADMIN 역할 전용.
 - 검수 큐 자동 적재·신고 접수 경로 등 남은 항목은 `docs/REDESIGN_BACKLOG.md` C6에 기록.
+
+## [2026-09-01] SPONPIK 소개 통합 콘텐츠 v1.0 (사용자 11 + 관리자 10화면)
+
+### 변경 사항
+소개 5개 메뉴를 정적 페이지가 아니라 계약·성과·권리 데이터에 연결된 시스템으로 재구현.
+
+**사용자 화면 (IU01~IU12)**
+- IU01 서비스소개 — 두 가지 시작(직접/추천 PICK), 핵심기능 5, 대상별 가치 3탭, 공식 인스타 CTA
+- IU02 매칭사례 목록 — 종목·투어·후원방식·업종 필터(모바일 bottom sheet)
+- IU03 사례 상세 + IU04 성과 근거 레이어 — 정의·측정기간·출처·검증상태·집계기준
+- IU05 성과보장 소개 — 5단계 흐름, 적용 상품, KPI 예시, 제외사항, FAQ
+- IU06 내 보장 현황 — KPI 목표/실적/달성률, 잠정 배지, 정책 요약
+- IU07 이의제기·보완지원 — 증빙 유형, 진실 확인, 예상 지원액, 4단계 절차
+- IU08·IU09 이용방법 — 브랜드 4경로 / 선수 5단계 / 팬 4단계, 로그인 게이트 표
+- IU10 브랜드 목록 · IU11 브랜드 상세
+- IU12 메가메뉴 — hover 150ms/leave 250ms + focus·ESC 지원, 모바일 아코디언
+
+**관리자 화면 (IA01~IA14)**
+- IA01 대시보드 / IA02 페이지·메뉴 CMS(+IA11) / IA03·IA04 사례 목록·편집
+- IA05 공개범위·근거 검수 / IA06 당사자 승인 / IA07 보장 정책 / IA08 판정
+- IA09 이의제기·보완지원 / IA10 브랜드 CMS / IA12 분석·SEO / IA13 권리 큐 / IA14 감사로그
+
+### 핵심 규칙 (코드로 강제)
+- **공개등급 6단계** — PUBLIC_EXACT / PUBLIC_RANGE / PUBLIC_LABEL / MEMBER_ONLY /
+  PARTY_ONLY / PRIVATE. 볼 수 없는 값은 응답에서 아예 뺀다(직렬화 금지).
+  값을 뭉개도 출처·검증상태는 공개한다.
+- **게시 게이트** — 계약 연결·지표 출처·권리 유효·인용문 승인·당사자 승인 중
+  하나라도 막히면 게시 자체가 400으로 거부된다.
+- **정책 스냅샷** — ACTIVE 정책은 수정 불가. 계약은 시점 스냅샷을 복제해 소급을 막는다.
+- **판정** — 필수 데이터 미수집은 0이 아니라 DATA_PENDING. 확정 후 잠금.
+- **보완지원** — 현금 환급·양도 불가. 발급은 요청자와 다른 관리자 승인 필수.
+- 분석 이벤트는 가명 ID만 저장하고 이메일·전화번호 형태는 서버에서 거부한다.
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` — ContentPage/ContentBlock, PartnerBrand,
+  MatchingCase/CaseMetric/CaseQuote/CaseApproval, RightsGrant,
+  GuaranteePolicy/Snapshot/Observation/Appeal, RemedyGrant, AboutAnalyticsEvent
+- `src/backend/prisma/migrations/20260906_about_hub_v1/migration.sql`
+- `src/backend/prisma/seed-about-demo.ts` (로컬 검증 전용)
+- `src/backend/src/services/about.service.ts` · `guarantee.service.ts` · `aboutAdmin.service.ts`
+- `src/backend/src/routes/about.routes.ts` · `aboutAdmin.routes.ts` · `index.ts`
+- `src/frontend/src/components/about/AboutShell.tsx` · `components/aboutadmin/AboutAdminShell.tsx`
+- `src/frontend/src/pages/about/` 9개 · `src/frontend/src/pages/admin/about/` 10개
+- `src/frontend/src/services/api.ts`, `src/frontend/src/App.tsx`
+
+### 검증
+로컬 DB에 마이그레이션 + 데모 시드를 적용하고 백엔드를 띄워 E2E 확인:
+- 공개등급 4종이 비로그인 응답에서 각각 다르게 처리됨 (정확치 / 80~90회 근사 /
+  "로그인 후 확인" / "계약 당사자만 확인")
+- 근거 레이어: PUBLIC_EXACT는 정의·집계기준·출처 노출, 원본 리포트는 당사자만
+- 판정 엔진: 미수집 → DATA_PENDING, 수집 후 → MET(121.1%), 같은 데이터 ALL 모드 → NOT_MET
+- 화면: 서비스소개·매칭사례 목록/상세·성과보장·이용방법 렌더 확인
+
+### 참고
+- 미구현·미정 항목은 `docs/REDESIGN_BACKLOG.md` C7 섹션에 기록.
+- 구 소개 화면 5종은 `/about/*-legacy` 경로로 보존.
