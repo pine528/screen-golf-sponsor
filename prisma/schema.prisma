@@ -202,6 +202,7 @@ model Athlete {
   temperatureEvents   FanTemperatureEvent[]
   offerProducts       AthleteOfferProduct[]
   directPickItems     DirectPickItem[]
+  offerAthletes       OfferAthlete[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -4046,4 +4047,245 @@ model InventoryHold {
 
   @@index([athleteSlotId, expiresAt])
   @@map("inventory_holds")
+}
+
+// ============================================
+// 지금 가능한 후원 — 완성형 상품(Offer) · 진열 · 보관함 (핸드오프 v1.0 2026-08-22)
+// ============================================
+
+/// 관리자·선수가 사전 구성해 발행하는 완성형 후원상품
+model Offer {
+  id        String @id @default(uuid())
+  code      String @unique // OFFER-0901 등 내부 코드
+  slug      String @unique
+  title     String
+  subtitle  String?
+  summary   String?
+  type      String @default("EVENT_SLOT") // EVENT_SLOT | READY_NOW | ONLINE_SUBSCRIPTION | CONTENT_PACKAGE | LOCAL_ACTIVATION | FAN_COMMERCE | LIMITED_DROP | AUCTION_LINK | CUSTOM_CURATED
+  status    String @default("DRAFT") // DRAFT | REVIEW | SCHEDULED | PUBLISHED | LOW_STOCK | PAUSED | SOLD_OUT | EXPIRED | ARCHIVED
+  version   Int    @default(1)
+
+  heroImageUrl String? @map("hero_image_url")
+  /// 이 상품이 맞는 브랜드 업종 (타겟 카테고리)
+  categories   String[] @default([])
+  /// 노출 채널 (대회 현장 · 공식 중계 · 대회 웹사이트 · SNS 등)
+  channels     String[] @default([])
+  /// 목적 태그 (인지 · 콘텐츠 · 구매 · 지역 · ESG · 팬참여)
+  purposes     String[] @default([])
+
+  // 일정
+  salesFrom     DateTime? @map("sales_from")
+  salesTo       DateTime? @map("sales_to")
+  executionFrom DateTime? @map("execution_from")
+  executionTo   DateTime? @map("execution_to")
+  eventId       String?   @map("event_id")
+  leadTimeDays  Int       @default(7) @map("lead_time_days")
+  durationCode  String    @default("SINGLE_EVENT") @map("duration_code")
+  months        Int       @default(1)
+
+  // 가격 (§9.3)
+  priceType      String  @default("FIXED") @map("price_type") // FIXED | SUBSCRIPTION | NEGOTIABLE | AUCTION | DISCOUNTED | MIXED
+  supplyAmount   Int     @default(0) @map("supply_amount") // 공급가 (VAT 별도)
+  originalPrice  Int?    @map("original_price")
+  discountReason String? @map("discount_reason")
+  costAmount     Int     @default(0) @map("cost_amount") // 선수 정산 예상 원가
+  platformFee    Int     @default(0) @map("platform_fee")
+
+  // 재고 (§9.1)
+  stockMode    String @default("CAPACITY") @map("stock_mode") // UNIQUE | CAPACITY | UNLIMITED | DERIVED | MANUAL
+  capacity     Int    @default(1)
+  reservedQty  Int    @default(0) @map("reserved_qty")
+  soldQty      Int    @default(0) @map("sold_qty")
+  holdMinutes  Int    @default(15) @map("hold_minutes")
+
+  // 승인 (§9.4)
+  approvalMode  String    @default("ATHLETE_APPROVAL") @map("approval_mode") // PRE_APPROVED | ATHLETE_APPROVAL | NEGOTIATION | AUCTION
+  preApprovedAt DateTime? @map("pre_approved_at")
+  preApprovalTo DateTime? @map("pre_approval_to") // 사전승인 유효기간
+  preApprovalMaxQty Int?  @map("pre_approval_max_qty")
+
+  // 권리 (§7.3 · §12.3)
+  offlineUse   Boolean @default(true) @map("offline_use")
+  onlineUse    Boolean @default(true) @map("online_use")
+  printUse     Boolean @default(false) @map("print_use")
+  secondaryUse Boolean @default(false) @map("secondary_use")
+  territory    String  @default("국내")
+  rightsNote   String? @map("rights_note")
+  restrictions Json? // string[]
+
+  /// 예상성과 — 범위·근거·기준일·신뢰도를 함께 저장한다 (§5.2). 보장값이 아니다.
+  expectedMetrics Json?     @map("expected_metrics") // [{metric,minValue,maxValue,unit,basis}]
+  methodology     String?
+  methodVersion   String?   @map("method_version")
+  confidence      String?   // HIGH | MEDIUM | LIMITED
+  dataAsOf        DateTime? @map("data_as_of")
+  guaranteed      Boolean   @default(false)
+  assumptions     Json?
+
+  // 운영
+  ownerName    String?   @map("owner_name")
+  reviewerName String?   @map("reviewer_name")
+  publishedAt  DateTime? @map("published_at")
+  scheduledAt  DateTime? @map("scheduled_at")
+  changeReason String?   @map("change_reason")
+  pauseReason  String?   @map("pause_reason")
+
+  // 성과 카운터 (§11.4)
+  viewCount   Int @default(0) @map("view_count")
+  detailCount Int @default(0) @map("detail_count")
+  saveCount   Int @default(0) @map("save_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  athletes   OfferAthlete[]
+  components OfferComponent[]
+  options    OfferOption[]
+  placements OfferPlacement[]
+  saved      SavedOffer[]
+  cartItems  OfferCartItem[]
+  audits     OfferAudit[]
+
+  @@index([status, salesTo])
+  @@index([type, status])
+  @@map("offers")
+}
+
+/// 상품에 포함된 선수 (복수 가능)
+model OfferAthlete {
+  id        String  @id @default(uuid())
+  offerId   String  @map("offer_id")
+  athleteId String  @map("athlete_id")
+  role      String? // 대표 · 참여
+  sortOrder Int     @default(0) @map("sort_order")
+
+  offer   Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  athlete Athlete @relation(fields: [athleteId], references: [id])
+
+  @@unique([offerId, athleteId])
+  @@map("offer_athletes")
+}
+
+/// 상품 구성요소 원자 단위 (§3.3)
+model OfferComponent {
+  id            String @id @default(uuid())
+  offerId       String @map("offer_id")
+  componentType String @map("component_type") // ATHLETE | SLOT | CONTENT | ONLINE_ASSET | VISIT | MARKET | REPORT | GUARANTEE
+  label         String
+  athleteId     String? @map("athlete_id")
+  athleteSlotId String? @map("athlete_slot_id")
+  slotCode      String? @map("slot_code")
+  offerProductId String? @map("offer_product_id")
+  /// 1건당 필요한 원자재고 수량 (DERIVED 계산용)
+  requiredQty   Int    @default(1) @map("required_qty")
+  quantity      Int    @default(1)
+  unitPrice     Int    @default(0) @map("unit_price")
+  note          String?
+  sortOrder     Int    @default(0) @map("sort_order")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId])
+  @@map("offer_components")
+}
+
+/// 브랜드가 구매 시 바꿀 수 있는 범위 (§3.4)
+model OfferOption {
+  id        String  @id @default(uuid())
+  offerId   String  @map("offer_id")
+  kind      String // LOCKED | SELECT_ONE | ADD_ON | QUANTITY | BRAND_INPUT | NEGOTIABLE
+  code      String
+  label     String
+  /// SELECT_ONE 선택지 / QUANTITY 범위 / ADD_ON 단가
+  choices   Json?
+  minQty    Int?    @map("min_qty")
+  maxQty    Int?    @map("max_qty")
+  addPrice  Int     @default(0) @map("add_price")
+  required  Boolean @default(false)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, code])
+  @@map("offer_options")
+}
+
+/// 진열 배치 (§8.2)
+model OfferPlacement {
+  id          String    @id @default(uuid())
+  offerId     String    @map("offer_id")
+  surface     String // MAIN | SPONSOR_LANDING | AVAILABLE_LIST | ATHLETE | DASHBOARD
+  sectionKey  String    @map("section_key") // READY_NOW | CLOSING_SOON | NEW | LOW_BUDGET | EVENT | ONLINE_ONLY | LOCAL | AUCTION
+  rank        Int       @default(100)
+  pinned      Boolean   @default(false)
+  activeFrom  DateTime? @map("active_from")
+  activeTo    DateTime? @map("active_to")
+  audience    Json? // {categories?:string[], budgetMax?:number, regions?:string[]}
+  badge       String?
+  reason      String? // 운영 · 제휴 · 자동규칙
+  isSponsored Boolean   @default(false) @map("is_sponsored") // 유료/제휴 우선노출 표시 (§4.4)
+  dailyCap    Int?      @map("daily_cap")
+  status      String    @default("ACTIVE") // ACTIVE | PAUSED | EXPIRED
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([surface, sectionKey, rank])
+  @@index([offerId])
+  @@map("offer_placements")
+}
+
+/// 보관함 — 나중에 보기 (hold 없음)
+model SavedOffer {
+  id          String   @id @default(uuid())
+  brandUserId String   @map("brand_user_id")
+  offerId     String   @map("offer_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([brandUserId, offerId])
+  @@index([brandUserId, createdAt])
+  @@map("saved_offers")
+}
+
+/// 장바구니 line — 주문군은 조회 시 계산한다 (§6.2)
+model OfferCartItem {
+  id          String   @id @default(uuid())
+  brandUserId String   @map("brand_user_id")
+  offerId     String   @map("offer_id")
+  quantity    Int      @default(1)
+  startDate   DateTime? @map("start_date")
+  /// 선택한 옵션 {code: value}
+  options     Json?
+  /// 담은 시점의 안내 금액 — 결제 금액은 항상 서버가 다시 계산한다
+  quotedAmount Int     @default(0) @map("quoted_amount")
+  quotedAt    DateTime @default(now()) @map("quoted_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([brandUserId, createdAt])
+  @@map("offer_cart_items")
+}
+
+/// 발행·변경·일시정지 감사 로그 (§11.3 · §13.4)
+model OfferAudit {
+  id        String   @id @default(uuid())
+  offerId   String   @map("offer_id")
+  actorId   String?  @map("actor_id")
+  actorName String?  @map("actor_name")
+  action    String // CREATE | UPDATE | VALIDATE | PUBLISH | PAUSE | RESUME | PLACEMENT | PRICE | ARCHIVE
+  field     String?
+  before    Json?
+  after     Json?
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId, createdAt])
+  @@map("offer_audits")
 }
