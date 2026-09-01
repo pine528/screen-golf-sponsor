@@ -923,3 +923,19 @@ IA: 팬 참여 = **팬 VOTE** / **선수 커뮤니티** / **팬스토어** / **�
 - 승인·결제는 기존 `SponsorshipApplication` 모듈 재사용(`sourceType=DIRECT_PICK`, `presetPrice`).
   승인은 **항목 단위**이며 한 선수가 복수 항목을 가질 수 있다
 - 이전 `/sponsor/pick/*` 경로는 새 경로로 리다이렉트
+
+## 지금 가능한 후원 (2026-09-03) — 완성형 상품 채널
+후원하기 = **직접 선택 PICK** / **스폰픽 추천 PICK** 두 갈래 + **지금 가능한 후원** 섹션·독립 목록.
+
+- 브랜드 화면: `/sponsor`(랜딩) · `/sponsor/available`(목록) · `/sponsor/available/:offerId`(상세)
+  · `/sponsor/cart`(보관함·장바구니) · `/sponsor/available/orders/:applicationId`(완료)
+- 관리자 화면: `/admin/offers`(A01) · `/admin/offers/new|:id`(A02~A06 빌더)
+  · `/admin/offers/placements`(A07) · `/admin/offers/dashboard`(A08)
+- API: `/available-offers`(options·sections·목록·상세·:id/quote·impressions)
+  · `/offer-cart`(saved·items·checkout) · `/admin/offers`(templates·alerts·dashboard·placements·CRUD·validate·publish)
+- **재고**: `availableQty` = 구성요소 가능 수량의 최솟값. 슬롯은 SlotInventory·InventoryHold까지 확인
+- **사전승인**: 유효기간·최대수량이 살아 있을 때만 즉시구매(BUY) 허용. 만료 시 승인 흐름으로 전환
+- **주문군**: A즉시 / B승인 / C협의 / D경매 / E구독. 다른 군은 함께 결제할 수 없다(CART_GROUP_MISMATCH)
+- **hold**: 담기에는 걸지 않고 체크아웃 진입 시 15분 (`offer.service.ts` 상수)
+- **예상성과**: 범위·근거·기준일·신뢰도와 "보장하지 않음"을 항상 함께 반환·표시 (LEG-06)
+- 승인·계약·결제·완료는 기존 `SponsorshipApplication` 모듈 재사용

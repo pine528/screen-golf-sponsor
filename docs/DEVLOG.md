@@ -1057,3 +1057,63 @@
   `directPick.service.ts`의 `DURATIONS` 표만 고치면 된다.
 - 협의형(NEGOTIATED)·경매 브릿지·비로그인 soft PICK(3개/7일)은 상태만 정의하고 흐름은 미구현.
 - 대체 항목 자동 교체, revision 재승인 흐름은 다음 단계.
+
+## [2026-09-03] 지금 가능한 후원 — 완성형 상품 채널 (핸드오프 v1.0 2026-08-22)
+
+### 변경 사항
+
+**백엔드 — 상품 · 진열 · 보관함 · 관리자 빌더**
+- 모델 8종: `Offer` / `OfferAthlete` / `OfferComponent` / `OfferOption`
+  / `OfferPlacement` / `SavedOffer` / `OfferCartItem` / `OfferAudit`
+- **재고(§9.1)**: `availableQty`는 구성요소별 가능 수량의 최솟값. 슬롯 구성요소는
+  실제 판매상태·SlotInventory·InventoryHold까지 확인해 하나라도 막히면 0
+- **사전승인(§9.4)**: 유효기간·최대판매수량을 확인해 `preApproved`를 계산하고,
+  이 값으로 즉시구매 배지와 `allowedActions`(SAVE/ADD/BUY/REQUEST/NEGOTIATE/AUCTION/NOTIFY)를 결정
+- **예상성과(§5.2)**: 범위·근거·기준일·신뢰도·`guaranteed`와 "보장하지 않음" 문구를 함께 반환
+- **주문군(§6.2)**: A즉시 / B승인 / C협의 / D경매 / E구독 자동 분리.
+  다른 군 일괄결제는 `CART_GROUP_MISMATCH`로 차단. 담기는 hold 없음(§6.1)
+- 주문 전환은 기존 승인·계약·결제 모듈 재사용(`sourceType=DIRECT_PICK`, `snapshot.channel=AVAILABLE_OFFERS`)
+- **관리자**: 템플릿 6종, 완성도 17항목, 발행 검증(필수누락·선수상태·재고충돌·일정·마진·권리·성과근거·배치),
+  발행/예약발행/일시정지/복제, 슬롯 기간충돌 조회, 진열 배치(판매기간 밖 차단), 운영 경보 6종, 전환 퍼널 대시보드
+- API: `/available-offers`(options·sections·목록·상세·quote·impressions),
+  `/offer-cart`(saved·items·checkout), `/admin/offers`(templates·alerts·dashboard·placements·CRUD·validate·publish)
+
+**프론트 — 브랜드 5화면 + 관리자 4화면 (시안 16장)**
+- 브랜드: 후원하기 랜딩(`/sponsor`) · 전체 목록(`/sponsor/available`) · 상품 상세
+  · 보관함·장바구니(`/sponsor/cart`) · 주문 완료. 선수 퀵프로필은 상세 안 레이어
+- 관리자: A01 목록·운영경보 / A02~A06 빌더 5단계 / A07 진열 배치관리 / A08 대시보드
+- 상태는 색상만이 아니라 아이콘·텍스트로 병기(§12.3 접근성)
+
+### 검증
+- 운영 API E2E 24항목 통과: 미완성 발행 차단 · 온라인전용 오프라인권리 차단 ·
+  옵션 견적((380,000+20,000)×2=800,000) · 리드타임 위반 차단 · 보관함→장바구니 이동 ·
+  주문군 분리 · 혼합 결제 차단 · 즉시결제군 주문 전환 · 미구매 항목 유지 ·
+  판매기간 밖 배치 차단 · 랜딩 섹션 자동 채움 · 운영 경보 · 대시보드
+- 브라우저: 목록 카드(배지·구성·예상성과·재고), 상세 옵션 반영(380,000→400,000),
+  A01 목록·경보, A03 빌더(완성도 100%·마진 시뮬레이터·구성합계 경고),
+  A05 검토 체크리스트 5그룹 통과, A07 배치, A08 퍼널·미집계 표기 확인
+
+### 작업 중 고친 결함
+- 대시보드가 전체 신청을 세어 직접 PICK 주문까지 매출·구매에 합산 →
+  `snapshot.channel=AVAILABLE_OFFERS` 주문만 집계
+- 노출 카운터가 0인데 하위 단계가 커서 전환율이 600%로 표시 →
+  상위 단계가 0이거나 하위가 상위보다 크면 비율을 만들지 않고 '집계 중'
+- 카드 노출(Impression) 집계 경로가 없어 퍼널 첫 단계가 비어 있었음 →
+  `POST /available-offers/impressions` 추가, 목록·랜딩에서 호출
+- 가격 유형 라벨이 확정가를 '즉시구매'로 표기해 승인 방식과 혼동 →
+  확정가 / 월 구독 / 조건협의 / 경매로 분리
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260903_available_offers/`
+- `src/backend/src/services/{offer,offerAdmin}.service.ts`
+- `src/backend/src/routes/{offer,offerAdmin,index}.routes.ts`
+- `src/frontend/src/components/offer/OfferCard.tsx`
+- `src/frontend/src/pages/offers/{SponsorLanding,AvailableOffers,OfferDetail,OfferCart,OfferOrderComplete}.tsx`
+- `src/frontend/src/pages/admin/offers/AdminOffer{List,Builder,Placements,Dashboard}.tsx`
+- `src/frontend/src/{App.tsx,services/api.ts,components/PublicHeader.tsx}`
+
+### 보류 (백로그 이관)
+- 단건 바로구매 전용 체크아웃 화면(시안 img_03)은 장바구니 결제 흐름으로 대체.
+  체크아웃 15분 hold와 재고 보유 카운트다운 UI는 미구현
+- 협의형 상담 → quote 확정 흐름, 경매 브릿지, 비로그인 담기(로컬 7일) 미구현
+- 상품 비교(최대 3개), CSV 일괄등록, 관리자 권한 세분화(OfferEditor/Pricing/Merchandiser) 미구현
