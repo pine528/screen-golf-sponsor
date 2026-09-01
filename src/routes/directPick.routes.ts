@@ -1,71 +1,146 @@
 /**
- * 직접 PICK API — 선수 · 슬롯 · 견적 (리디자인 v2.0)
- * 열람·견적은 비로그인 허용, 신청은 기존 /applications(브랜드 인증)을 쓴다.
+ * 직접 선택 PICK API (핸드오프 v1.0 §13.1)
+ * 탐색·퀵프로필·오퍼·견적은 비로그인 열람 가능, 견적함·홀드·승인요청은 브랜드 인증 필요.
  */
 import { Router, Request, Response, NextFunction } from 'express';
-import { getOptions, listPickAthletes, getPickAthlete, getPickSlots, quote } from '../services/directPick.service';
+import { authenticate, authorize } from '../middleware/auth';
+import {
+  getOptions, listPickAthletes, getQuickProfile, getOffers, quote,
+  getOrCreateDraft, getDraft, listDrafts, addItem, updateItem, removeItem,
+  extendHolds, validateDraft, suggestAlternatives, submitDraft,
+} from '../services/directPick.service';
 
 const router = Router();
+
+/** 응답 공통 필드 (§13.2) */
+const ok = (res: Response, data: any, status = 200) =>
+  res.status(status).json({
+    success: true,
+    data,
+    error: null,
+    serverTime: new Date().toISOString(),
+  });
 
 const fail = (res: Response, e: any) => {
   const status = e?.status || 500;
   res.status(status).json({
     success: false,
-    error: { code: status === 500 ? 'INTERNAL_ERROR' : 'REQUEST_FAILED', message: e?.message || '처리에 실패했습니다' },
+    error: {
+      code: e?.code || (status === 409 ? 'CONFLICT' : status === 410 ? 'GONE' : status === 500 ? 'INTERNAL_ERROR' : 'REQUEST_FAILED'),
+      message: e?.message || '처리에 실패했습니다',
+    },
     data: null,
+    retryable: status === 409 || status === 410,
+    serverTime: new Date().toISOString(),
   });
 };
 
-/** GET /api/direct-pick/options — 기간·유형·추가활동·구매방식 정책 */
-router.get('/options', (_req: Request, res: Response) => {
-  res.json({ success: true, data: getOptions(), error: null });
-});
+/* ── 탐색 · 오퍼 (공개) ─────────────────────────────────── */
 
-/** GET /api/direct-pick/athletes — 판매 슬롯 보유 선수 */
+router.get('/options', (_req: Request, res: Response) => ok(res, getOptions()));
+
 router.get('/athletes', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await listPickAthletes({
-      q: req.query.q as string, tour: req.query.tour as string,
-      region: req.query.region as string, limit: Number(req.query.limit) || 60,
-    });
-    res.json({ success: true, data, error: null });
+    ok(res, await listPickAthletes({
+      q: req.query.q as string,
+      tour: req.query.tour as string,
+      region: req.query.region as string,
+      maxMonthly: Number(req.query.maxMonthly) || undefined,
+      mode: req.query.mode as string,
+      sort: req.query.sort as string,
+      limit: Number(req.query.limit) || 60,
+    }));
   } catch (e) { next(e); }
 });
 
-/** GET /api/direct-pick/athletes/:id — 선수 상세 패널 */
-router.get('/athletes/:id', async (req: Request, res: Response, next: NextFunction) => {
+/** 퀵프로필 레이어 (§3.3) */
+router.get('/athletes/:id/quick-profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await getPickAthlete(req.params.id);
-    if (!data) {
-      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: '선수를 찾을 수 없습니다' }, data: null });
-      return;
-    }
-    res.json({ success: true, data, error: null });
+    const data = await getQuickProfile(req.params.id);
+    if (!data) return fail(res, Object.assign(new Error('선수를 찾을 수 없습니다'), { status: 404, code: 'NOT_FOUND' }));
+    ok(res, data);
   } catch (e) { next(e); }
 });
 
-/** GET /api/direct-pick/athletes/:id/slots — 슬롯 도식·상태·가격 */
-router.get('/athletes/:id/slots', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    res.json({ success: true, data: await getPickSlots(req.params.id), error: null });
-  } catch (e) { next(e); }
+/** 착장 슬롯 + 온라인 상품 (§4) */
+router.get('/athletes/:id/offers', async (req: Request, res: Response, next: NextFunction) => {
+  try { ok(res, await getOffers(req.params.id)); } catch (e) { next(e); }
 });
 
-/** POST /api/direct-pick/quote — 서버 재계산 견적 (§14.4) */
+/** 단건 견적 — 화면 안내용, 결제 권위는 draft validate (§5.6) */
 router.post('/quote', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const b = req.body || {};
-    if (!b.athleteId || !b.slotCode) {
-      res.status(400).json({ success: false, error: { code: 'INVALID_REQUEST', message: '선수와 슬롯을 선택해주세요' }, data: null });
-      return;
+    if (!b.athleteId || (!b.slotCode && !b.offerCode)) {
+      return fail(res, Object.assign(new Error('선수와 상품을 선택해주세요'), { status: 400, code: 'INVALID_REQUEST' }));
     }
-    const data = await quote({
-      athleteId: b.athleteId, slotCode: b.slotCode, durationCode: b.durationCode,
-      productType: b.productType, addOns: Array.isArray(b.addOns) ? b.addOns.slice(0, 5) : [],
-      transactionType: b.transactionType,
-    });
-    res.json({ success: true, data, error: null });
+    ok(res, await quote(b));
   } catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/* ── 견적함 (브랜드) ────────────────────────────────────── */
+
+router.get('/drafts', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await listDrafts(req.user.id)); } catch (e) { next(e); }
+});
+
+/** 활성 견적함 — 없으면 생성 */
+router.post('/drafts', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await getOrCreateDraft(req.user.id), 201); } catch (e) { next(e); }
+});
+
+router.get('/drafts/:id', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const d = await getDraft(req.params.id, req.user.id);
+    if (!d) return fail(res, Object.assign(new Error('견적함을 찾을 수 없습니다'), { status: 404, code: 'NOT_FOUND' }));
+    if (d === 'FORBIDDEN') return fail(res, Object.assign(new Error('조회 권한이 없습니다'), { status: 403, code: 'FORBIDDEN' }));
+    ok(res, d);
+  } catch (e) { next(e); }
+});
+
+/** 항목 담기 — hold 15분 생성 (§6.2) */
+router.post('/drafts/:id/items', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const b = req.body || {};
+    if (!b.athleteId || (!b.slotCode && !b.offerCode)) {
+      return fail(res, Object.assign(new Error('선수와 상품을 선택해주세요'), { status: 400, code: 'INVALID_REQUEST' }));
+    }
+    ok(res, await addItem(req.params.id, b, req.user.id, req.get('Idempotency-Key') || b.idempotencyKey), 201);
+  } catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+router.patch('/items/:itemId', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await updateItem(req.params.itemId, req.body || {}, req.user.id)); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+router.delete('/items/:itemId', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await removeItem(req.params.itemId, req.user.id)); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/** 충돌 항목 대체안 (§6.3) */
+router.get('/items/:itemId/alternatives', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await suggestAlternatives(req.params.itemId, req.user.id)); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/** hold 연장 — 결제 진입 시 1회 (§6.2) */
+router.post('/drafts/:id/extend-hold', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await extendHolds(req.params.id, req.user.id)); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/** hard validation (§6.1) */
+router.post('/drafts/:id/validate', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await validateDraft(req.params.id, req.user.id)); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/** 승인 요청 전환 (§8) */
+router.post('/drafts/:id/submit', authenticate, authorize('BRAND'), async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await submitDraft(req.params.id, req.user.id, req.body?.brandInfo), 201); }
+  catch (e: any) { if (e?.status) return fail(res, e); next(e); }
 });
 
 export default router;

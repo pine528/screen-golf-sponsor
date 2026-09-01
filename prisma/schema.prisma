@@ -200,6 +200,8 @@ model Athlete {
   communityPosts      AthleteCommunityPost[]
   brandSuggestions    FanBrandSuggestion[]
   temperatureEvents   FanTemperatureEvent[]
+  offerProducts       AthleteOfferProduct[]
+  directPickItems     DirectPickItem[]
   proposals           Proposal[]
   deliverables        Deliverable[]
   eventParticipations EventParticipation[]
@@ -3347,6 +3349,7 @@ model AthleteSlot {
   slotTemplate SlotTemplate    @relation(fields: [slotTemplateId], references: [id])
   inventories  SlotInventory[]
   productSlots ProductSlot[]
+  holds        InventoryHold[]
 
   @@unique([athleteId, slotTemplateId])
   @@map("athlete_slots")
@@ -3931,4 +3934,116 @@ model FanTemperatureEvent {
   @@index([athleteId, createdAt])
   @@index([userId, athleteId])
   @@map("fan_temperature_events")
+}
+
+// ============================================
+// 직접 선택 PICK — 오퍼 · 견적 초안 · 홀드 (핸드오프 v1.0 §4 · §6 · §7 · §12)
+// ============================================
+
+/// 선수별 온라인/부가 상품 — 오프라인 착장 슬롯과 별개로 판매하는 오퍼
+/// ONLINE_ONLY 는 offlineUse=false 가 강제된다 (§12.3)
+model AthleteOfferProduct {
+  id           String   @id @default(uuid())
+  athleteId    String   @map("athlete_id")
+  code         String // ONLINE_PROFILE_PATCH | GROWTH_MARKET_IMAGE | STORE_PRINT | SNS_FEED ...
+  name         String
+  type         String   @default("ONLINE_ONLY") // ONLINE_ONLY | SOCIAL_CONTENT | STORE_MARKET | APPEARANCE
+  description  String?
+  price        Int
+  unit         String   @default("MONTH") // MONTH | ONCE
+  minMonths    Int      @default(1) @map("min_months")
+  offlineUse   Boolean  @default(false) @map("offline_use")
+  onlineUse    Boolean  @default(true) @map("online_use")
+  printUse     Boolean  @default(false) @map("print_use")
+  secondaryUse Boolean  @default(false) @map("secondary_use")
+  capacity     Int      @default(0) // 0 = 무제한
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  athlete Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  items   DirectPickItem[]
+
+  @@unique([athleteId, code])
+  @@index([athleteId, isActive])
+  @@map("athlete_offer_products")
+}
+
+/// 견적함(초안) — 복수 선수·복수 상품을 한 건으로 묶는다 (§7)
+model DirectPickDraft {
+  id             String    @id @default(uuid())
+  brandUserId    String    @map("brand_user_id")
+  status         String    @default("CONFIGURING") // CONFIGURING | HELD | VALIDATION_REQUIRED | READY_TO_REQUEST | SUBMITTED | CONVERTED | EXPIRED | CANCELLED
+  revision       Int       @default(1)
+  title          String?
+  budget         Int?
+  note           String?
+  quoteVersion   String?   @map("quote_version")
+  quoteExpiresAt DateTime? @map("quote_expires_at")
+  applicationId  String?   @map("application_id") // 승인 요청 전환 후 SponsorshipApplication.id
+  submittedAt    DateTime? @map("submitted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  items DirectPickItem[]
+
+  @@index([brandUserId, updatedAt])
+  @@map("direct_pick_drafts")
+}
+
+/// 견적 항목 — 오프라인 슬롯 1개 또는 온라인 상품 1개
+model DirectPickItem {
+  id             String    @id @default(uuid())
+  draftId        String    @map("draft_id")
+  athleteId      String    @map("athlete_id")
+  kind           String    @default("OFFLINE_SLOT") // OFFLINE_SLOT | ONLINE_PRODUCT
+  athleteSlotId  String?   @map("athlete_slot_id")
+  slotCode       String?   @map("slot_code")
+  slotName       String?   @map("slot_name")
+  offerProductId String?   @map("offer_product_id")
+  durationCode   String    @default("SINGLE_EVENT") @map("duration_code")
+  months         Int       @default(1)
+  startDate      DateTime? @map("start_date")
+  saleMode       String    @default("BUY_NOW") @map("sale_mode") // BUY_NOW | NEGOTIATED | AUCTION | LONG_TERM
+  addOns         Json? // [{code,label,count,price}]
+  scopes         Json? // ['OFFLINE','ONLINE','PRINT','SECONDARY']
+  basePrice      Int       @default(0) @map("base_price")
+  durationAmount Int       @default(0) @map("duration_amount")
+  addOnAmount    Int       @default(0) @map("add_on_amount")
+  subtotal       Int       @default(0)
+  status         String    @default("OK") // OK | NEEDS_CONFIRMATION | CONFLICT
+  conflictCode   String?   @map("conflict_code")
+  conflictNote   String?   @map("conflict_note")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  draft   DirectPickDraft      @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  athlete Athlete              @relation(fields: [athleteId], references: [id])
+  offer   AthleteOfferProduct? @relation(fields: [offerProductId], references: [id])
+  hold    InventoryHold?
+
+  @@index([draftId])
+  @@index([athleteId])
+  @@map("direct_pick_items")
+}
+
+/// 임시 점유 — 견적함 담기 시 15분, 결제 진입 시 10분 1회 연장 (§6.2)
+model InventoryHold {
+  id             String    @id @default(uuid())
+  draftItemId    String    @unique @map("draft_item_id")
+  athleteSlotId  String?   @map("athlete_slot_id")
+  brandUserId    String    @map("brand_user_id")
+  qty            Int       @default(1)
+  expiresAt      DateTime  @map("expires_at")
+  extendedAt     DateTime? @map("extended_at")
+  releasedAt     DateTime? @map("released_at")
+  idempotencyKey String    @unique @map("idempotency_key")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  item        DirectPickItem @relation(fields: [draftItemId], references: [id], onDelete: Cascade)
+  athleteSlot AthleteSlot?   @relation(fields: [athleteSlotId], references: [id])
+
+  @@index([athleteSlotId, expiresAt])
+  @@map("inventory_holds")
 }

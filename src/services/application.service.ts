@@ -22,7 +22,7 @@ export interface SubmitInput {
   planKey?: string;
   planName?: string;
   durationMonths?: number;
-  items: { athleteId: string; slotInstanceId?: string; slotCode?: string; slotName?: string; role?: string }[];
+  items: { athleteId: string; slotInstanceId?: string; slotCode?: string; slotName?: string; role?: string; presetPrice?: number }[];
   /** 직접 PICK 후원 구성 — 금액은 이 값으로 서버에서 다시 계산한다 (§14.4) */
   config?: { durationCode?: string; productType?: string; transactionType?: string; addOns?: string[] };
   snapshot?: any;
@@ -31,10 +31,14 @@ export interface SubmitInput {
 /** 신청 생성 — 가격은 클라이언트 값을 믿지 않고 슬롯 원장에서 다시 읽는다 */
 export async function submitApplication(input: SubmitInput, brandUserId: string) {
   if (!input.items?.length) throw Object.assign(new Error('선수를 1명 이상 선택해주세요'), { status: 400 });
-  if (input.items.length > 4) throw Object.assign(new Error('한 신청에는 최대 4명까지 담을 수 있습니다'), { status: 400 });
+  const maxItems = input.sourceType === 'DIRECT_PICK' ? 20 : 4;
+  if (input.items.length > maxItems) {
+    throw Object.assign(new Error(`한 신청에는 최대 ${maxItems}개 항목까지 담을 수 있습니다`), { status: 400 });
+  }
 
   const athleteIds = [...new Set(input.items.map((i) => i.athleteId))];
-  if (athleteIds.length !== input.items.length) {
+  /* 직접 PICK은 한 선수에게 여러 상품(착장 슬롯 + 온라인)을 담을 수 있다 (§7.2) */
+  if (input.sourceType !== 'DIRECT_PICK' && athleteIds.length !== input.items.length) {
     throw Object.assign(new Error('같은 선수를 중복해서 담을 수 없습니다'), { status: 400 });
   }
 
@@ -47,12 +51,12 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
   }
 
   /* 직접 PICK 구성 — 기간 배수·추가 활동 요율도 서버 정책표에서 읽는다 (§14.4) */
-  const { DURATIONS, ADD_ONS, TRANSACTION_TYPES } = await import('./directPick.service');
+  const { DURATIONS, ADD_ONS, SALE_MODES } = await import('./directPick.service');
   const cfg = input.config;
   const cfgDuration = cfg ? (DURATIONS.find((d) => d.code === cfg.durationCode) || DURATIONS[0]) : null;
   const cfgAddOns = cfg ? ADD_ONS.filter((a) => (cfg.addOns || []).includes(a.code)) : [];
   const cfgAddOnAmount = cfgAddOns.reduce((sum, a) => sum + a.price, 0);
-  if (cfg?.transactionType && !TRANSACTION_TYPES.some((t) => t.code === cfg.transactionType)) {
+  if (cfg?.transactionType && !SALE_MODES.some((t: { code: string }) => t.code === cfg.transactionType)) {
     throw Object.assign(new Error('구매 방식이 올바르지 않습니다'), { status: 400 });
   }
   if (cfg && cfg.transactionType === 'AUCTION' && ['MONTHS_6', 'MONTHS_12'].includes(cfgDuration!.code)) {
@@ -61,12 +65,17 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
 
   /* 슬롯 가격·판매 상태 서버 재검증 (§14.4) */
   const priced: { athleteId: string; slotInstanceId?: string; slotCode?: string; slotName?: string; role?: string; price: number }[] = [];
+  /* 직접 PICK은 견적함에서 이미 서버가 계산한 금액을 그대로 쓴다 (§5.6 단일 진실원천) */
+  const usePreset = input.sourceType === 'DIRECT_PICK';
   for (const it of input.items) {
     let price = 0;
     let slotName = it.slotName;
     let slotInstanceId = it.slotInstanceId;
 
-    const slot = await prisma.athleteSlot.findFirst({
+    /* 온라인 전용 상품은 착장 슬롯이 없다 — 직접 PICK에서만 slotCode 없이 들어온다 */
+    const onlineOnly = usePreset && !it.slotCode;
+
+    const slot = onlineOnly ? null : await prisma.athleteSlot.findFirst({
       where: {
         athleteId: it.athleteId,
         saleEnabled: true,
@@ -75,12 +84,16 @@ export async function submitApplication(input: SubmitInput, brandUserId: string)
       include: { slotTemplate: true },
       orderBy: { basePrice: 'asc' },
     });
-    if (!slot) throw Object.assign(new Error(`선택한 슬롯을 판매 중이 아닙니다 (${it.slotName || it.slotCode || ''})`), { status: 409 });
-    price = cfgDuration ? slot.basePrice * cfgDuration.months + cfgAddOnAmount : slot.basePrice;
-    slotName = slot.customName || slot.slotTemplate.name;
+    if (!onlineOnly && !slot) {
+      throw Object.assign(new Error(`선택한 슬롯을 판매 중이 아닙니다 (${it.slotName || it.slotCode || ''})`), { status: 409 });
+    }
+    price = usePreset && typeof it.presetPrice === 'number'
+      ? it.presetPrice
+      : cfgDuration ? slot!.basePrice * cfgDuration.months + cfgAddOnAmount : slot!.basePrice;
+    if (slot) slotName = slot.customName || slot.slotTemplate.name;
 
     // OPEN 상태 인스턴스가 있으면 연결 (없어도 신청 자체는 가능 — 협의 상품)
-    if (!slotInstanceId) {
+    if (!slotInstanceId && slot) {
       const inst = await prisma.slotInstance.findFirst({
         where: { athleteId: it.athleteId, slotTemplateId: slot.slotTemplateId, status: 'OPEN' },
         select: { id: true },
