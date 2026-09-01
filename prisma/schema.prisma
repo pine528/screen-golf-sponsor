@@ -4724,3 +4724,460 @@ model PointAdjustment {
   @@map("point_adjustments")
 }
 
+// ============================================
+// SPONPIK 소개 · 통합 콘텐츠 v1.0
+// (핸드오프 v1.0 2026-08-22 — 소개 허브 / 매칭사례 / 성과보장 / 브랜드 / CMS)
+//
+// 원칙
+//  - 출처 없는 성과 수치는 게시할 수 없다 (§5.4 게시 차단).
+//  - 성과보장 정책은 계약 시점 스냅샷으로 고정하고 소급 적용하지 않는다 (§8.2).
+//  - 권리(초상·로고·인용)가 만료되면 자동 비노출 큐로 보낸다 (§10.4).
+// ============================================
+
+/// 소개 페이지 (CMS) — 블록 조합으로 렌더링한다 (§11.2)
+model ContentPage {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  menuLabel   String?   @map("menu_label")
+  menuDesc    String?   @map("menu_desc")
+  /// DRAFT | IN_REVIEW | APPROVED | SCHEDULED | PUBLISHED | ARCHIVED
+  status      String    @default("DRAFT")
+  version     Int       @default(1)
+  locale      String    @default("KO")
+  seoTitle    String?   @map("seo_title")
+  seoDesc     String?   @map("seo_desc")
+  ogImageUrl  String?   @map("og_image_url")
+  sortOrder   Int       @default(0) @map("sort_order")
+  scheduledAt DateTime? @map("scheduled_at")
+  publishedAt DateTime? @map("published_at")
+  publishedBy String?   @map("published_by")
+  updatedBy   String?   @map("updated_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  blocks ContentBlock[]
+
+  @@index([status, sortOrder])
+  @@map("content_pages")
+}
+
+/// 페이지를 구성하는 블록 (§11.2) — 타입별 허용 페이지와 검증 규칙이 다르다
+model ContentBlock {
+  id        String   @id @default(uuid())
+  pageId    String   @map("page_id")
+  /// HERO | FEATURE_GRID | CASE_CAROUSEL | METRIC_STRIP | STEPS | FAQ | BRAND_GRID | INSTAGRAM_CTA | LEGAL_NOTE
+  type      String
+  name      String?
+  /// 블록별 데이터 (제목·설명·CTA·항목 배열 등)
+  payload   Json
+  visible   Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  page ContentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, sortOrder])
+  @@map("content_blocks")
+}
+
+/// 파트너 브랜드 (§10) — 계정이 없는 브랜드도 소개에 노출할 수 있어 Brand 계정과 분리한다
+model PartnerBrand {
+  id           String    @id @default(uuid())
+  slug         String    @unique
+  /// 계정이 있는 브랜드면 연결한다
+  brandId      String?   @map("brand_id")
+  displayName  String    @map("display_name")
+  legalName    String?   @map("legal_name")
+  category     String
+  description  String?
+  website      String?
+  instagram    String?
+  storeUrl     String?   @map("store_url")
+  contactEmail String?   @map("contact_email")
+  /// 로고 변형 {light,dark,mono} + heroImageUrl
+  logoLight    String?   @map("logo_light")
+  logoDark     String?   @map("logo_dark")
+  heroImageUrl String?   @map("hero_image_url")
+  logoAlt      String?   @map("logo_alt")
+  /// PROSPECT | ONBOARDING | ACTIVE_PARTNER | PAST_PARTNER | SUSPENDED | ARCHIVED (§10.3)
+  status       String    @default("ONBOARDING")
+  featured     Boolean   @default(false)
+  sortOrder    Int       @default(0) @map("sort_order")
+  seoTitle     String?   @map("seo_title")
+  seoDesc      String?   @map("seo_desc")
+  publishedAt  DateTime? @map("published_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  cases  MatchingCase[]
+  rights RightsGrant[]
+
+  @@index([status, sortOrder])
+  @@map("partner_brands")
+}
+
+/// 매칭사례 (§6.1) — 계약·성과·권리와 연결되어야 게시할 수 있다
+model MatchingCase {
+  id              String    @id @default(uuid())
+  slug            String    @unique
+  code            String    @unique
+  title           String
+  summary         String?
+  /// 브랜드 목표와 당시 과제
+  background      String?
+  partnerBrandId  String?   @map("partner_brand_id")
+  athleteId       String?   @map("athlete_id")
+  contractId      String?   @map("contract_id")
+  /// 화면에 그대로 쓰는 표시용 이름 (선수/브랜드 삭제 대비)
+  athleteName     String?   @map("athlete_name")
+  brandName       String?   @map("brand_name")
+  sport           String?
+  tour            String?
+  /// 후원 유형 라벨 (모자 정면 · SNS 콘텐츠 등)
+  sponsorTypes    String[]  @default([]) @map("sponsor_types")
+  objectiveCodes  String[]  @default([]) @map("objective_codes")
+  /// 슬롯·기간·활동·콘텐츠 구성 블록
+  executionBlocks Json?     @map("execution_blocks")
+  /// 계약-패치-대회-콘텐츠-검증 타임라인
+  timeline        Json?
+  heroImageUrl    String?   @map("hero_image_url")
+  periodFrom      DateTime? @map("period_from")
+  periodTo        DateTime? @map("period_to")
+  /// DRAFT | IN_REVIEW | AWAITING_PARTY | APPROVED | SCHEDULED | PUBLISHED | ARCHIVED | ON_HOLD (§6.2)
+  status          String    @default("DRAFT")
+  /// 전체 공개등급 — 개별 지표는 CaseMetric.visibility 를 따른다
+  visibility      String    @default("PUBLIC_EXACT")
+  verified        Boolean   @default(false)
+  featured        Boolean   @default(false)
+  sortOrder       Int       @default(0) @map("sort_order")
+  assigneeId      String?   @map("assignee_id")
+  scheduledAt     DateTime? @map("scheduled_at")
+  publishedAt     DateTime? @map("published_at")
+  archivedAt      DateTime? @map("archived_at")
+  holdReason      String?   @map("hold_reason")
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  partnerBrand PartnerBrand?  @relation(fields: [partnerBrandId], references: [id], onDelete: SetNull)
+  metrics      CaseMetric[]
+  quotes       CaseQuote[]
+  approvals    CaseApproval[]
+
+  @@index([status, publishedAt])
+  @@index([partnerBrandId])
+  @@index([athleteId])
+  @@map("matching_cases")
+}
+
+/// 사례 성과 지표 (§12.2) — 값 하나마다 출처·기간·공개등급·검증상태를 갖는다
+model CaseMetric {
+  id                 String    @id @default(uuid())
+  caseId             String    @map("case_id")
+  /// broadcast_seconds | sns_views | engagement_rate | store_visits ...
+  metricCode         String    @map("metric_code")
+  label              String
+  definition         String?
+  definitionVersion  String?   @map("definition_version")
+  value              Float
+  unit               String
+  /// 화면 표기용 (예: +28.6%, 18,420회)
+  displayValue       String?   @map("display_value")
+  periodStart        DateTime? @map("period_start")
+  periodEnd          DateTime? @map("period_end")
+  /// API | FILE | MANUAL | PLATFORM
+  sourceType         String    @map("source_type")
+  sourceName         String?   @map("source_name")
+  sourceId           String?   @map("source_id")
+  evidenceUri        String?   @map("evidence_uri")
+  /// 집계 기준 설명 (중복 제거 규칙 등)
+  aggregationNote    String?   @map("aggregation_note")
+  /// RAW | VERIFIED | FINAL | REJECTED (§12.2)
+  verificationStatus String    @default("RAW") @map("verification_status")
+  verifiedAt         DateTime? @map("verified_at")
+  verifiedBy         String?   @map("verified_by")
+  /// PUBLIC_EXACT | PUBLIC_RANGE | PUBLIC_LABEL | MEMBER_ONLY | PARTY_ONLY | PRIVATE (§5.3)
+  visibility         String    @default("MEMBER_ONLY")
+  isPrimary          Boolean   @default(false) @map("is_primary")
+  sortOrder          Int       @default(0) @map("sort_order")
+  observedAt         DateTime? @map("observed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  case MatchingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, sortOrder])
+  @@map("case_metrics")
+}
+
+/// 사례 인용문 (§5.2) — 당사자 승인 없이는 게시할 수 없다
+model CaseQuote {
+  id         String    @id @default(uuid())
+  caseId     String    @map("case_id")
+  /// BRAND | ATHLETE
+  speaker    String
+  authorName String    @map("author_name")
+  authorRole String?   @map("author_role")
+  avatarUrl  String?   @map("avatar_url")
+  content    String
+  approved   Boolean   @default(false)
+  approvedAt DateTime? @map("approved_at")
+  approvedBy String?   @map("approved_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  case MatchingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("case_quotes")
+}
+
+/// 당사자 승인 (§6.2 AWAITING_PARTY) — 항목별로 브랜드·선수 승인을 받는다
+model CaseApproval {
+  id          String    @id @default(uuid())
+  caseId      String    @map("case_id")
+  /// BRAND | ATHLETE
+  party       String
+  partyId     String?   @map("party_id")
+  partyName   String?   @map("party_name")
+  /// PENDING | VIEWED | APPROVED | CHANGES_REQUESTED
+  status      String    @default("PENDING")
+  comment     String?
+  /// 항목별 승인 상태 {profileImage,logo,quote,metrics}
+  itemStatus  Json?     @map("item_status")
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  viewedAt    DateTime? @map("viewed_at")
+  respondedAt DateTime? @map("responded_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  case MatchingCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, party])
+  @@index([status, expiresAt])
+  @@map("case_approvals")
+}
+
+/// 초상·로고·인용 사용권 (§10.4 · §13) — 만료되면 게시가 자동 차단된다
+model RightsGrant {
+  id             String    @id @default(uuid())
+  /// PORTRAIT | LOGO | QUOTE | PHOTO | VIDEO
+  assetType      String    @map("asset_type")
+  assetName      String    @map("asset_name")
+  assetUrl       String?   @map("asset_url")
+  thumbnailUrl   String?   @map("thumbnail_url")
+  /// 권리 보유자
+  holderType     String    @map("holder_type") // ATHLETE | BRAND | AGENCY | THIRD_PARTY
+  holderName     String    @map("holder_name")
+  athleteId      String?   @map("athlete_id")
+  partnerBrandId String?   @map("partner_brand_id")
+  /// website / social / press / store 등 허용 채널
+  allowedScopes  String[]  @default([]) @map("allowed_scopes")
+  allowedRegion  String?   @map("allowed_region")
+  /// 동의서 등 증빙
+  evidenceUrl    String?   @map("evidence_url")
+  evidenceName   String?   @map("evidence_name")
+  validFrom      DateTime? @map("valid_from")
+  validTo        DateTime? @map("valid_to")
+  /// VALID | EXPIRING | EXPIRED | MISSING_EVIDENCE | REVOKED | BLOCKED
+  status         String    @default("VALID")
+  ownerTeam      String?   @map("owner_team")
+  managerName    String?   @map("manager_name")
+  managerContact String?   @map("manager_contact")
+  /// 이 권리에 걸린 게시물 [{type,title,url}]
+  usedIn         Json?     @map("used_in")
+  note           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  partnerBrand PartnerBrand? @relation(fields: [partnerBrandId], references: [id], onDelete: SetNull)
+
+  @@index([status, validTo])
+  @@index([athleteId])
+  @@map("rights_grants")
+}
+
+/// 성과보장 정책 버전 (§8.1) — ACTIVE 는 수정 불가, 새 버전으로만 바꾼다
+model GuaranteePolicy {
+  id                  String    @id @default(uuid())
+  version             String    @unique
+  summary             String?
+  /// 적용 상품 유형 (RECOMMENDED_PICK | AVAILABLE_OFFER ...)
+  eligibleProductTypes String[] @default([]) @map("eligible_product_types")
+  /// 최소 기간·예산·활동·브랜드 의무 조건
+  qualificationRules  Json      @map("qualification_rules")
+  /// KPI 정의 [{code,label,operator,target,unit,weight,source,required}]
+  metricRules         Json      @map("metric_rules")
+  /// ALL | ANY | WEIGHTED
+  judgeMode           String    @default("ALL") @map("judge_mode")
+  /// 가중 판정 시 최소 달성률(%)
+  minScore            Float?    @map("min_score")
+  /// 보완지원 규칙 {ratio,cap,validMonths,cashRefund:false}
+  remedyRules         Json      @map("remedy_rules")
+  exclusions          Json?
+  appealWindowDays    Int       @default(14) @map("appeal_window_days")
+  /// DRAFT | ACTIVE | RETIRED
+  status              String    @default("DRAFT")
+  effectiveFrom       DateTime? @map("effective_from")
+  effectiveTo         DateTime? @map("effective_to")
+  legalApprovedBy     String?   @map("legal_approved_by")
+  legalApprovedAt     DateTime? @map("legal_approved_at")
+  createdBy           String?   @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  snapshots GuaranteeSnapshot[]
+
+  @@index([status, effectiveFrom])
+  @@map("guarantee_policies")
+}
+
+/// 계약 시점 정책 스냅샷 (§8.2) — 정책이 바뀌어도 기존 계약에는 소급하지 않는다
+model GuaranteeSnapshot {
+  id              String    @id @default(uuid())
+  policyId        String    @map("policy_id")
+  policyVersion   String    @map("policy_version")
+  contractId      String?   @map("contract_id")
+  applicationId   String?   @map("application_id")
+  brandId         String?   @map("brand_id")
+  athleteId       String?   @map("athlete_id")
+  brandName       String?   @map("brand_name")
+  athleteName     String?   @map("athlete_name")
+  contractAmount  Int?      @map("contract_amount")
+  /// 계약에 고정된 KPI 목표 [{code,label,target,unit,weight,source,required}]
+  kpiTargets      Json      @map("kpi_targets")
+  judgeMode       String    @default("ALL") @map("judge_mode")
+  minScore        Float?    @map("min_score")
+  remedyRules     Json      @map("remedy_rules")
+  exclusions      Json?
+  measureStart    DateTime? @map("measure_start")
+  measureEnd      DateTime? @map("measure_end")
+  appealWindowDays Int      @default(14) @map("appeal_window_days")
+  /// NOT_APPLICABLE | ELIGIBLE | ACTIVE | MEASURING | DATA_PENDING | MET | NOT_MET
+  /// | REMEDY_ELIGIBLE | REMEDY_ISSUED | APPEALED | FINAL (§8.3)
+  status          String    @default("ELIGIBLE")
+  judgedAt        DateTime? @map("judged_at")
+  judgedBy        String?   @map("judged_by")
+  finalizedAt     DateTime? @map("finalized_at")
+  /// 최종 확정 결과 사본 (불변)
+  finalSnapshot   Json?     @map("final_snapshot")
+  lockedAt        DateTime? @map("locked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  policy       GuaranteePolicy      @relation(fields: [policyId], references: [id])
+  observations GuaranteeObservation[]
+  appeals      GuaranteeAppeal[]
+  remedies     RemedyGrant[]
+
+  @@index([status, measureEnd])
+  @@index([brandId, status])
+  @@map("guarantee_snapshots")
+}
+
+/// KPI 실적 관측치 (§7.4) — 미수집은 0이 아니라 DATA_PENDING 이다
+model GuaranteeObservation {
+  id           String    @id @default(uuid())
+  snapshotId   String    @map("snapshot_id")
+  metricCode   String    @map("metric_code")
+  label        String
+  target       Float
+  actual       Float?
+  unit         String
+  weight       Float     @default(0)
+  required     Boolean   @default(true)
+  sourceName   String?   @map("source_name")
+  evidenceUri  String?   @map("evidence_uri")
+  /// PENDING | COLLECTED | VERIFIED | REJECTED
+  collectStatus String   @default("PENDING") @map("collect_status")
+  /// MET | NOT_MET | DATA_PENDING | EXCLUDED
+  judgement    String    @default("DATA_PENDING")
+  excludeReason String?  @map("exclude_reason")
+  excludeApprovedBy String? @map("exclude_approved_by")
+  provisional  Boolean   @default(true)
+  nextCheckAt  DateTime? @map("next_check_at")
+  observedAt   DateTime? @map("observed_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  snapshot GuaranteeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, metricCode])
+  @@map("guarantee_observations")
+}
+
+/// 이의제기 (§7.3 · §8.5)
+model GuaranteeAppeal {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  snapshotId  String    @map("snapshot_id")
+  brandUserId String?   @map("brand_user_id")
+  reason      String
+  /// 증빙 유형 체크 [CONTENT_LOG, AD_PROOF, EXTERNAL_CAUSE, ETC]
+  evidenceTypes String[] @default([]) @map("evidence_types")
+  attachments Json?
+  attested    Boolean   @default(false)
+  /// RECEIVED | UNDER_REVIEW | DECIDED | SUPPORT_ISSUED | REJECTED
+  status      String    @default("RECEIVED")
+  slaDueAt    DateTime? @map("sla_due_at")
+  assigneeId  String?   @map("assignee_id")
+  decisionType String?  @map("decision_type") // APPROVE | PARTIAL | REJECT
+  decisionCode String?  @map("decision_code")
+  decisionNote String?  @map("decision_note")
+  decidedBy   String?   @map("decided_by")
+  decidedAt   DateTime? @map("decided_at")
+  approvedBy  String?   @map("approved_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  snapshot GuaranteeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([status, slaDueAt])
+  @@map("guarantee_appeals")
+}
+
+/// 보완지원 원장 (§8.4 · §16.4) — 현금 환급·양도 불가. 발급·사용·소멸을 기록한다
+model RemedyGrant {
+  id           String    @id @default(uuid())
+  code         String    @unique
+  snapshotId   String    @map("snapshot_id")
+  brandId      String?   @map("brand_id")
+  /// 지원 비율(%) 과 금액 상한
+  ratio        Float
+  capAmount    Int       @map("cap_amount")
+  issuedAmount Int       @map("issued_amount")
+  usedAmount   Int       @default(0) @map("used_amount")
+  /// RESERVED | ISSUED | PARTIALLY_USED | USED | EXPIRED | CANCELLED
+  status       String    @default("RESERVED")
+  validFrom    DateTime? @map("valid_from")
+  validTo      DateTime? @map("valid_to")
+  /// 사용처 계약/주문 참조
+  referenceIds String[]  @default([]) @map("reference_ids")
+  issuedBy     String?   @map("issued_by")
+  approvedBy   String?   @map("approved_by")
+  note         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  snapshot GuaranteeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([status, validTo])
+  @@index([brandId, status])
+  @@map("remedy_grants")
+}
+
+/// 소개 영역 분석 이벤트 (§13.1) — 개인 식별자를 저장하지 않는다
+model AboutAnalyticsEvent {
+  id         String   @id @default(uuid())
+  event      String
+  pageSlug   String?  @map("page_slug")
+  /// pseudonymous id (내부 user_id 아님)
+  visitorKey String?  @map("visitor_key")
+  role       String?
+  params     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([event, createdAt])
+  @@index([pageSlug, createdAt])
+  @@map("about_analytics_events")
+}
+
