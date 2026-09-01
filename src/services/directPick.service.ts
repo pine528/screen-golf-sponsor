@@ -116,6 +116,7 @@ export async function listPickAthletes(params: SearchParams) {
   if (!athletes.length) return { athletes: [], total: 0 };
 
   const ids = athletes.map((a) => a.id);
+  await ensureOffers(ids);
   const [slots, offers, temps, results] = await Promise.all([
     prisma.athleteSlot.findMany({
       where: { athleteId: { in: ids }, saleEnabled: true },
@@ -222,15 +223,26 @@ export async function listPickAthletes(params: SearchParams) {
 
 /* ── 3단계 데이터: 오퍼(슬롯 + 온라인 상품) (§4) ─────────── */
 
-/** 선수 온라인 상품이 없으면 기본 카탈로그로 시딩한다 */
-async function ensureOffers(athleteId: string) {
-  const count = await prisma.athleteOfferProduct.count({ where: { athleteId } });
-  if (count > 0) return;
+/**
+ * 선수 온라인 상품이 없으면 기본 카탈로그로 시딩한다.
+ * 목록과 상세가 같은 값을 보여야 하므로 두 경로에서 모두 호출한다.
+ */
+async function ensureOffers(athleteIds: string | string[]) {
+  const ids = Array.isArray(athleteIds) ? athleteIds : [athleteIds];
+  if (!ids.length) return;
+  const existing = await prisma.athleteOfferProduct.findMany({
+    where: { athleteId: { in: ids } },
+    select: { athleteId: true },
+    distinct: ['athleteId'],
+  });
+  const has = new Set(existing.map((e) => e.athleteId));
+  const missing = ids.filter((id) => !has.has(id));
+  if (!missing.length) return;
   await prisma.athleteOfferProduct.createMany({
-    data: DEFAULT_OFFERS.map((o) => ({
+    data: missing.flatMap((athleteId) => DEFAULT_OFFERS.map((o) => ({
       athleteId, code: o.code, name: o.name, type: o.type, price: o.price,
       unit: o.unit, sortOrder: o.sortOrder, description: o.description, printUse: o.printUse,
-    })),
+    }))),
     skipDuplicates: true,
   });
 }
