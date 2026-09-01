@@ -891,21 +891,43 @@ IA: 후원하기 = **직접 PICK** / **추천 PICK** / **디지털 파트너 월
 ### 표기 원칙 (LEG-06 유지)
 산출 근거가 없는 지표는 화면에 넣지 않는다 — 시안의 '팬 온도'는 미표시.
 
-## 팬 참여 — 팬온도 (2026-09-01)
-IA: 팬 참여 = **팬 VOTE** / **선수 커뮤니티** / **팬스토어** / **팬포인트**.
+## 팬 참여 v1.0 (2026-09-01) — §팬참여 핸드오프 2026-08-22
+IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토어** (4축), 진입은 `/fan`.
 
-- 화면: `/fan/vote` · `/fan/community/:athleteId` · `/fan/store` · `/fan/points`
-- API `/fan-engage`: `rules` · `athletes` · `athletes/:id/temperature` ·
-  `athletes/:id/posts`(GET/POST) · `posts/:id/like` · `posts/:id/comments`(GET/POST) ·
-  `athletes/:id/brand-suggestions`(GET/POST) · `me`
-- **팬온도** = `FanTemperatureEvent` 원장의 `deltaMilli` 합 ÷ 1000 (0.001℃ 단위 정수).
-  활동 1건 = 1행, `(선수·유저·활동·refType·refId)` 유니크로 중복 적립 차단. 임의 보정 없음(LEG-06).
-- 활동 1건당 정책은 `fanEngage.service.ts`의 `ENGAGE_RULES` 한 표:
-  VOTE +0.2℃/+20P · 팬레터 +0.3℃/+30P · 커뮤니티 +0.25℃/+5P ·
-  팬스토어 +0.1℃/구매 1% · 브랜드 추천 +0.1℃/+10P
-- 팬레터는 `isPrivate=true` — 선수 본인과 작성자만 열람
-- 포인트 적립은 기존 `pointService.adjustPoints`(원장+트랜잭션+멱등) 재사용,
-  사유는 `FAN_ENGAGE_REWARD`
+- 화면 16종: `/fan` · `/fan/vote`(+`/:id`) · `/fan/temperature/:athleteId` · `/fan/contributions`
+  · `/fan/points`(+`/ledger`) · `/fan/community/:athleteId` · `/fan/letter/:athleteId`
+  · `/fan/brand-suggest/:athleteId` · `/fan/store`(+`/:idOrSlug`, `/product/:id`)
+  · `/fan/campaign` · `/fan/activity`  (구 화면은 `/fan/*-legacy`)
+- API `/fan-hub`: `meta` · `/` · `votes`(+`/:id`, `/:id/ballot`) · `athletes/:id/temperature`
+  · `me/contributions` · `me/points` · `me/point-ledger` · `me/letter-quota`
+  · `athletes/:id/letters` · `brand-suggest/options` · `me/brand-suggestions`
+  · `athletes/:id/brand-suggestions`(GET/POST) · `stores`(+`/:idOrSlug`, `/:id/exit`)
+  · `store-products/:id` · `me/store-exits` · `store-postback` · `campaign` · `me/activity`
+
+**팬온도** (`fanTemperature.service.ts`, 산식 `fan-temp-v1.0-2026-08-22`)
+- 최근 30일 유효 활동을 0~100으로 환산한 **활성도 지표**. 선수의 실력·가치 점수가 아니다.
+- 구성요소 6종 = 활동팬수 30 / VOTE 20 / 커뮤니티 20 / 스토어 15 / 지속성 10 / 선수응답 5.
+  각 항목을 `cap`으로 정규화 후 가중합, 최근 7일 1.3배, 신뢰도 계수(표본/30, 하한 0.3), 무효표 감점(최대 15).
+- 표본 30명 미만 = 점수 비공개("데이터 축적 중"). 관리자 수동 숫자 입력 금지 — 제외·재계산만 허용.
+- 일배치 `FanTemperatureSnapshot`에 산식 버전과 함께 저장, 과거 스냅샷은 덮어쓰지 않는다.
+
+**팬포인트** (`fanPoint.service.ts`)
+- 원장 상태: PENDING → AVAILABLE → REVERSED / EXPIRED. 잔액 직접 수정 금지, 모든 변동이 거래로 남는다.
+- 적립표 `EARN_RULES` 한 표: 관심선수 3P · VOTE 2P(일5) · 예측정답 5P · 댓글 1P(일5) ·
+  게시글 3P(주3) · 브랜드추천 5P(월3) · 채택 30P(월1) · 구매 1%(월 5,000P).
+- 유효기간 12개월. 회수·만료는 삭제가 아니라 원거래를 참조하는 역거래로 기록한다.
+
+**Fan VOTE** (`fanHub.service.ts`) — 1계정 1표, 예측형만 마감 전 변경 가능,
+개설 30분·30표 미만이면 결과 숨김, 미참여자에게 결과 비공개.
+
+**응원편지** — 월 2통, AutoMod 위반 시 `PENDING`(팬온도·포인트 미반영), 선수 개별 답장 의무 없음.
+
+**브랜드 추천** (`fanBrandSuggest.service.ts`) — 접수→검토→전달→관심→채택/보류/종료.
+이해관계 자가표시 필수(NONE 외에는 검토 전 적립 보류), 이유 50~500자, 기본 비공개, 월 3건.
+
+**팬스토어** (`fanStore.service.ts`) — 외부몰 연결형. 내부 결제 없음.
+이동 시 익명 `click_id`+UTM 발급, 포인트는 브랜드 구매확정 회신(`store-postback`) 후 적립.
+외부몰 이동 내역을 SPONPIK 주문처럼 표시하지 않는다. 책임주체를 모든 화면에 노출.
 
 ## 직접 선택 PICK v1.0 (2026-09-02) — §리디자인 v2.0 전면 재구성
 9단계: 선수 탐색 → 선수 확인 → 상품 PICK → 조건 구성 → 견적함 → 승인 요청 → 선수 승인 → 결제 → 완료

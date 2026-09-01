@@ -20,7 +20,7 @@
 | A5 | **추가 활동 요율** | SNS 피드 40,000 / 스토리 20,000 / 릴스 20,000 / 매장방문 300,000 / 행사 700,000 / 프로암 500,000 / 후기 300,000 | `directPick.service.ts` `ADD_ONS` | 대기 |
 | A6 | **추가 활동 선수별 차등** | 전 선수 동일 요율 | 차등 필요 시 `AthleteOfferProduct` 확장 또는 신규 테이블 | 대기 |
 | A7 | **온라인 상품 기본가** | 프로필 패치 200,000 / 성장마켓 250,000 / 매장 인쇄물 150,000 (월) | `directPick.service.ts` `DEFAULT_OFFERS` | 대기 |
-| A8 | **팬온도 건당 상승치** | VOTE +0.2 / 팬레터 +0.3 / 커뮤니티 +0.25 / 팬스토어 +0.1 / 브랜드추천 +0.1 ℃ | `fanEngage.service.ts` `ENGAGE_RULES` | 대기 |
+| A8 | ~~**팬온도 건당 상승치**~~ | 팬참여 핸드오프 v1.0 §6 산식(30일 롤링 0~100)으로 **대체됨**. `fanTemperature.service.ts` `COMPONENTS`가 기준 | `fanEngage.service.ts` `ENGAGE_RULES` (구 커뮤니티 화면 전용으로 잔존) | 해소 |
 | A9 | **팬온도 목표선** | 미표시 (시안의 "목표 40.0℃"는 근거 없어 제외) | 기준 확정 시 게이지 추가 | 대기 |
 | A10 | **팬 참여 포인트** | VOTE +20P / 팬레터 +30P / 커뮤니티 +5P / 브랜드추천 +10P / 팬스토어 구매금액 1% | `fanEngage.service.ts` `ENGAGE_RULES` | 대기 |
 | A11 | **hold / SLA** | hold 15분 + 결제 진입 10분 1회 연장, 승인 SLA 72시간, 견적 최대 5명 | `directPick.service.ts` 상수 | 준비됨 (핸드오프 부록 B 기본안 그대로) |
@@ -89,12 +89,52 @@
 
 ---
 
+## C6. 팬 참여 v1.0 (핸드오프 2026-08-22) 미구현
+
+### 배치·스케줄러 (호출자 없음 — 함수는 구현되어 있다)
+- [ ] `fanTemperature.runDailySnapshot()` — 매일 03:00 팬온도 스냅샷.
+      현재는 관리자 수동 실행(`POST /fan-hub/admin/temperature-snapshot`)과
+      조회 시 즉석 계산으로만 동작한다
+- [ ] `fanPoint.confirmPending()` — pending → available 확정 (매시간 + 결과확정 시)
+- [ ] `fanPoint.expirePoints()` — 매일 00:10 만료 처리
+- [ ] 소멸 예고 알림 발송 (§7.5) — D-30 / D-7 기준만 정해져 있고 발송 경로 미정
+
+### Fan VOTE
+- [ ] `BRAND`(브랜드 설문) · `PICK`(팬선정) · 미션형 유형 — `VoteV2.templateCode` 매핑이 없어
+      현재는 OX/4지선다/예측만 분류된다 (`fanHub.service.ts` `typeOf`)
+- [ ] 예측형 정답 확정 시 `VOTE_CORRECT` 자동 적립 연결 (정산 훅 필요)
+- [ ] `pending_review` 표 격리 — 유효성 판정 로직은 있으나 판정 주체가 없다
+
+### 팬스토어
+- [ ] 관리자 스토어·상품 등록 화면 (A09) — 현재 DB 직접 입력만 가능
+- [ ] 브랜드 postback 연동 — 인증 방식·정산 파일 포맷 미정.
+      지금은 관리자 전용 `POST /fan-hub/store-postback` 수동 회신뿐이다
+- [ ] 취소·반품 시 포인트 reversal 자동 연결 (`fanPoint.reverse()`는 구현됨)
+- [ ] AR 이미지·디지털 상품 (2차)
+
+### 응원편지 · 커뮤니티
+- [ ] 선수 감사 메시지 작성 UI (월 1회, `FanLetter.thanksAt`)
+- [ ] AutoMod 욕설·혐오 사전 — 현재는 연락처·계좌·외부메신저·만남·금전 요구만 차단
+- [ ] 공개 편지 큐레이션 (선수/운영자)
+- [ ] 신고·차단 UI (§10.3) — 백엔드 `isHidden`만 존재
+
+### 관리자 12화면 (A01~A12)
+- [ ] 대표님이 별도 전달 예정. 전달 전까지 착수하지 않는다
+
+---
+
 ## D. 정리 대상 (기술 부채)
 
 - [ ] `SponsorshipProduct` / `ProductSlot` 모델이 스키마에만 있고 코드에서 미사용 — 직접 PICK의
       `AthleteOfferProduct`와 역할이 겹친다. 통합하거나 제거 결정 필요
 - [ ] `src/frontend/dist/`가 git에 추적됨 — Vercel이 소스에서 빌드하므로 제외 검토
 - [ ] 시안 이미지·docx가 저장소 루트에 흩어져 있음 (`리디자인/1`, `리디자인/2`) — 정리 위치 결정
+- [ ] `docs/PROJECT_STATE.md`가 960줄 — 규칙(300줄 이내)을 크게 넘었다. 섹션별 분리 또는 요약 필요
+- [ ] 구 팬 화면 3종이 v1 누적 팬온도 API(`getEngageTemperature`)를 계속 사용한다 —
+      `FanVote.tsx` `FanStore.tsx` `FanCommunity.tsx`. 신규 화면으로 대체 완료 후
+      `/fan/*-legacy` 라우트와 함께 제거 검토
+- [ ] `fanEngage.service.ts`의 `ENGAGE_RULES` 누적 ℃ 원장과
+      `fanTemperature.service.ts`의 30일 산식이 공존한다 — 구 화면 제거 시점에 정리
 
 ---
 

@@ -1117,3 +1117,50 @@
   체크아웃 15분 hold와 재고 보유 카운트다운 UI는 미구현
 - 협의형 상담 → quote 확정 흐름, 경매 브릿지, 비로그인 담기(로컬 7일) 미구현
 - 상품 비교(최대 3개), CSV 일괄등록, 관리자 권한 세분화(OfferEditor/Pricing/Merchandiser) 미구현
+
+## [2026-09-01] 팬 참여 v1.0 재개편 (핸드오프 2026-08-22)
+
+### 변경 사항
+- **팬온도 산식 v1.0 도입** — 기존 누적 ℃ 원장을 30일 롤링 0~100 활성도 지표로 대체.
+  6개 구성요소(활동팬수 30 / VOTE 20 / 커뮤니티 20 / 스토어 15 / 지속성 10 / 선수응답 5),
+  최근 7일 1.3배 가중, 표본 30 미만은 "데이터 축적 중", 신뢰도 계수 + 무효표 감점.
+  산식 버전(`fan-temp-v1.0-2026-08-22`)과 함께 일배치 스냅샷 저장.
+- **팬포인트 원장 상태 머신** — PENDING → AVAILABLE → REVERSED/EXPIRED.
+  적립표 8종(관심선수 3P / VOTE 2P·일5 / 예측정답 5P / 댓글 1P·일5 / 게시글 3P·주3 /
+  브랜드추천 5P·월3 / 채택 30P·월1 / 구매 1%·월5,000P), 유효기간 12개월, 회수는 원거래 참조 역거래.
+- **Fan VOTE 정책** — 유형 5종, 1계정 1표, 예측형만 마감 전 변경 가능,
+  초기 30분·30표 미만 결과 숨김, 참여 전 결과 비공개.
+- **응원편지** — 월 2통, AutoMod(연락처·계좌·외부메신저·만남·금전 요구 자동 보류),
+  보류 건은 팬온도·포인트 미반영, 선수 개별 답장 의무 없음 고지.
+- **브랜드 추천 파이프라인** — 접수→검토→전달→관심→채택/보류/종료,
+  이해관계 자가표시 필수(있으면 검토 전 적립 보류), 이유 50~500자, 기본 비공개, 월 3건.
+- **팬스토어 v1.0 (외부몰 연결형)** — 협업 스토리·혜택코드·책임주체 노출,
+  이동 시 익명 click_id + UTM 발급, 포인트는 브랜드 구매확정 회신 후 적립,
+  외부몰 이동 내역을 SPONPIK 주문과 분리 표시.
+- **연말 응원광고** — 다양성 40 / 지속성 30 / 편지 20 / 공익미션 10 가중치,
+  집행 미보장 고지 노출.
+- **팬 화면 16종(F01~F16) 신규 디자인** — 공용 UI 킷(`FanKit.tsx`) 기반.
+  구 화면은 `/fan/*-legacy` 경로로 보존.
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` — `FanTemperatureSnapshot` `FanContribution` `FanLetter`
+  `FanAdCampaign` `FanStore` `FanStoreProduct` `FanStoreClick` 추가,
+  `PointLedgerTx`(status/expiresAt/confirmedAt/originalTxId/athleteId) ·
+  `FanTemperatureEvent`(validity/riskScore/amount) · `FanBrandSuggestion`(interest/isPublic/statusNote) 확장
+- `src/backend/prisma/migrations/20260904_fan_engage_v2/migration.sql` — 멱등 마이그레이션
+- `src/backend/src/services/fanTemperature.service.ts` (신규)
+- `src/backend/src/services/fanPoint.service.ts` (신규)
+- `src/backend/src/services/fanHub.service.ts` (신규)
+- `src/backend/src/services/fanBrandSuggest.service.ts` (신규)
+- `src/backend/src/services/fanStore.service.ts` (신규)
+- `src/backend/src/routes/fanHub.routes.ts` (신규), `src/backend/src/routes/index.ts`
+- `src/frontend/src/components/fanhub/FanKit.tsx` (신규)
+- `src/frontend/src/pages/fanhub/` — FanHub / FanVoteList / FanVoteDetail / FanTemperature /
+  FanContributions / FanPointsHome / FanPointLedger / FanLetter / FanCommunityNew /
+  FanBrandSuggest / FanStoreHome / FanStoreDetail / FanStoreProduct / FanCampaign / FanActivity (신규)
+- `src/frontend/src/services/api.ts`, `src/frontend/src/App.tsx`
+
+### 참고
+- 미구현·미정 항목은 `docs/REDESIGN_BACKLOG.md` C6 섹션에 기록.
+- 배치 3종(스냅샷·pending 확정·만료)은 함수만 구현되어 있고 스케줄러 연결이 남아 있음.
+- 관리자 12화면(A01~A12)은 시안 전달 대기.
