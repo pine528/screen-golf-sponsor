@@ -1258,3 +1258,53 @@
 ### 참고
 - 미구현·미정 항목은 `docs/REDESIGN_BACKLOG.md` C7 섹션에 기록.
 - 구 소개 화면 5종은 `/about/*-legacy` 경로로 보존.
+
+## [2026-09-02] 공개 IA v2.0 배선 정리 + 선수 목록 §7.1 재작성
+
+리디자인 폴더(1~6) 시안·핸드오프를 현재 화면과 다시 대조했다. 화면 자체는 모두
+구현돼 있었고, 남은 문제는 **구 IA로 이어지는 링크**와 **구 디자인이 남은 선수 목록**,
+**로그인 후 사이드바가 너무 길다**는 세 가지였다.
+
+### 변경 사항
+- **선수 목록 `/athletes` 재작성 (전체사이트개편 v2.0 §7.1)** — 추천·신규·전체를
+  세 번 나열하던 구조를 한 목록 + 한 정렬(추천/팬온도/최근 성적/신규/가격)로 통합.
+  카드는 사진·이름·투어·지역·팬온도·최근 성적·슬롯 현황·시작가만 둔다.
+  팬온도 미집계는 "집계 중", 성적 미수집은 "확인 필요"로 표시(LEG-06).
+  이모지·장식 배지 제거. 검색어는 `?q=`로 주소에 유지.
+- **PublicHeader 메가 메뉴** — 소개 메뉴 5종을 신규 소개 라우트로 교체
+  (`/about/service` · `/about/how-it-works` · `/about/performance-guarantee` ·
+  `/about/brands` · `/about/cases`). 팬 참여 메뉴를 팬 참여 홈·VOTE·커뮤니티·
+  팬포인트·팬스토어 5종으로 재구성. 관심 선수 → `/fan/contributions`.
+- **MobileTabBar** — 경매/AI 매칭/마켓 탭을 v2.0 GNB와 같은
+  홈·후원하기·선수·팬 참여·마이 5탭으로 교체.
+- **Home** — `/auctions` 로 가던 보조 링크·전체보기를 `/sponsor/available` 로,
+  한 줄 소개 링크를 `/about/how-it-works` 로. 진행 중 후원기회에 후원상품
+  (`listAvailableOffers`, 마감 임박순 3건)을 앞에 합쳐 노출. 푸터를
+  후원하기/선수/팬 참여/스폰픽 소개/지원 5열로 재구성.
+- **HowItWorks** — 존재하지 않던 `/sponsor/digital` → `/digital-partner`,
+  `/athlete/register` → `/register`, `/athlete/proposals` → `/dashboard`.
+- **Layout(로그인 셸) 사이드바** — 역할별 평면 목록(🔥 접두어·"Phase 2/3" 표기)을
+  그룹 구조로 교체. 자주 쓰는 메뉴만 펼치고 나머지는 "더보기"로 접는다.
+  관리자는 운영/회원/후원·슬롯/재무/성과·데이터/설정 6그룹. 활성 경로가 접힌
+  그룹 안에 있으면 자동으로 펼친다.
+- 선수 카드 이미지 박스가 flex 자식이라 aspect-ratio가 무시되던 문제 —
+  `overflow-hidden shrink-0` 추가.
+
+### 영향받는 파일
+- `src/frontend/src/pages/PublicAthletes.tsx` (재작성)
+- `src/frontend/src/components/PublicHeader.tsx` · `MobileTabBar.tsx` · `Layout.tsx`
+- `src/frontend/src/pages/Home.tsx` · `pages/about/HowItWorks.tsx`
+
+### 검증
+- `tsc --noEmit` · `vite build` 통과.
+- 로컬(5173/3000)에서 `/athletes` 데스크톱·모바일, `/` 메가 메뉴 2종, 모바일 탭바 확인.
+- 로컬 DB에 Offer/AthleteOfferProduct/FanAdCampaign 테이블이 없어 500이 나던 것은
+  `prisma db push`로 로컬만 동기화(운영 무관).
+- 로그인 셸 사이드바는 타입·빌드만 확인(로그인 계정 미보유).
+
+### 참고
+- 구 IA 화면(`/auctions` `/ai-match` `/growth-market` `/features` `/how-it-works`
+  `/for-who` `/guide` `/faq`)은 라우트는 남겨두고 공개 내비게이션에서만 뺐다.
+  제거 결정은 `docs/REDESIGN_BACKLOG.md` D 섹션.
+- Vercel 프리뷰 관리자 로그인 실패는 코드가 아니라 Render `CORS_ORIGIN` 미등록
+  (+ Vercel Deployment Protection) 문제. 환경변수에 프리뷰 도메인 추가 필요.

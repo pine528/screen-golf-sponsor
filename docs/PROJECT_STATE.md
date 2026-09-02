@@ -1013,3 +1013,15 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - **hold**: 담기에는 걸지 않고 체크아웃 진입 시 15분 (`offer.service.ts` 상수)
 - **예상성과**: 범위·근거·기준일·신뢰도와 "보장하지 않음"을 항상 함께 반환·표시 (LEG-06)
 - 승인·계약·결제·완료는 기존 `SponsorshipApplication` 모듈 재사용
+
+## 공개 IA v2.0 배선 (2026-09-02)
+전체사이트개편 v2.0 §1.1 GNB = 후원하기 / 선수 / 팬 참여 / 스폰픽 소개 (+마이).
+- `PublicHeader` 메가 메뉴가 신규 라우트만 가리킨다 (소개 `/about/service|how-it-works|performance-guarantee|brands|cases`,
+  팬 `/fan|/fan/vote|/fan/community|/fan/points|/fan/store`).
+- `MobileTabBar` 5탭: 홈 `/` · 후원하기 `/sponsor/available` · 선수 `/athletes` · 팬 참여 `/fan` · 마이.
+- `/athletes`(PublicAthletes)는 §7.1 단일 목록: `GET /direct-pick/athletes` 하나로 검색·칩·정렬.
+  미집계 팬온도 "집계 중", 미수집 성적 "확인 필요" (LEG-06).
+- 로그인 셸 `Layout.tsx` 사이드바는 역할별 그룹(`brandNav`/`athleteNav`/`fanNav`/`adminNav`/`agencyNav`).
+  `collapsed` 그룹은 활성 경로가 안에 있을 때만 자동 펼침.
+- 구 IA 화면(`/auctions` `/ai-match` `/growth-market` `/features` `/how-it-works` `/for-who` `/guide` `/faq`)은
+  라우트만 남고 공개 내비게이션에서 제외. 제거 결정은 `REDESIGN_BACKLOG.md` D.

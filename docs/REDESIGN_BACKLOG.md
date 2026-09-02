@@ -178,6 +178,15 @@
       `/about/guarantee`, `/about/brands-legacy`, `/about/cases-legacy`).
       신규 화면 검수 후 제거
 - [ ] `prisma/seed-about-demo.ts` 는 로컬 검증용 시드다. 운영 배포 대상이 아니다
+- [ ] 구 IA 공개 화면 8종이 라우트만 남아 있다 (`/auctions` `/ai-match` `/growth-market`
+      `/features` `/how-it-works` `/for-who` `/guide` `/faq`). 2026-09-02 공개 내비게이션
+      (헤더·모바일 탭바·홈·푸터)에서는 모두 뺐다. 외부 유입 링크 확인 후 리다이렉트 또는 제거
+- [ ] 로그인 셸(`Layout.tsx`) 사이드바를 그룹 구조로 바꿨지만, 각 역할의 "더보기" 그룹에
+      들어간 구 화면(브랜드 경매·AI 매칭·성장마켓, 선수 경매·성장마켓 등)은 실제 사용 여부를
+      확인해 정리 필요
+- [ ] 공개 화면 키트가 4벌 공존한다 (직접 PICK `direct/*`, 후원상품 `offers/*`, 팬 `FanKit`,
+      소개 `AboutShell`). 버튼 높이·모서리·색 토큰은 §11 규격으로 맞춰져 있으나 컴포넌트는
+      중복 — 공용 UI 패키지로 통합 검토
 - [ ] 구 팬 화면 3종이 v1 누적 팬온도 API(`getEngageTemperature`)를 계속 사용한다 —
       `FanVote.tsx` `FanStore.tsx` `FanCommunity.tsx`. 신규 화면으로 대체 완료 후
       `/fan/*-legacy` 라우트와 함께 제거 검토
