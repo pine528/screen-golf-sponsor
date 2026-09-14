@@ -1445,3 +1445,20 @@
 
 ### 검증
 - tsc · vite build 통과. `/athletes/:id` 로컬 렌더 확인(스냅샷 4카드 + 탭). 푸시 완료.
+
+## [2026-09-14] 팬 허브 flywheel · 팬온도 고정 문구
+
+### 변경 사항
+- `/fan` 히어로 카피를 "응원이 선수의 가치가 됩니다."로, 그 아래 "내 응원은 이렇게 선수에게 돌아갑니다" 4단계
+  (응원하기 → 팬온도·팬기여도 → 선수 성장 신호 → 추천·브랜드 후원) 흐름도를 기능 카드보다 먼저 배치 (UI 가이드 §11.1).
+  브랜드에는 개인 팬 데이터가 아니라 집계·추세만 전달된다는 문장 포함.
+- 팬온도 고정 문구를 `FanKit.FAN_TEMP_NOTE` 한 곳에 두고 팬 허브·팬온도 페이지·선수 상세 Snapshot·
+  `/athletes` `/sponsor/direct/athletes` 카드 tooltip에 적용 (§11.4).
+- 팬온도 페이지·VOTE 참여 후 문구(참여 완료·+nP 적립 예정·팬온도 반영)는 이미 구현돼 있어 손대지 않음.
+
+### 영향받는 파일
+- `src/frontend/src/components/fanhub/FanKit.tsx` · `components/athlete/AthleteSnapshot.tsx`
+- `src/frontend/src/pages/fanhub/FanHub.tsx` · `FanTemperature.tsx` · `pages/PublicAthletes.tsx` · `pages/direct/DirectAthletes.tsx`
+
+### 검증
+- tsc · vite build 통과. `/fan` 로컬 렌더 확인. 푸시 완료.

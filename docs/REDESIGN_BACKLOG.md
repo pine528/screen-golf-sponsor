@@ -180,8 +180,6 @@
 
 ### P1
 - [ ] `/athletes/:id` 본문(1,900줄 · 경매 패널 · ROI 대시보드 · 점수 산정 기준)을 탭 5개 구조로 분리 재작성 — 상단 Snapshot·탭은 2026-09-14 완료 (§10.2)
-- [ ] `/fan` flywheel 시각화, `/fan/temperature` 30일 변화 + 기여 원인 (§11)
-- [ ] 팬온도 고정 문구 — 선수 상세에는 적용(2026-09-14). 팬 허브·팬온도 페이지·선수 카드 tooltip에도 적용
 - [ ] ROI 4축(Media/Social/Fan/Commerce) + Expected vs Actual 분리 (§15)
 - [ ] 공통 상태 화면 loading/empty/error/stale/restricted/expired/conflict 를 P0 화면에 정의 (§17.2)
 - [ ] 관리자를 도메인별 console 9종으로 재편 (§16) — 현재 팬/소개/상품 3종만 신규 셸
