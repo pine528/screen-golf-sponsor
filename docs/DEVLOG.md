@@ -1407,3 +1407,20 @@
 
 ### 검증
 - tsc · vite build 통과. `/sponsor/direct/athletes` 렌더 확인. 푸시 완료(redesign ff80f40).
+
+## [2026-09-14] 직접 PICK — 후원 위치 + 조건 구성 한 화면 통합
+
+### 변경 사항
+- `/sponsor/direct/build/:athleteId` 하나에서 위치 선택 → 온라인 상품 → 기간·판매 방식·시작일·추가 활동·사용 범위
+  → 서버 견적(공급가·VAT·총액) → 견적함 담기까지 끝낸다 (UI 가이드 §6.3, v2.1 §3에는 /configure 없음).
+- 조건이 바뀔 때마다 250ms 디바운스로 항목별 서버 quote 재계산. 화면은 응답 금액만 표시(S2 §5.6).
+- 선택값은 주소 query(`slot`, `offers`)로 유지. 비로그인 담기 시 임시저장 후 로그인 복귀.
+- 주소의 slot 코드가 목록에 없으면 무시. 온라인 전용 상품 때문에 빠진 사용 범위는 경고.
+- 소재 입력(로고·카피·URL)은 승인 요청 화면(DirectRequest)에서 받으므로 제거.
+- `/build/:id/configure` → `/build/:id` Navigate(선택 query 유지). `DirectConfigure.tsx` 삭제.
+
+### 영향받는 파일
+- `src/frontend/src/pages/direct/DirectBuild.tsx` (재작성) · `App.tsx` · `pages/direct/DirectConfigure.tsx` (삭제)
+
+### 검증
+- tsc · vite build 통과. 로컬에서 모자 정면 선택 → 공급가 300만 · VAT 30만 · 총액 330만 표시 확인.

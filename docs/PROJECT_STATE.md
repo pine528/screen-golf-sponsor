@@ -1035,3 +1035,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - (2026-09-14 추가) `/dashboard`는 역할별 Action-first: 브랜드 = 승인/결제/진행/리포트 타일 → 이어서 하기 → 진행 중 → 성과 → 다음 제안,
   선수 = 요청/서명/슬롯/정산 타일 → 승인 목록 → 계약·팬·체크인 → 성과. 구 URL(`/about`, `/about/how`, `/about/guarantee`,
   `/sponsor/digital`, `/opportunities`)은 `App.tsx`에서 Navigate replace.
+- (2026-09-14) 직접 PICK 구성은 `/sponsor/direct/build/:athleteId` 한 화면(위치·온라인 상품·기간·판매 방식·추가 활동·사용 범위·서버 견적·담기). `/configure` 경로는 build로 이동.

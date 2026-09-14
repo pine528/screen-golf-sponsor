@@ -172,7 +172,7 @@
 메인은 2026-09-14 시안대로 완료. 아래는 UI 가이드 §18 우선순위 매트릭스 중 미착수분.
 
 ### P0
-- [ ] `/sponsor/direct/build/:id` — 2026-09-14 상태명·sticky CTA·레이아웃 정리 완료. 남은 것: /configure(기간·판매유형·추가활동·권리)를 build 한 화면으로 합치기(v2.1 §3 canonical route에는 /configure 없음), 도식을 선수 실사로
+- [ ] `/sponsor/direct/build/:id` — 도식을 선수 실사 + Front/Back 실측 좌표로 교체 (현재 공용 인체 도식, 후면 좌표 없음)
 - [ ] 추천 결과 — 승인 가능성·예상 KPI 범위·위험 필드를 엔진 응답에 추가해 카드에 노출 (§7.4, 2026-09-14 UI는 정리 완료)
 - [ ] 디지털 파트너 플랜 금액(START/GROW/PLUS)을 Admin Pricing Config로 이동 — 현재 프론트 상수 (v2.1 §9.2)
 - [ ] 대시보드 — 브랜드 "새 리포트" 건수 API, 선수 팬온도/마지막 체크인 API 연결 (현재 "집계 중"), `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (§13)
