@@ -264,9 +264,41 @@ export async function checkoutApplication(id: string, brandUserId: string, opts?
         comment: `${approved.length}명 · 공급가 ${total.toLocaleString()}원`,
       },
     });
+    /* Payment → Campaign (v2.1 §5.1): 결제가 끝나면 실행·성과 측정 단위인 캠페인을 만들어 신청과 연결한다.
+       브랜드 프로필이 없으면 연결만 건너뛴다(결제 자체는 막지 않는다). */
+    let campaignId: string | null = app.campaignId ?? null;
+    if (!campaignId) {
+      const brand = app.brandId
+        ? await tx.brand.findUnique({ where: { id: app.brandId }, select: { id: true } })
+        : await tx.brand.findFirst({ where: { userId: brandUserId }, select: { id: true } });
+      if (brand) {
+        const start = new Date();
+        const end = new Date(start);
+        end.setMonth(end.getMonth() + Math.max(1, app.durationMonths || 1));
+        const campaign = await tx.campaign.create({
+          data: {
+            brandId: brand.id,
+            name: app.planName ? `${app.planName} 후원` : app.sourceType === 'DIRECT_PICK' ? '직접 PICK 후원' : '추천 PICK 후원',
+            description: `후원 신청 ${id} 결제 완료로 생성`,
+            budget: total + vat,
+            spentAmount: 0,
+            budgetAllocated: total + vat,
+            targetCategories: [],
+            excludedAthletes: [],
+            preferredAthletes: approved.map((i) => i.athleteId),
+            preferredTours: [],
+            dateStart: start,
+            dateEnd: end,
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
+        campaignId = campaign.id;
+      }
+    }
     return tx.sponsorshipApplication.update({
       where: { id },
-      data: { status: 'ACTIVE', totalAmount: total, vatAmount: vat, paidAt: new Date() },
+      data: { status: 'ACTIVE', totalAmount: total, vatAmount: vat, paidAt: new Date(), ...(campaignId ? { campaignId } : {}) },
       include: {
         items: { include: { athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true } } } },
         reviews: { orderBy: { createdAt: 'asc' } },

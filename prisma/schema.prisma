@@ -917,6 +917,7 @@ model Campaign {
 
   brand     Brand              @relation(fields: [brandId], references: [id])
   contracts CampaignContract[]
+  applications SponsorshipApplication[] // 결제 완료된 후원 신청 (계약 스냅샷 · 예상 범위 보유)
 
   // ROI Report Dashboard relations
   vodAssets     VodAsset[]
@@ -3701,14 +3702,17 @@ model SponsorshipApplication {
   submittedAt   DateTime?                    @map("submitted_at")
   approvalDueAt DateTime?                    @map("approval_due_at") // 승인 유효기간 (기본 72h)
   paidAt        DateTime?                    @map("paid_at")
+  campaignId    String?                      @map("campaign_id") // 결제 완료 시 생성·연결되는 캠페인 (v2.1 §5 Transaction Core: Payment → Campaign)
   createdAt     DateTime                     @default(now()) @map("created_at")
   updatedAt     DateTime                     @updatedAt @map("updated_at")
 
-  items   ApplicationItem[]
-  reviews ApplicationReview[]
+  items    ApplicationItem[]
+  reviews  ApplicationReview[]
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([brandUserId, createdAt])
   @@index([status])
+  @@index([campaignId])
   @@map("sponsorship_applications")
 }
 
