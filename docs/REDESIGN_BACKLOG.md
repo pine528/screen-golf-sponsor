@@ -179,16 +179,14 @@
 - [ ] Legacy redirect — SPA Navigate로 처리(2026-09-14). Vercel `vercel.json` 301 규칙 추가 여부 결정 (v2.1 §3.1)
 
 ### P1
-- [ ] `/athletes/:id` 상단 4축 Snapshot(경기/브랜드/팬/콘텐츠) + 탭 5개 (§10.2)
+- [ ] `/athletes/:id` 본문(1,900줄 · 경매 패널 · ROI 대시보드 · 점수 산정 기준)을 탭 5개 구조로 분리 재작성 — 상단 Snapshot·탭은 2026-09-14 완료 (§10.2)
 - [ ] `/fan` flywheel 시각화, `/fan/temperature` 30일 변화 + 기여 원인 (§11)
-- [ ] 팬온도 고정 문구 "팬온도는 선수의 실력이나 절대 인기순위가 아니라, 최근 팬 활동의 활성도입니다." 전 화면 tooltip
+- [ ] 팬온도 고정 문구 — 선수 상세에는 적용(2026-09-14). 팬 허브·팬온도 페이지·선수 카드 tooltip에도 적용
 - [ ] ROI 4축(Media/Social/Fan/Commerce) + Expected vs Actual 분리 (§15)
 - [ ] 공통 상태 화면 loading/empty/error/stale/restricted/expired/conflict 를 P0 화면에 정의 (§17.2)
 - [ ] 관리자를 도메인별 console 9종으로 재편 (§16) — 현재 팬/소개/상품 3종만 신규 셸
 
 ### 가독성 (2026-09-14 공개 화면 1차 적용)
-- [ ] 관리자·로그인 셸(`Layout.tsx`, `pages/admin/*`, `pages/brand/*`, `pages/athlete/*`)에도 같은 규칙 적용
-      (최소 11.5px, 보조 글자 slate-500)
 - [ ] 배지(10.5px → 11.5px)가 커진 곳의 줄바꿈 점검 — 메인 히어로 RECOMMENDED, 후원 허브 배지
 
 ### 정책·구조 (v2.1)

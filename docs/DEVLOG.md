@@ -1424,3 +1424,24 @@
 
 ### 검증
 - tsc · vite build 통과. 로컬에서 모자 정면 선택 → 공급가 300만 · VAT 30만 · 총액 330만 표시 확인.
+
+## [2026-09-14] 셸·관리자 가독성 2차 + 선수 상세 4축 Snapshot
+
+### 변경 사항
+- **가독성 2차** — 로그인 셸·관리자·브랜드·선수·에이전시·구 팬/스토어 화면 151개 파일에 공개 화면과 같은 규칙
+  (10~11.5px → 11.5~12.5px 773곳, `text-slate-400` → `slate-500` 867곳). 이제 프론트 전체에 10~11.5px 글자와
+  본문용 slate-400이 남아 있지 않다.
+- **선수 상세 `/athletes/:id`** — 히어로 아래에 4축 Snapshot(경기 / 브랜드 / 팬 / 콘텐츠)과 구간 탭
+  (프로필·경기·후원·팬·콘텐츠) 추가. 새 컴포넌트 `components/athlete/AthleteSnapshot.tsx`.
+  - 경기: 최근 5경기 평균 순위·TOP10(실측만). 브랜드: 모집 중 슬롯·협업 브랜드, CTA "이 선수 후원하기"(브랜드 강조).
+    팬: 팬온도 v1.0 점수·표본(`/fan-hub/athletes/:id/temperature`), CTA "응원하기"(팬 강조). 콘텐츠: SNS 채널 수·유튜브 구독.
+  - 미측정 값은 "집계 중". 팬온도 고정 문구를 스냅샷 아래에 항상 표시.
+  - 탭은 기존 섹션 앵커(`profile-detail` / `results` / `purchase` / `sns`)로 스크롤, 팬 탭은 `/fan/community/:id`.
+  기존 1,900줄 상세 본문은 그대로 두고 상단만 재구성(전면 재작성은 백로그).
+
+### 영향받는 파일
+- `src/frontend/src/components/athlete/AthleteSnapshot.tsx` (신규) · `pages/PublicAthleteDetail.tsx` · `components/purchase/UnifiedPurchase.tsx`
+- 가독성: `src/frontend/src/**` 151개 파일
+
+### 검증
+- tsc · vite build 통과. `/athletes/:id` 로컬 렌더 확인(스냅샷 4카드 + 탭). 푸시 완료.
