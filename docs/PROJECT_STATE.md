@@ -1037,3 +1037,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
   `/sponsor/digital`, `/opportunities`)은 `App.tsx`에서 Navigate replace.
 - (2026-09-14) 직접 PICK 구성은 `/sponsor/direct/build/:athleteId` 한 화면(위치·온라인 상품·기간·판매 방식·추가 활동·사용 범위·서버 견적·담기). `/configure` 경로는 build로 이동.
 - (2026-09-14) 관리자 사이드바는 9도메인(선수운영·상품운영·거래운영·팬운영·Trust·CMS·성과보장·데이터품질·분석·감사), `/admin`은 처리할 일 → 콘솔 카드 → 수익.
+- (2026-09-14) 선수 상세 `/athletes/:id?tab=profile|games|sponsor|fan|content` 5탭. 브랜드 기본 탭은 sponsor.

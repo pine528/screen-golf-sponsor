@@ -1514,3 +1514,20 @@
 
 ### 검증
 - tsc · vite build 통과. 관리자 로그인 필요라 화면 확인은 못 함. 푸시 완료.
+
+## [2026-09-14] 선수 상세 본문 5탭 분리
+
+### 변경 사항
+- `/athletes/:id` 본문을 프로필 / 경기 / 후원 / 팬 / 콘텐츠 탭으로 분리. 히어로(정체성)와 4축 Snapshot은 항상 보이고,
+  그 아래는 선택한 탭만 렌더한다. 탭은 `?tab=` 로 유지되며 브랜드 로그인은 후원 탭, 그 외는 프로필 탭이 기본.
+  `#slots` 로 들어오면 후원 탭으로 전환 후 구매 영역으로 스크롤.
+  - 프로필: 운영 현황(슬롯·최근 대회·다음 대회) + 메인 스폰서 / 경기: 경기결과·분석·추이·향후 일정
+  - 후원: 통합 구매(UnifiedPurchase) + 진행 중 경매 / 콘텐츠: SNS·유튜브·ROI 대시보드
+  - 팬: 신규 `AthleteFanPanel` — 최근 30일 팬온도·지난주 변화·온도를 올린 활동(집계 중 처리) + 커뮤니티·VOTE·관심 등록 진입
+- Snapshot 카드의 "경기 상세 / 응원하기 / 콘텐츠 보기"가 탭 전환으로 동작. 기존 1,900줄 본문은 위치만 옮기고 내용은 유지.
+
+### 영향받는 파일
+- `src/frontend/src/pages/PublicAthleteDetail.tsx` · `components/athlete/AthleteSnapshot.tsx` · `components/athlete/AthleteFanPanel.tsx` (신규)
+
+### 검증
+- tsc · vite build 통과. `?tab=fan` 렌더(팬 패널·탭 활성) 로컬 확인. 푸시 완료.
