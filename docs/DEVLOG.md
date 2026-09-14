@@ -1336,3 +1336,31 @@
 - UI/UX 가이드 §4는 메인을 Hero+두 PICK+보조링크+푸터로만 끝내라고 하지만,
   사용자가 "메인은 우선 이렇게" 라며 4단계·브랜드·가치·CTA 섹션이 있는 시안을 확정했다.
   시안을 따른다. 나머지 P0 화면 수정(UI 가이드 §18 매트릭스)은 `REDESIGN_BACKLOG.md` C8.
+
+## [2026-09-14] 후원 허브 · 직접 PICK · 추천 PICK 시작 — UI 가이드 v1.0 P0 1차
+
+### 변경 사항
+- **`/sponsor` 후원 허브** 재작성 — 상품 목록을 빼고 4개 방식(직접/추천/지금 가능한 후원/디지털)을
+  2×2 카드로 설명. 카드마다 핵심 질문·한 줄 설명·이런 브랜드·예상 소요·로그인 시점·CTA 1개.
+  하단에 "어느 방식이든 이후 단계는 같다" 안내 (승인→계약→결제→실행→리포트).
+- **직접 PICK 스텝바** — 내부 9단계를 사용자에게는 5단계(선수·후원 위치·구성·검토·승인)로 접어 표시.
+  페이지가 넘기는 `current` 값은 그대로 두고 `FOLD` 표로 변환.
+- **선수 탐색 카드** — 핵심 신호 6개만: 사진(모집상태 배지)·이름·투어/지역·특징 2개·팬온도·시작가.
+  주 CTA "이 선수 선택", 보조 "선수 정보"(퀵프로필)·"비교". 최근 성적·슬롯 수·데이터 상태 라벨 제거.
+- **Build** — 좌측 "다른 선수" 사이드바 제거, 선수 한 줄 요약을 상단에. 모바일 고정 CTA(선택 n개·금액·조건 구성).
+  슬롯 상태 8종을 UI 가이드 명칭으로 통일.
+- **견적함** — 제목 "후원 구성안", 상단 요약에 요청 가능/확인 필요/충돌 건수.
+- **추천 PICK 시작** — 검색창처럼 보이던 입력을 "한 질문 + 브리프 카드"로. 예시 chip 5종(누르면 예문 입력),
+  자동 추출 조건 확인(목표/예산/기간 select), 우측에 진행 방식 3단계. 성과보장 문구는 "계약 KPI 미달 시
+  약정에 따른 보완지원"으로(50% 상수 제거), 링크 `/about/performance-guarantee`.
+- 백엔드 `recommendPick.service.ts`에 목표 `SNS`(SNS 확산) 추가. 브리프 화면 목표 목록에도 추가.
+
+### 영향받는 파일
+- `src/frontend/src/pages/offers/SponsorLanding.tsx` (재작성) · `components/direct/DirectStepBar.tsx`
+- `src/frontend/src/pages/direct/DirectAthletes.tsx` · `DirectBuild.tsx` · `DirectCart.tsx`
+- `src/frontend/src/pages/recommend/RecommendLanding.tsx` (재작성) · `RecommendBrief.tsx`
+- `src/backend/src/services/recommendPick.service.ts`
+
+### 검증
+- tsc · vite build 통과. 로컬에서 `/sponsor`, `/sponsor/recommended`, `/sponsor/direct/athletes`, `/sponsor/direct/build/:id` 렌더 확인.
+- 견적함은 로그인 필요라 타입·빌드만 확인. 프론트(redesign)·백엔드(main) 푸시 완료.

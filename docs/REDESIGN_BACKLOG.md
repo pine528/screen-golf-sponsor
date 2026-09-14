@@ -172,11 +172,7 @@
 메인은 2026-09-14 시안대로 완료. 아래는 UI 가이드 §18 우선순위 매트릭스 중 미착수분.
 
 ### P0
-- [ ] `/sponsor` 후원 허브 — 4개 진입(직접/추천/지금 가능한 후원/디지털)의 차이를 2×2 카드로 설명 (§5)
-- [ ] `/sponsor/direct/athletes` 카드 정보량 축소 — 목록 5~7 신호 → 퀵프로필 → 상세 3단계 (§6.2)
-- [ ] `/sponsor/direct/build/:id` — hotspot + 텍스트 위치 목록 + 가격 + sticky CTA 1개, 상태 8종 텍스트+아이콘 (§6.3)
-- [ ] `/sponsor/direct/cart` — "후원 구성안" 단위 그룹핑, 요청가능/확인/충돌 summary + 대안 (§6.4)
-- [ ] `/sponsor/recommended` — 자연어 목표 + 예시 chip + 추출 확인, "AI 검색창" 인상 제거 (§7.1)
+- [ ] `/sponsor/direct/build/:id` — 2026-09-14 상태명·sticky CTA·레이아웃 정리 완료. 남은 것: /configure(기간·판매유형·추가활동·권리)를 build 한 화면으로 합치기(v2.1 §3 canonical route에는 /configure 없음), 도식을 선수 실사로
 - [ ] `/sponsor/recommended/results/:id` — 안정형/균형형(BEST)/도전형 후원안, 동일 선수 반복 금지 (§7.4)
 - [ ] `/sponsor/available` — 주어를 상품으로, 배지 바로구매/선수확인/협의/월구독/경매 (§8)
 - [ ] `/digital-partner` — 경기복 미포함 첫 화면 명시, 월액+12개월 총액+VAT 동시 표시 (§9)
