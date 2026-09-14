@@ -1481,3 +1481,19 @@
 
 ### 검증
 - tsc · vite build 통과. `/market/stores/x` → `/fan/store/x` 리다이렉트 확인. ROI는 브랜드 로그인 필요라 빌드만.
+
+## [2026-09-14] 공통 상태 화면 키트 + P0 적용
+
+### 변경 사항
+- `components/ui/StateView.tsx` 신설 — loading(3초 초과 안내·재시도) / empty(이유+다음 행동) / error(문제·trace_id·재시도·문의)
+  / restricted(이유+로그인 복귀) / expired / stale(기준일+갱신) / conflict(이전→현재+대안). v2.1 §20.1 표준 오류 코드
+  12종 → 문구·권장 행동 매핑(`STANDARD_ERROR`), Axios 오류 파서 `readError`, `useSlowLoading`.
+- 적용: 직접 PICK 선수 탐색(오류·빈 결과), Build(로드 실패·선수 없음), 후원상품 목록(오류), 추천 결과(오류·만료 시
+  되돌리기 대신 원인 표시). 견적함은 기존 충돌·대안 UX 유지.
+
+### 영향받는 파일
+- `src/frontend/src/components/ui/StateView.tsx` (신규) · `pages/direct/DirectAthletes.tsx` · `DirectBuild.tsx`
+  · `pages/offers/AvailableOffers.tsx` · `pages/recommend/RecommendResults.tsx`
+
+### 검증
+- tsc · vite build 통과. 선수 탐색에서 없는 검색어로 빈 상태(필터 초기화·추천 PICK) 렌더 확인. 푸시 완료.
