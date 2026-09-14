@@ -186,6 +186,11 @@
 - [ ] 공통 상태 화면 loading/empty/error/stale/restricted/expired/conflict 를 P0 화면에 정의 (§17.2)
 - [ ] 관리자를 도메인별 console 9종으로 재편 (§16) — 현재 팬/소개/상품 3종만 신규 셸
 
+### 가독성 (2026-09-14 공개 화면 1차 적용)
+- [ ] 관리자·로그인 셸(`Layout.tsx`, `pages/admin/*`, `pages/brand/*`, `pages/athlete/*`)에도 같은 규칙 적용
+      (최소 11.5px, 보조 글자 slate-500)
+- [ ] 배지(10.5px → 11.5px)가 커진 곳의 줄바꿈 점검 — 메인 히어로 RECOMMENDED, 후원 허브 배지
+
 ### 정책·구조 (v2.1)
 - [ ] API base path `/api/v1` 통일 + legacy adapter (v2.1 §17) — 대규모, 별도 계획 필요
 - [ ] 슬롯 표시명 "가슴" → "상의" 전수 확인 (코드 주석 1건 외 UI 없음, 2026-09-14 기준)

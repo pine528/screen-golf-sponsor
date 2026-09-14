@@ -1392,3 +1392,18 @@
 ### 검증
 - tsc · vite build 통과. `/digital-partner` 렌더, `/about/how` → `/about/how-it-works` 리다이렉트 확인.
 - 추천 결과·대시보드는 로그인/데이터가 필요해 타입·빌드만 확인.
+
+## [2026-09-14] 공개 화면 가독성 일괄 개선
+
+### 변경 사항
+- 공개·브랜드 화면 66개 파일(직접 PICK·추천 PICK·후원상품·팬 참여·소개·디지털·선수·메인·헤더)에서
+  10~11.5px 글자 412곳을 11.5~12.5px로, 본문·라벨의 `text-slate-400` 561곳을 `text-slate-500`으로 일괄 치환.
+  흰 바탕 대비가 2.9:1 → 4.6:1(WCAG AA)로 올라간다. placeholder·hover 변형은 그대로.
+- 관리자·로그인 셸 화면은 이번 범위에서 제외 (다음 차례).
+
+### 영향받는 파일
+- `src/frontend/src/pages/{direct,recommend,offers,fanhub,about,digital}/*` · `PublicAthletes.tsx` · `PublicAthleteDetail.tsx`
+  · `DigitalPartner.tsx` · `Home.tsx` · `components/{direct,offer,fanhub,about}/*` · `PublicHeader.tsx` · `MobileTabBar.tsx`
+
+### 검증
+- tsc · vite build 통과. `/sponsor/direct/athletes` 렌더 확인. 푸시 완료(redesign ff80f40).
