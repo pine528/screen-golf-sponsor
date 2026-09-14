@@ -1601,3 +1601,21 @@
 
 ### 검증
 - 양쪽 tsc · 프론트 build 통과. 로그인 필요라 화면 확인은 못 함.
+
+## [2026-09-14] 후원하기 허브 새 시안 적용 + 허브 중심 내비게이션
+
+### 변경 사항
+- **`/sponsor` 재작성(시안 2026-09-14 Desktop·Mobile)** — "어떤 방식으로 후원하시겠어요?" 히어로 + 3단계 미니 플로우(선택하기→후원 진행→선수와 성장)
+  → 2×2 카드: 직접 PICK(Green, 워터마크), 스폰픽 추천 PICK(Coral, AI 추천 배지), 지금 가능한 후원(바로 구매 가능 배지), 디지털 파트너
+  → "선택이 어렵다면" 상황별 추천 경로 4개 → "선수와 후원사를 더 가깝게" 4단계. 모바일은 1열.
+- **내비게이션** — 헤더 1차 메뉴 4개에 `to`를 두고 클릭 시 허브로 이동(후원하기→`/sponsor`, 선수→`/athletes`, 팬 참여→`/fan`, 소개→`/about/service`).
+  hover 메가메뉴는 그대로. 모바일 드로어 아코디언 첫 줄에 "○○ 홈으로". 모바일 탭바 후원하기 → `/sponsor`.
+- 세부 화면 복귀: 추천 브리프·상품 상세·디지털 선수 목록 브레드크럼에 후원하기(`/sponsor`) 링크, 직접 PICK 선수 탐색과 추천 시작 화면에
+  "후원 방식 다시 선택" 링크. 직접 PICK 스텝바 브레드크럼 후원하기는 이미 `/sponsor`.
+
+### 영향받는 파일
+- `src/frontend/src/pages/offers/SponsorLanding.tsx` (재작성) · `components/PublicHeader.tsx` · `MobileTabBar.tsx`
+- `pages/recommend/RecommendBrief.tsx` · `RecommendLanding.tsx` · `pages/offers/OfferDetail.tsx` · `pages/digital/DigitalAthletes.tsx` · `pages/direct/DirectAthletes.tsx`
+
+### 검증
+- tsc · vite build 통과. `/sponsor` 데스크톱 렌더 시안 대조 확인. 푸시 완료.
