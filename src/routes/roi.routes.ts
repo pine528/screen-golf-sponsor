@@ -135,6 +135,34 @@ router.get(
 );
 
 /**
+ * @route GET /roi/my/reports?days=30
+ * @desc 브랜드의 최근 완료 리포트 — 대시보드 "새 리포트" 타일 (UI 가이드 §13.1). 캠페인 소유권으로 범위를 제한한다.
+ */
+router.get(
+  '/my/reports',
+  authorize('BRAND'),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const brand = await prisma.brand.findFirst({ where: { userId: (req as any).user.id }, select: { id: true } });
+      if (!brand) { res.json({ success: true, data: { count: 0, items: [], since: null } }); return; }
+      const days = Math.min(365, Math.max(1, parseInt(String(req.query.days || '30')) || 30));
+      const since = new Date(Date.now() - days * 86400_000);
+      const where = { status: 'COMPLETED' as const, generatedAt: { gte: since }, campaign: { brandId: brand.id } };
+      const [count, items] = await Promise.all([
+        prisma.roiReport.count({ where }),
+        prisma.roiReport.findMany({
+          where, orderBy: { generatedAt: 'desc' }, take: 5,
+          select: { id: true, title: true, type: true, generatedAt: true, campaignId: true, campaign: { select: { name: true } } },
+        }),
+      ]);
+      res.json({ success: true, data: { count, items, since: since.toISOString() } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * @route GET /roi/campaigns/:campaignId/reports
  * @desc Get reports list for a campaign
  */
