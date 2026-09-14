@@ -1036,3 +1036,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
   선수 = 요청/서명/슬롯/정산 타일 → 승인 목록 → 계약·팬·체크인 → 성과. 구 URL(`/about`, `/about/how`, `/about/guarantee`,
   `/sponsor/digital`, `/opportunities`)은 `App.tsx`에서 Navigate replace.
 - (2026-09-14) 직접 PICK 구성은 `/sponsor/direct/build/:athleteId` 한 화면(위치·온라인 상품·기간·판매 방식·추가 활동·사용 범위·서버 견적·담기). `/configure` 경로는 build로 이동.
+- (2026-09-14) 관리자 사이드바는 9도메인(선수운영·상품운영·거래운영·팬운영·Trust·CMS·성과보장·데이터품질·분석·감사), `/admin`은 처리할 일 → 콘솔 카드 → 수익.
