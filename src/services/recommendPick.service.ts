@@ -188,10 +188,85 @@ function buildPlans(reranked: any[], budget: { min: number; max: number }) {
         avgFit: Math.round(members.reduce((s, m) => s + (m.fitScore || 0), 0) / members.length),
       },
       reasons: buildReasons(key, members),
+      approvability: buildApprovability(members),
+      risks: buildRisks(key, members, total, budget.max),
+      expected: buildExpected(members),
     });
   });
 
   return plans;
+}
+
+/** 예상성과 산식 버전 — 바뀌면 올린다. 화면은 이 값을 함께 표시한다 (§14.1 methodVersion) */
+export const EXPECTED_METHOD_VERSION = 'exp-v0.1';
+
+/**
+ * 승인 가능성 — 점수가 아니라 재고·데이터 상태로 판단한다 (v2.1 §1.3-4 실행 가능성 우선).
+ *  HIGH: 전원 판매 중 슬롯 보유 + 데이터 HIGH/MEDIUM + 즉시 구매 슬롯
+ *  MEDIUM: 슬롯은 있으나 선수 확인이 필요한 판매 방식이거나 데이터 MEDIUM
+ *  LOW: 슬롯이 없거나 데이터 LOW 선수 포함
+ */
+function buildApprovability(members: any[]) {
+  const noSlot = members.filter((m) => !m.slot);
+  const lowData = members.filter((m) => m.confidence === 'LOW');
+  const needsConfirm = members.filter((m) => m.slot && m.slot.saleMode && m.slot.saleMode !== 'BUY_NOW');
+  let level: 'HIGH' | 'MEDIUM' | 'LOW' = 'HIGH';
+  const reasons: string[] = [];
+  if (noSlot.length || lowData.length) {
+    level = 'LOW';
+    if (noSlot.length) reasons.push(`${noSlot.map((m) => m.name).join(' · ')} — 판매 중인 슬롯 없음`);
+    if (lowData.length) reasons.push(`${lowData.map((m) => m.name).join(' · ')} — 데이터 수집 중`);
+  } else if (needsConfirm.length) {
+    level = 'MEDIUM';
+    reasons.push(`${needsConfirm.map((m) => m.name).join(' · ')} — 선수 확인 후 확정되는 판매 방식`);
+  } else {
+    reasons.push('전원 즉시 선택 가능한 슬롯 · 데이터 충분');
+  }
+  const label = level === 'HIGH' ? '승인 가능성 높음' : level === 'MEDIUM' ? '선수 확인 필요' : '실행 전 확인 필요';
+  return { level, label, reasons, approvalWindowHours: 72 };
+}
+
+/** 위험 — 사용자가 신청 전에 알아야 할 것만. 없으면 빈 배열 */
+function buildRisks(key: Plan, members: any[], total: number, budgetMax: number) {
+  const risks: { code: string; label: string; text: string }[] = [];
+  const low = members.filter((m) => m.confidence === 'LOW');
+  if (low.length) risks.push({ code: 'DATA_LOW', label: '데이터 부족', text: `${low.map((m) => m.name).join(' · ')}는 지표가 수집 중이라 예상 범위의 불확실성이 큽니다.` });
+  const noSlot = members.filter((m) => !m.slot);
+  if (noSlot.length) risks.push({ code: 'NO_SLOT', label: '슬롯 미확보', text: `${noSlot.map((m) => m.name).join(' · ')}는 현재 판매 중인 착장 슬롯이 없어 온라인 상품으로 대체될 수 있습니다.` });
+  if (total > budgetMax) risks.push({ code: 'OVER_BUDGET', label: '예산 초과', text: `구성 금액이 입력 예산 상한을 ${(total - budgetMax).toLocaleString()}원 넘습니다.` });
+  const noSns = members.filter((m) => !(m.followers > 0));
+  if (noSns.length === members.length) risks.push({ code: 'NO_SNS', label: 'SNS 데이터 없음', text: 'SNS 도달 예상 범위를 만들 수 있는 팔로워 데이터가 없습니다.' });
+  if (key === 'CHALLENGE' && !risks.some((r) => r.code === 'DATA_LOW')) {
+    risks.push({ code: 'GROWTH', label: '성장 우선 구성', text: '노출 이력이 적은 선수를 포함해 결과 편차가 클 수 있습니다.' });
+  }
+  return risks;
+}
+
+/**
+ * 예상성과 — 실측(팔로워 합계)에 공개된 산식을 적용한 범위. 보장이 아니다 (§14.1).
+ * 팔로워 데이터가 없으면 만들지 않는다 (LEG-06: 추정으로 빈칸을 채우지 않는다).
+ */
+function buildExpected(members: any[]) {
+  const withSns = members.filter((m) => m.followers > 0);
+  if (!withSns.length) return null;
+  const followers = withSns.reduce((s, m) => s + m.followers, 0);
+  const allHigh = withSns.every((m) => m.confidence === 'HIGH');
+  const confidence = allHigh && withSns.length === members.length ? 'MEDIUM' : 'LOW';
+  return {
+    methodVersion: EXPECTED_METHOD_VERSION,
+    dataAsOf: new Date().toISOString(),
+    guaranteed: false,
+    confidence,
+    metrics: [
+      {
+        metric: 'SNS 도달 (게시 1회당)',
+        minValue: Math.round(followers * 0.02),
+        maxValue: Math.round(followers * 0.06),
+        basis: `팔로워 합계 ${followers.toLocaleString()} × 업계 평균 게시당 도달률 2~6%`,
+      },
+    ],
+    assumptions: ['선수 계정에 브랜드 콘텐츠 1회 이상 게시', '게시 시점 팔로워 수가 기준일과 유사'],
+  };
 }
 
 function buildReasons(key: Plan, members: any[]) {
