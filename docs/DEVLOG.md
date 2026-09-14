@@ -1462,3 +1462,22 @@
 
 ### 검증
 - tsc · vite build 통과. `/fan` 로컬 렌더 확인. 푸시 완료.
+
+## [2026-09-14] 팬스토어 순서 정리 · ROI 4축
+
+### 변경 사항
+- **팬스토어** — 상세를 스토리(협업 이유) → 팬 혜택(코드) → 상품 순서로 재배치, 상품 목록에 "구매는 브랜드몰에서" 안내,
+  CTA "브랜드몰에서 구매하기". 홈 소개 문구를 스토리 우선으로. `/market`, `/market/stores/:id` canonical 별칭 →
+  `/fan/store*` (UI 가이드 §11.5, v2.1 §3).
+- **브랜드 성과 리포트 `/brand/reports/roi`** 재작성 — Media / Social / Fan / Commerce 4축 요약 카드,
+  "예상 범위 대비 실제" 표(계약 스냅샷 예상 범위 ↔ 실측), Media 상세 유지 (§15).
+  - Media: 기존 `/roi/campaigns/:id/dashboard` (검수 승인 노출). Commerce: `getBrandFunnelReport` 최근 30일 요약.
+  - Social·Fan: 연결된 측정 소스가 없어 "집계 중" + 사유. 0으로 만들지 않는다.
+  - 예상 범위는 `campaign.expectedPerformance`(또는 snapshot)가 있을 때만. 없으면 "기록 없음"과 안내.
+
+### 영향받는 파일
+- `src/frontend/src/pages/fanhub/FanStoreDetail.tsx` · `FanStoreHome.tsx` · `App.tsx`
+- `src/frontend/src/pages/brand/BrandROIDashboard.tsx` (재작성)
+
+### 검증
+- tsc · vite build 통과. `/market/stores/x` → `/fan/store/x` 리다이렉트 확인. ROI는 브랜드 로그인 필요라 빌드만.
