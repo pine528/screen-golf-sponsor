@@ -167,6 +167,38 @@
 
 ---
 
+## C8. 통합 핸드오프 v2.1 · UI/UX 가이드 v1.0 (2026-09-07 접수, 리디자인/7)
+
+메인은 2026-09-14 시안대로 완료. 아래는 UI 가이드 §18 우선순위 매트릭스 중 미착수분.
+
+### P0
+- [ ] `/sponsor` 후원 허브 — 4개 진입(직접/추천/지금 가능한 후원/디지털)의 차이를 2×2 카드로 설명 (§5)
+- [ ] `/sponsor/direct/athletes` 카드 정보량 축소 — 목록 5~7 신호 → 퀵프로필 → 상세 3단계 (§6.2)
+- [ ] `/sponsor/direct/build/:id` — hotspot + 텍스트 위치 목록 + 가격 + sticky CTA 1개, 상태 8종 텍스트+아이콘 (§6.3)
+- [ ] `/sponsor/direct/cart` — "후원 구성안" 단위 그룹핑, 요청가능/확인/충돌 summary + 대안 (§6.4)
+- [ ] `/sponsor/recommended` — 자연어 목표 + 예시 chip + 추출 확인, "AI 검색창" 인상 제거 (§7.1)
+- [ ] `/sponsor/recommended/results/:id` — 안정형/균형형(BEST)/도전형 후원안, 동일 선수 반복 금지 (§7.4)
+- [ ] `/sponsor/available` — 주어를 상품으로, 배지 바로구매/선수확인/협의/월구독/경매 (§8)
+- [ ] `/digital-partner` — 경기복 미포함 첫 화면 명시, 월액+12개월 총액+VAT 동시 표시 (§9)
+- [ ] `/brand/dashboard` · `/athlete/dashboard` — Action-first(승인/결제/진행/리포트 → 성과) (§13)
+- [ ] 글로벌 GNB — 선수 메뉴를 전체 선수/추천 선수/관심 선수/선수 등록으로 (v2.1 §2)
+- [ ] 모바일 drawer 최상단에 직접 PICK / 추천 PICK 바로가기 고정 (§2.3)
+- [ ] Legacy redirect 301: /opportunities, /sponsor/digital, /about, /about/how, /about/guarantee (v2.1 §3.1)
+
+### P1
+- [ ] `/athletes/:id` 상단 4축 Snapshot(경기/브랜드/팬/콘텐츠) + 탭 5개 (§10.2)
+- [ ] `/fan` flywheel 시각화, `/fan/temperature` 30일 변화 + 기여 원인 (§11)
+- [ ] 팬온도 고정 문구 "팬온도는 선수의 실력이나 절대 인기순위가 아니라, 최근 팬 활동의 활성도입니다." 전 화면 tooltip
+- [ ] ROI 4축(Media/Social/Fan/Commerce) + Expected vs Actual 분리 (§15)
+- [ ] 공통 상태 화면 loading/empty/error/stale/restricted/expired/conflict 를 P0 화면에 정의 (§17.2)
+- [ ] 관리자를 도메인별 console 9종으로 재편 (§16) — 현재 팬/소개/상품 3종만 신규 셸
+
+### 정책·구조 (v2.1)
+- [ ] API base path `/api/v1` 통일 + legacy adapter (v2.1 §17) — 대규모, 별도 계획 필요
+- [ ] 슬롯 표시명 "가슴" → "상의" 전수 확인 (코드 주석 1건 외 UI 없음, 2026-09-14 기준)
+- [ ] 성과보장 eligible_product_types 정책형 전환 — 현재 추천PICK 중심 하드코딩 여부 점검
+- [ ] Feature flag 12종(v2.1 §21.2) 도입 여부 결정
+
 ## D. 정리 대상 (기술 부채)
 
 - [ ] `SponsorshipProduct` / `ProductSlot` 모델이 스키마에만 있고 코드에서 미사용 — 직접 PICK의

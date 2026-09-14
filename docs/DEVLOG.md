@@ -1308,3 +1308,31 @@
   제거 결정은 `docs/REDESIGN_BACKLOG.md` D 섹션.
 - Vercel 프리뷰 관리자 로그인 실패는 코드가 아니라 Render `CORS_ORIGIN` 미등록
   (+ Vercel Deployment Protection) 문제. 환경변수에 프리뷰 도메인 추가 필요.
+
+## [2026-09-14] 메인 재구성 (SPONPIK 2.0 시안) + 통합 핸드오프 v2.1 접수
+
+리디자인/7 에 통합 수정보완 개발핸드오프 v2.1 과 UI/UX 통합 개발가이드 v1.0,
+메인 시안(2026-09-07)이 추가됐다. v2.1은 S1~S7 문서 간 충돌을 정리한 단일 기준
+(본 문서 > 상세 핸드오프 > 전체사이트 v2.0 > 이전 구현)이다.
+
+### 변경 사항
+- **메인 `/` 재작성** — 시안 그대로: 히어로(두 PICK) → 4단계 → 함께하는 브랜드 캐러셀 →
+  새로운 가치 4종 → 최종 CTA 배너 → 간결 푸터. 선수 카드·후원기회 목록·경매 섹션 제거.
+- 히어로 핫스폿을 사용자 지시대로 **모자 슬롯 / 소매 슬롯 / 카라 슬롯 / 상의 슬롯 / 하의 슬롯**
+  5종으로 교체. 모바일은 3종만 표시(라벨 잘림 방지).
+- CTA 카피: 직접 PICK "원하는 선수를 직접 선택하세요." / 추천 PICK "AI가 선별한 맞춤 선수를 제안합니다."
+- 실사 이미지에 박혀 있던 "FOUNDER PRO NO.1" 캡션을 지운 `bae-jinri-hero.png` 를 만들고
+  HTML 캡션(KLPGA 프로 · 배진리 · 사인)으로 대체. 필기체는 Great Vibes(`font-script`).
+- 헤더 후원하기 메뉴에서 "진행 중 후원기회"(/auctions) 항목 제거 — v2.1 C-02(명칭 폐기).
+
+### 영향받는 파일
+- `src/frontend/src/pages/Home.tsx` (재작성) · `components/PublicHeader.tsx`
+- `src/frontend/src/index.css` · `tailwind.config.js` · `public/golfers/bae-jinri-hero.png`
+
+### 검증
+- tsc · vite build 통과. 로컬 1440 데스크톱·375 모바일 렌더 확인. 푸시 완료(redesign).
+
+### 참고
+- UI/UX 가이드 §4는 메인을 Hero+두 PICK+보조링크+푸터로만 끝내라고 하지만,
+  사용자가 "메인은 우선 이렇게" 라며 4단계·브랜드·가치·CTA 섹션이 있는 시안을 확정했다.
+  시안을 따른다. 나머지 P0 화면 수정(UI 가이드 §18 매트릭스)은 `REDESIGN_BACKLOG.md` C8.

@@ -1025,3 +1025,10 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
   `collapsed` 그룹은 활성 경로가 안에 있을 때만 자동 펼침.
 - 구 IA 화면(`/auctions` `/ai-match` `/growth-market` `/features` `/how-it-works` `/for-who` `/guide` `/faq`)은
   라우트만 남고 공개 내비게이션에서 제외. 제거 결정은 `REDESIGN_BACKLOG.md` D.
+
+## 메인 · 통합 핸드오프 v2.1 (2026-09-14)
+- 기준 문서 우선순위: `리디자인/7` 통합 핸드오프 v2.1 > 기능별 상세 핸드오프 > 전체사이트 v2.0 > 이전 구현.
+  UI는 같은 폴더의 UI/UX 통합 개발가이드 v1.0 §18 매트릭스로 화면별 점검 (미착수분은 `REDESIGN_BACKLOG.md` C8).
+- 메인 `/` = 히어로(두 PICK + 슬롯 핫스폿 5종) → 4단계 → 브랜드 캐러셀 → 가치 4종 → CTA → 푸터. 데이터 fetch 없음.
+- 히어로 실사는 `public/golfers/bae-jinri-hero.png`(캡션 제거본). 필기체 유틸 `font-script`(Great Vibes).
+- 용어 고정(v2.1 Appendix B): 직접 PICK / 스폰픽 추천 PICK / 지금 가능한 후원 / 디지털 파트너 / 상의(가슴 금지) / 성과보장(매출·우승보장 금지).
