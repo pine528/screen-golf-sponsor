@@ -1039,3 +1039,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - (2026-09-14) 관리자 사이드바는 9도메인(선수운영·상품운영·거래운영·팬운영·Trust·CMS·성과보장·데이터품질·분석·감사), `/admin`은 처리할 일 → 콘솔 카드 → 수익.
 - (2026-09-14) 선수 상세 `/athletes/:id?tab=profile|games|sponsor|fan|content` 5탭. 브랜드 기본 탭은 sponsor.
 - (2026-09-14) 후원 신청 결제 완료(`checkoutApplication`) 시 Campaign 자동 생성·`campaignId` 연결. 계약 스냅샷 예상 범위는 `application.snapshot.plan.expected`.
+- (2026-09-14) 디지털 플랜 가격 단일 출처 = `DigitalPlan` 테이블. 관리자 `/admin/digital-plans` 에서 수정(사유 필수·감사로그). 랜딩·신청·결제 모두 API 값 사용.

@@ -1572,3 +1572,20 @@
 
 ### 검증
 - 백엔드 prisma generate · tsc, 프론트 tsc · build 통과. 로컬 DB 동기화. 결제 E2E는 PG 샌드박스가 필요해 미실행.
+
+## [2026-09-14] 디지털 파트너 플랜 가격 → 관리자 Pricing Config
+
+### 변경 사항
+- 플랜(START/GROW/PLUS)은 이미 `DigitalPlan` 테이블에 있었고 신청·결제는 DB 값을 쓰고 있었다. 빠져 있던 두 가지를 채웠다.
+  - **관리자 API** `GET /digital-partner/admin/plans`(비활성 포함) · `PATCH /digital-partner/admin/plans/:code`
+    (name·monthlyPrice·capacity·active·benefits·exclusions, 변경 사유 필수, `AdminActionLog` DIGITAL_PLAN_UPDATE 기록).
+  - **관리자 화면** `/admin/digital-plans` — 플랜 3종 카드 편집, 12개월 총액 자동 계산, 저장 시 사유 필수. 상품운영 그룹·운영 홈 진입.
+- `/digital-partner` 랜딩의 금액 상수를 삭제하고 `/digital-partner/plans`를 읽는다. 로딩·오류 상태 포함.
+- 진행 중 구독은 계약 스냅샷을 따르므로 가격 변경이 소급되지 않는다 (v2.1 §9.2 · 부록 B).
+
+### 영향받는 파일
+- `src/backend/src/services/digitalPartner.service.ts` · `routes/digitalPartner.routes.ts`
+- `src/frontend/src/pages/admin/AdminDigitalPlans.tsx` (신규) · `pages/DigitalPartner.tsx` · `services/api.ts` · `App.tsx` · `components/Layout.tsx` · `pages/Dashboard.tsx`
+
+### 검증
+- 양쪽 tsc, 프론트 build 통과. `/digital-partner`가 API 값(월 49,000/99,000/199,000원)으로 렌더되는 것 확인. 관리자 화면은 로그인 필요.
