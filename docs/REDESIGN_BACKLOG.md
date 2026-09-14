@@ -173,14 +173,14 @@
 
 ### P0
 - [ ] `/sponsor/direct/build/:id` — 도식을 선수 실사 + Front/Back 실측 좌표로 교체 (현재 공용 인체 도식, 후면 좌표 없음)
-- [ ] 추천 결과 — 승인 가능성·예상 KPI 범위·위험 필드를 엔진 응답에 추가해 카드에 노출 (§7.4, 2026-09-14 UI는 정리 완료)
+- [ ] 추천 예상 범위 산식 exp-v0.1(팔로워×2~6%)을 실제 성과 데이터로 보정하는 루프 — engineVersion·methodVersion별 추적 (v2.1 §14.2)
 - [ ] 디지털 파트너 플랜 금액(START/GROW/PLUS)을 Admin Pricing Config로 이동 — 현재 프론트 상수 (v2.1 §9.2)
-- [ ] 대시보드 — 브랜드 "새 리포트" 건수 API, 선수 팬온도/마지막 체크인 API 연결 (현재 "집계 중"), `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (§13)
+- [ ] 대시보드 — 브랜드 "새 리포트" 건수 API(RoiReport 브랜드 목록 엔드포인트 없음), `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (선수 팬온도·체크인은 2026-09-14 연결, §13)
 - [ ] Legacy redirect — SPA Navigate로 처리(2026-09-14). Vercel `vercel.json` 301 규칙 추가 여부 결정 (v2.1 §3.1)
 
 ### P1
 - [ ] `/athletes/:id` 히어로(AthleteHeroV2 350줄)의 기본정보·활동·이력·지수·SNS 블록을 탭 안으로 흡수해 상단을 더 줄이기 (본문 5탭 분리는 2026-09-14 완료, §10.2)
-- [ ] ROI — Social(선수 SNS 게시 이행·도달) · Fan(캠페인 기간 팬 집계) 측정 소스 API 연결, 캠페인에 계약 시 expectedPerformance 스냅샷 저장 (UI는 2026-09-14 4축 구조 완료, §15)
+- [ ] ROI — Social(선수 SNS 게시 이행·도달) · Fan(캠페인 기간 팬 집계) 측정 소스 API 연결, 캠페인↔신청(계약) 연결 키 추가해 예상 범위를 캠페인 단위로 (지금은 신청 단위, §15)
 - [ ] 상태 화면 키트(StateView)를 견적함·승인 현황·체크아웃·디지털 신청·대시보드에도 적용 (P0 4화면은 2026-09-14 완료, §17.2)
 - [ ] 관리자 개별 화면 82개를 도메인 셸(FanAdminShell·AboutAdminShell 같은 형태)로 이관, 추천운영 콘솔 신설, 역할별 RBAC 메뉴 필터 (사이드바·운영 홈은 2026-09-14 9도메인 재편 완료, §16)
 

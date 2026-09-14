@@ -1531,3 +1531,25 @@
 
 ### 검증
 - tsc · vite build 통과. `?tab=fan` 렌더(팬 패널·탭 활성) 로컬 확인. 푸시 완료.
+
+## [2026-09-14] 백엔드 연결 1차 — 추천안 승인 가능성·위험·예상 범위, 계약 스냅샷 예상 범위, 선수 대시보드 데이터
+
+### 변경 사항
+- **추천 엔진(`recommendPick.service.ts`)** — 안(plan)마다 세 필드 추가. 스키마 변경 없음.
+  - `approvability` {level HIGH/MEDIUM/LOW, label, reasons[], approvalWindowHours: 72} — 점수가 아니라 슬롯 유무·판매 방식·데이터 신뢰도로 판단.
+  - `risks[]` {code,label,text} — DATA_LOW / NO_SLOT / OVER_BUDGET / NO_SNS / GROWTH.
+  - `expected` — 팔로워 실측 합계 × 공개 도달률 2~6% 범위, `methodVersion: exp-v0.1`, dataAsOf, confidence, guaranteed=false, assumptions.
+    팔로워 데이터가 없으면 null (추정으로 채우지 않음, LEG-06).
+- **추천 결과 화면** — 승인 가능성 배지, 위험 목록(모든 안), 예상 범위 블록(근거·신뢰도·기준일·산식 버전·보장 아님).
+  신청 시 `snapshot.plan.expected`가 그대로 계약 스냅샷에 남는다.
+- **성과 리포트** — "계약 시 예상 범위"를 캠페인이 아니라 승인·결제·진행 중 신청의 `snapshot.plan.expected`에서 읽는다.
+  기록된 신청이 여러 건이면 선택. 캠페인↔신청 연결은 없으므로 예상 범위는 신청 단위로 표시.
+- **선수 대시보드** — `/athletes/me`로 선수 id·`profileUpdatedAt`을 받아 팬온도(`/fan-hub/athletes/:id/temperature`)와
+  "마지막 확인 n일 전"(28일 이상 경고)을 표시. 표본 30 미만은 "집계 중 (참여 n명)".
+
+### 영향받는 파일
+- `src/backend/src/services/recommendPick.service.ts`
+- `src/frontend/src/pages/recommend/RecommendResults.tsx` · `pages/brand/BrandROIDashboard.tsx` · `pages/Dashboard.tsx`
+
+### 검증
+- 백엔드·프론트 tsc, vite build 통과. 추천 결과·대시보드는 로그인·데이터 필요라 빌드만. 양쪽 푸시 완료.
