@@ -48,10 +48,11 @@ const OBJECTIVE_GOALS: Record<string, string[]> = {
   TRIAL: ['SNS_CONTENT', 'EVENT_TEST'],
   PURCHASE: ['FAN_STORE', 'SNS_CONTENT'],
   LOCAL: ['FAN_STORE', 'BRAND_AWARENESS'],
+  SNS: ['SNS_CONTENT', 'BRAND_AWARENESS'],
 };
 
 const OBJECTIVE_LABEL: Record<string, string> = {
-  AWARENESS: '브랜드 인지도', TRIAL: '제품 체험', PURCHASE: '구매 전환', LOCAL: '지역 홍보',
+  AWARENESS: '브랜드 인지도', TRIAL: '제품 체험', PURCHASE: '구매 전환', LOCAL: '지역 홍보', SNS: 'SNS 확산',
 };
 
 /** 자연어에서 조건 힌트 추출 — 규칙 기반(모델 미사용, §3.2 AI 사용 경계) */
@@ -62,6 +63,7 @@ export function extractFromText(text: string) {
   if (/체험|리뷰|사용\s*후기|시식/.test(t)) { out.objective = 'TRIAL'; out.confidence.objective = 0.8; }
   if (/구매|판매|전환|매출/.test(t)) { out.objective = 'PURCHASE'; out.confidence.objective = 0.85; }
   if (/지역|매장|방문|동네|상권/.test(t)) { out.objective = 'LOCAL'; out.confidence.objective = 0.75; }
+  if (/SNS|인스타|릴스|숏폼|콘텐츠 확산|바이럴/i.test(t)) { out.objective = 'SNS'; out.confidence.objective = 0.8; }
   const man = t.match(/(\d{1,5})\s*만\s*원/);
   if (man) {
     const v = Number(man[1]);
