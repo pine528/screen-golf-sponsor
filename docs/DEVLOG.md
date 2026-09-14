@@ -1589,3 +1589,15 @@
 
 ### 검증
 - 양쪽 tsc, 프론트 build 통과. `/digital-partner`가 API 값(월 49,000/99,000/199,000원)으로 렌더되는 것 확인. 관리자 화면은 로그인 필요.
+
+## [2026-09-14] 브랜드 대시보드 "새 리포트" 건수 연결
+
+### 변경 사항
+- `GET /roi/my/reports?days=30` (BRAND) — 브랜드 소유 캠페인의 최근 N일 `COMPLETED` 리포트 건수와 최근 5건.
+- 브랜드 대시보드 새 리포트 타일이 이 값을 표시(응답 전에는 "집계 중").
+
+### 영향받는 파일
+- `src/backend/src/routes/roi.routes.ts` · `src/frontend/src/services/api.ts` · `pages/Dashboard.tsx`
+
+### 검증
+- 양쪽 tsc · 프론트 build 통과. 로그인 필요라 화면 확인은 못 함.

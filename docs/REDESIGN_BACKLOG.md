@@ -174,7 +174,7 @@
 ### P0
 - [ ] `/sponsor/direct/build/:id` — 도식을 선수 실사 + Front/Back 실측 좌표로 교체 (현재 공용 인체 도식, 후면 좌표 없음)
 - [ ] 추천 예상 범위 산식 exp-v0.1(팔로워×2~6%)을 실제 성과 데이터로 보정하는 루프 — engineVersion·methodVersion별 추적 (v2.1 §14.2)
-- [ ] 대시보드 — 브랜드 "새 리포트" 건수 API(RoiReport 브랜드 목록 엔드포인트 없음), `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (선수 팬온도·체크인은 2026-09-14 연결, §13)
+- [ ] `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (v2.1 §3 — 현재 `/dashboard` 역할 분기)
 - [ ] Legacy redirect — SPA Navigate로 처리(2026-09-14). Vercel `vercel.json` 301 규칙 추가 여부 결정 (v2.1 §3.1)
 
 ### P1
