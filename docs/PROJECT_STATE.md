@@ -1032,3 +1032,6 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - 메인 `/` = 히어로(두 PICK + 슬롯 핫스폿 5종) → 4단계 → 브랜드 캐러셀 → 가치 4종 → CTA → 푸터. 데이터 fetch 없음.
 - 히어로 실사는 `public/golfers/bae-jinri-hero.png`(캡션 제거본). 필기체 유틸 `font-script`(Great Vibes).
 - 용어 고정(v2.1 Appendix B): 직접 PICK / 스폰픽 추천 PICK / 지금 가능한 후원 / 디지털 파트너 / 상의(가슴 금지) / 성과보장(매출·우승보장 금지).
+- (2026-09-14 추가) `/dashboard`는 역할별 Action-first: 브랜드 = 승인/결제/진행/리포트 타일 → 이어서 하기 → 진행 중 → 성과 → 다음 제안,
+  선수 = 요청/서명/슬롯/정산 타일 → 승인 목록 → 계약·팬·체크인 → 성과. 구 URL(`/about`, `/about/how`, `/about/guarantee`,
+  `/sponsor/digital`, `/opportunities`)은 `App.tsx`에서 Navigate replace.

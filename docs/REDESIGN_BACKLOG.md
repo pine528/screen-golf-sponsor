@@ -173,13 +173,10 @@
 
 ### P0
 - [ ] `/sponsor/direct/build/:id` — 2026-09-14 상태명·sticky CTA·레이아웃 정리 완료. 남은 것: /configure(기간·판매유형·추가활동·권리)를 build 한 화면으로 합치기(v2.1 §3 canonical route에는 /configure 없음), 도식을 선수 실사로
-- [ ] `/sponsor/recommended/results/:id` — 안정형/균형형(BEST)/도전형 후원안, 동일 선수 반복 금지 (§7.4)
-- [ ] `/sponsor/available` — 주어를 상품으로, 배지 바로구매/선수확인/협의/월구독/경매 (§8)
-- [ ] `/digital-partner` — 경기복 미포함 첫 화면 명시, 월액+12개월 총액+VAT 동시 표시 (§9)
-- [ ] `/brand/dashboard` · `/athlete/dashboard` — Action-first(승인/결제/진행/리포트 → 성과) (§13)
-- [ ] 글로벌 GNB — 선수 메뉴를 전체 선수/추천 선수/관심 선수/선수 등록으로 (v2.1 §2)
-- [ ] 모바일 drawer 최상단에 직접 PICK / 추천 PICK 바로가기 고정 (§2.3)
-- [ ] Legacy redirect 301: /opportunities, /sponsor/digital, /about, /about/how, /about/guarantee (v2.1 §3.1)
+- [ ] 추천 결과 — 승인 가능성·예상 KPI 범위·위험 필드를 엔진 응답에 추가해 카드에 노출 (§7.4, 2026-09-14 UI는 정리 완료)
+- [ ] 디지털 파트너 플랜 금액(START/GROW/PLUS)을 Admin Pricing Config로 이동 — 현재 프론트 상수 (v2.1 §9.2)
+- [ ] 대시보드 — 브랜드 "새 리포트" 건수 API, 선수 팬온도/마지막 체크인 API 연결 (현재 "집계 중"), `/brand/dashboard` `/athlete/dashboard` canonical 경로 별칭 (§13)
+- [ ] Legacy redirect — SPA Navigate로 처리(2026-09-14). Vercel `vercel.json` 301 규칙 추가 여부 결정 (v2.1 §3.1)
 
 ### P1
 - [ ] `/athletes/:id` 상단 4축 Snapshot(경기/브랜드/팬/콘텐츠) + 탭 5개 (§10.2)

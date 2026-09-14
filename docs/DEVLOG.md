@@ -1364,3 +1364,31 @@
 ### 검증
 - tsc · vite build 통과. 로컬에서 `/sponsor`, `/sponsor/recommended`, `/sponsor/direct/athletes`, `/sponsor/direct/build/:id` 렌더 확인.
 - 견적함은 로그인 필요라 타입·빌드만 확인. 프론트(redesign)·백엔드(main) 푸시 완료.
+
+## [2026-09-14] UI 가이드 v1.0 P0 2차 — 추천 결과 · 지금 가능한 후원 · 디지털 파트너 · 대시보드 · 구 URL
+
+### 변경 사항
+- **추천 결과** `/sponsor/recommended/results/:id` — 제목을 "실행 가능한 후원안 N개"로, 근거를 균형형만이 아니라
+  모든 안에 최대 3개 노출, "핏 %" → "적합도", 평균 적합도 대신 데이터 충분도(충분/일부 수집 중), 도전형에 불확실성
+  안내, CTA "이 추천안 검토" / "근거 보기", 하단에 기준일·엔진 버전·재검증·동일 선수 반복 금지 안내 (§7.4).
+- **지금 가능한 후원** — 소개 문구에 판매 방식 5종(바로 구매·선수확인·협의·월 구독·경매) 명시,
+  "SPONPIK이 안전한 후원을 보장합니다" 문구 제거(Appendix B), 브레드크럼 후원하기 → `/sponsor`.
+- **디지털 파트너** `/digital-partner` 재작성 — 히어로 "선수의 공식 디지털 파트너가 되어보세요.", 첫 화면에
+  경기복·대회 현장 부착 미포함 명시, 사용처 4종(WEB/SNS/FAN STORE/STORE POP) 아이콘, 플랜 카드에
+  월액·12개월 약정·연간 총액·VAT 동시 표시, 포함/미포함 항목 분리, 진행 방식 5단계, 자동갱신 기본 OFF 안내 (§9).
+- **대시보드** `/dashboard` — 브랜드·선수를 Action-first로 재작성 (§13).
+  브랜드: 승인 대기/결제 대기/진행 중/새 리포트 타일 → 이어서 하기(구성안·보관 상품·최근 신청) → 진행 중 후원
+  → 성과(측정값만) → 다음 제안. 선수: 새 후원 요청/서명 대기/판매 가능 슬롯/정산 대기 → 승인 필요 목록
+  → 진행 중 계약 · 팬/체크인 → 성과·정산. 미측정 값은 "집계 중". 관리자 대시보드는 유지.
+- **구 URL 리다이렉트** — `/about`→`/about/service`, `/about/how`→`/about/how-it-works`,
+  `/about/guarantee`→`/about/performance-guarantee`, `/sponsor/digital`→`/digital-partner`,
+  `/opportunities(/:id)`→`/sponsor/available` (v2.1 §3.1). 구 소개 2종은 `/about/*-legacy`로 이동.
+- 확인 결과 이미 반영돼 있던 것: 헤더 선수 메뉴 4종, 모바일 드로어 상단 두 PICK 바로가기.
+
+### 영향받는 파일
+- `src/frontend/src/pages/recommend/RecommendResults.tsx` · `pages/offers/AvailableOffers.tsx`
+- `src/frontend/src/pages/DigitalPartner.tsx` (재작성) · `pages/Dashboard.tsx` (브랜드·선수 재작성) · `App.tsx`
+
+### 검증
+- tsc · vite build 통과. `/digital-partner` 렌더, `/about/how` → `/about/how-it-works` 리다이렉트 확인.
+- 추천 결과·대시보드는 로그인/데이터가 필요해 타입·빌드만 확인.
