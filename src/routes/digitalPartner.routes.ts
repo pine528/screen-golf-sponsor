@@ -7,8 +7,7 @@ import { authenticate, authorize } from '../middleware/auth';
 import {
   listPlans, listDigitalAthletes, getDigitalAthlete, applyDigital,
   getDigitalApplication, reviewDigital, checkoutDigital,
-  listBrandSubscriptions, listAthleteDigitalRequests,
-} from '../services/digitalPartner.service';
+  listBrandSubscriptions, listAthleteDigitalRequests, listAllPlans, updatePlan } from '../services/digitalPartner.service';
 
 const router = Router();
 
@@ -24,6 +23,17 @@ const fail = (res: Response, e: any) => {
 /** GET /api/digital-partner/plans — 플랜 목록 (공개) */
 router.get('/plans', async (_req: Request, res: Response, next: NextFunction) => {
   try { res.json({ success: true, data: await listPlans(), error: null }); } catch (e) { next(e); }
+});
+
+/** 관리자 Pricing Config (v2.1 §9.2) — 가격·수량·포함/미포함의 단일 출처 */
+router.get('/admin/plans', authenticate, authorize('ADMIN'), async (_req: Request, res: Response, next: NextFunction) => {
+  try { res.json({ success: true, data: await listAllPlans(), error: null }); } catch (e) { next(e); }
+});
+router.patch('/admin/plans/:code', authenticate, authorize('ADMIN'), async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const { reason, ...patch } = req.body || {};
+    res.json({ success: true, data: await updatePlan(String(req.params.code), patch, req.user.id, String(reason || '')), error: null });
+  } catch (e) { next(e); }
 });
 
 /** GET /api/digital-partner/athletes — 모집 중 선수 (공개) */

@@ -7,6 +7,7 @@
  *  - 가격은 서버가 플랜 × 선수 배수로 재계산한다 (§8.3).
  */
 import { PrismaClient, Prisma } from '@prisma/client';
+import { logAdmin } from './fanAdmin.service';
 
 const prisma = new PrismaClient();
 
@@ -48,6 +49,43 @@ export async function listPlans() {
     });
   }
   return prisma.digitalPlan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
+}
+
+/** 관리자 — 비활성 포함 전체 플랜 (Admin Pricing Config, v2.1 §9.2) */
+export async function listAllPlans() {
+  await listPlans(); // 기본 3종 시딩 보장
+  return prisma.digitalPlan.findMany({ orderBy: { sortOrder: 'asc' } });
+}
+
+/** 관리자 — 플랜 가격·수량·포함/미포함 수정. 진행 중 구독은 계약 스냅샷을 따르므로 소급되지 않는다. */
+export async function updatePlan(
+  code: string,
+  patch: { name?: string; monthlyPrice?: number; capacity?: number; active?: boolean; benefits?: string[]; exclusions?: string[] },
+  adminId: string,
+  reason: string,
+) {
+  const before = await prisma.digitalPlan.findUnique({ where: { code } });
+  if (!before) throw Object.assign(new Error('플랜을 찾을 수 없습니다'), { status: 404 });
+  if (!reason || !reason.trim()) throw Object.assign(new Error('변경 사유가 필요합니다'), { status: 400 });
+  if (patch.monthlyPrice != null && (!Number.isInteger(patch.monthlyPrice) || patch.monthlyPrice <= 0)) {
+    throw Object.assign(new Error('월 구독료는 1원 이상의 정수여야 합니다'), { status: 400 });
+  }
+  if (patch.capacity != null && (!Number.isInteger(patch.capacity) || patch.capacity < 0)) {
+    throw Object.assign(new Error('수량은 0 이상의 정수여야 합니다'), { status: 400 });
+  }
+  const data: Prisma.DigitalPlanUpdateInput = {};
+  if (patch.name != null) data.name = String(patch.name).trim().slice(0, 40) || before.name;
+  if (patch.monthlyPrice != null) data.monthlyPrice = patch.monthlyPrice;
+  if (patch.capacity != null) data.capacity = patch.capacity;
+  if (patch.active != null) data.active = !!patch.active;
+  if (patch.benefits) data.benefits = patch.benefits.map(String).slice(0, 12) as Prisma.InputJsonValue;
+  if (patch.exclusions) data.exclusions = patch.exclusions.map(String).slice(0, 12) as Prisma.InputJsonValue;
+  const after = await prisma.digitalPlan.update({ where: { code }, data });
+  await logAdmin(adminId, 'DIGITAL_PLAN_UPDATE', 'DIGITAL_PLAN', code, reason, {
+    before: { name: before.name, monthlyPrice: before.monthlyPrice, capacity: before.capacity, active: before.active },
+    after: { name: after.name, monthlyPrice: after.monthlyPrice, capacity: after.capacity, active: after.active },
+  });
+  return after;
 }
 
 /** 선수별 잔여 수량 — 재고 레코드가 없으면 플랜 기본 capacity를 쓴다 */
