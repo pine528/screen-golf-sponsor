@@ -1553,3 +1553,22 @@
 
 ### 검증
 - 백엔드·프론트 tsc, vite build 통과. 추천 결과·대시보드는 로그인·데이터 필요라 빌드만. 양쪽 푸시 완료.
+
+## [2026-09-14] 후원 신청 ↔ 캠페인 연결 (Payment → Campaign)
+
+### 변경 사항
+- 스키마: `SponsorshipApplication.campaignId`(nullable, FK → campaigns, SET NULL) + `Campaign.applications`.
+  마이그레이션 `20260914_application_campaign_link` (멱등). 로컬 DB `db push` 적용, Render는 빌드 시 db push.
+- `checkoutApplication`: 결제 완료 트랜잭션 안에서 브랜드 캠페인을 자동 생성(ACTIVE, 기간 = durationMonths,
+  예산 = 공급가+VAT, preferredAthletes = 승인 선수, 이름 = "{planName} 후원" / "직접 PICK 후원")하고 신청에 연결.
+  브랜드 프로필이 없으면 결제는 그대로 진행하고 연결만 생략. 이미 연결된 신청은 재생성하지 않음.
+- 성과 리포트: 선택한 캠페인에 연결된 신청의 `snapshot.plan.expected`를 "계약 시 예상 범위"로 우선 사용
+  ("이 캠페인" 표시). 연결 없으면 기존처럼 신청 선택.
+
+### 영향받는 파일
+- `src/backend/prisma/schema.prisma` · `prisma/migrations/20260914_application_campaign_link/migration.sql`
+  · `src/backend/src/services/application.service.ts`
+- `src/frontend/src/pages/brand/BrandROIDashboard.tsx`
+
+### 검증
+- 백엔드 prisma generate · tsc, 프론트 tsc · build 통과. 로컬 DB 동기화. 결제 E2E는 PG 샌드박스가 필요해 미실행.
