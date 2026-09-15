@@ -9,6 +9,7 @@ import * as ops from '../services/fanAdminOps.service';
 import { runDailySnapshot } from '../services/fanTemperature.service';
 import { confirmPending, expirePoints } from '../services/fanPoint.service';
 import { confirmPurchase } from '../services/fanStore.service';
+import { seedDemoStores } from '../services/fanStoreDemo.service';
 
 const router = Router();
 const ok = (res: Response, data: any) => res.json({ success: true, data, error: null });
@@ -253,6 +254,11 @@ router.get('/stores/:id', async (req: Request, res: Response, next: NextFunction
 
 router.post('/stores', async (req: any, res: Response, next: NextFunction) => {
   try { ok(res, await ops.upsertStore({ ...req.body, adminId: req.user.id })); } catch (e) { next(e); }
+});
+
+/** POST /api/admin/fan/stores/seed-demo — 구 데모 카탈로그(OREX·the GUYS·호이베이커리) 3스토어·22상품을 만들거나 갱신 (멱등) */
+router.post('/stores/seed-demo', async (_req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await seedDemoStores()); } catch (e) { next(e); }
 });
 
 /* ── A10 주문 · 환불 · 정산 ─────────────────────────── */

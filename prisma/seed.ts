@@ -1,6 +1,7 @@
 import { PrismaClient, BodyPart, MaterialRule, SlotGrade, SlotCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { SLOT_DISPLAY_COORDS } from './slot-display-coords';
+import { seedDemoStores } from '../src/services/fanStoreDemo.service';
 
 const prisma = new PrismaClient();
 
@@ -1165,6 +1166,14 @@ async function backfillSlotInventory() {
     if (slotCnt || invCnt) console.log(`✅ 인벤토리 보충 — 선수슬롯 ${slotCnt}건 / 재고 ${invCnt}건`);
   } catch (e) {
     console.warn('Warning: 인벤토리 보충 실패 (non-fatal):', e);
+  }
+
+  /* 팬스토어 데모 카탈로그 (OREX · the GUYS · 호이베이커리) — slug 기준 멱등 */
+  try {
+    const r = await seedDemoStores();
+    console.log('Fan store demo:', r.results.map((x) => `${x.slug}=${x.status}`).join(', '));
+  } catch (e) {
+    console.warn('Warning: 팬스토어 데모 시드 실패 (non-fatal):', e);
   }
 }
 
