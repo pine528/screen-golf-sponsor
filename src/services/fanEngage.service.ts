@@ -186,7 +186,7 @@ export async function getCommunitySummary(athleteId: string) {
   const d7 = new Date(now.getTime() - 7 * 86400_000);
   const seasonStart = new Date(now.getFullYear(), 0, 1);
 
-  const [fans, cheers, top10, topPosts, weekly, tv] = await Promise.all([
+  const [fans, cheers, top10, topPosts, weekly, tv, letters] = await Promise.all([
     prisma.fanTemperatureEvent.findMany({ where: { athleteId }, select: { userId: true }, distinct: ['userId'] }),
     prisma.athleteCommunityPost.count({ where: { athleteId, isHidden: false, isPrivate: false, authorRole: 'FAN', createdAt: { gte: d30 } } }),
     prisma.athleteEventResult.count({ where: { athleteId, status: 'APPROVED', rank: { lte: 10 }, eventDate: { gte: seasonStart } } }),
@@ -200,6 +200,7 @@ export async function getCommunitySummary(athleteId: string) {
       _count: { _all: true }, orderBy: { _count: { userId: 'desc' } }, take: 5,
     }),
     (await import('./fanTemperature.service')).getTemperatureView(athleteId).catch(() => null),
+    prisma.fanLetter.count({ where: { athleteId, status: 'PUBLISHED', createdAt: { gte: d30 } } }),
   ]);
 
   const userIds = weekly.map((w) => w.userId).filter(Boolean) as string[];
@@ -214,8 +215,13 @@ export async function getCommunitySummary(athleteId: string) {
       isRecommended: athlete.isRecommended,
       quote: Array.isArray(athlete.highlights) && (athlete.highlights as any[]).length ? String((athlete.highlights as any[])[0]) : null,
     },
-    stats: { fanCount: fans.length, recentCheers: cheers, seasonTop10: top10 },
-    temperature: tv ? { score: tv.score, tier: tv.tier, lowSample: tv.lowSample, weeklyDelta: (tv as any).weeklyDelta ?? null } : null,
+    stats: { fanCount: fans.length, recentCheers: cheers, seasonTop10: top10, recentLetters: letters },
+    temperature: tv ? {
+      score: tv.score, tier: tv.tier, lowSample: tv.lowSample, weeklyDelta: (tv as any).weeklyDelta ?? null,
+      /* 시안 '팬온도는 이렇게 만들어져요' — 구성요소 가중치 · 30일 활동 팬 수 */
+      components: (tv as any).components?.map((c: any) => ({ key: c.key, label: c.label, weight: c.weight })) ?? [],
+      activeFanCount: (tv as any).activeFanCount ?? null,
+    } : null,
     topPosts: topPosts.map((p) => ({ id: p.id, content: p.content, likeCount: p.likeCount, type: p.type })),
     weeklyFans: weekly.map((w, i) => {
       const f = fanBy.get(w.userId as string);
@@ -223,6 +229,51 @@ export async function getCommunitySummary(athleteId: string) {
     }),
     asOf: now.toISOString(),
   };
+}
+
+/* ── 신고 (시안 2026-09-15 커뮤니티 '게시글 신고 · 사용자 신고') ─────────────
+ * 팬이 낸 신고는 운영 신고함(FanReport)에 그대로 쌓인다. 신고자는 익명으로 처리된다.
+ */
+export const REPORT_REASONS = [
+  { code: 'ABUSE', label: '욕설 · 비방' }, { code: 'PRIVACY', label: '개인정보 노출' }, { code: 'AD', label: '광고 · 홍보' },
+  { code: 'FALSE', label: '허위사실 유포' }, { code: 'OTHER', label: '기타' },
+] as const;
+
+export async function reportContent(reporterId: string, input: { targetType: string; targetId: string; reason: string; detail?: string }) {
+  const targetType = String(input.targetType || '').toUpperCase();
+  if (!['POST', 'COMMENT', 'USER'].includes(targetType)) throw Object.assign(new Error('신고 대상이 올바르지 않습니다'), { status: 400 });
+  const reasonDef = REPORT_REASONS.find((r) => r.code === input.reason);
+  if (!reasonDef) throw Object.assign(new Error('신고 사유를 선택해주세요'), { status: 400 });
+
+  let targetUserId: string | null = null;
+  if (targetType === 'POST') {
+    const p = await prisma.athleteCommunityPost.findUnique({ where: { id: input.targetId }, select: { authorUserId: true } });
+    if (!p) throw Object.assign(new Error('게시글을 찾을 수 없습니다'), { status: 404 });
+    targetUserId = p.authorUserId;
+  } else if (targetType === 'COMMENT') {
+    const c = await prisma.communityComment.findUnique({ where: { id: input.targetId }, select: { authorUserId: true } });
+    if (!c) throw Object.assign(new Error('댓글을 찾을 수 없습니다'), { status: 404 });
+    targetUserId = c.authorUserId;
+  } else {
+    targetUserId = input.targetId;
+  }
+  if (targetUserId === reporterId) throw Object.assign(new Error('본인 글은 신고할 수 없습니다'), { status: 400 });
+
+  const dup = await prisma.fanReport.findFirst({ where: { reporterId, targetType, targetId: input.targetId, status: { in: ['RECEIVED', 'CLASSIFIED'] } } });
+  if (dup) return { id: dup.id, code: dup.code, duplicate: true };
+
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const code = `FR-${day}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  const r = await prisma.fanReport.create({
+    data: {
+      code, reporterId, targetType, targetId: input.targetId, targetUserId,
+      reason: reasonDef.label, detail: (input.detail || '').trim().slice(0, 500) || null,
+      risk: reasonDef.code === 'PRIVACY' || reasonDef.code === 'ABUSE' ? 'P1' : 'P2',
+      status: 'RECEIVED',
+      slaDueAt: new Date(Date.now() + (reasonDef.code === 'PRIVACY' || reasonDef.code === 'ABUSE' ? 4 : 24) * 3600_000),
+    },
+  });
+  return { id: r.id, code: r.code, duplicate: false };
 }
 
 /* ── 커뮤니티 ───────────────────────────────────────────── */
@@ -282,6 +333,8 @@ export async function listPosts(
       commentCount: p.commentCount,
       likedByMe: Array.isArray(p.likes) ? p.likes.length > 0 : false,
       isMine: !!viewer && p.authorUserId === viewer.id,
+      /* 사용자 신고 대상 — 팬 글에만 (선수 공식 글·팬레터는 대상 아님) */
+      authorUserId: p.authorRole === 'FAN' && p.type !== 'LETTER' ? p.authorUserId : null,
       createdAt: p.createdAt,
     })),
   };

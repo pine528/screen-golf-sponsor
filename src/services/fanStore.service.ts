@@ -82,6 +82,9 @@ function decorateProduct(p: any) {
     stockNote: p.stockNote,
     isSponsored: p.isSponsored,
     pointRate: p.pointRate,
+    createdAt: p.createdAt,
+    /* NEW = 등록 30일 이내 (확인된 사실만 배지로) */
+    isNew: p.createdAt ? new Date(p.createdAt).getTime() >= Date.now() - 30 * 86400_000 : false,
     /* 적립 예상액은 확정이 아니라 예상임을 화면이 말할 수 있게 rate 를 함께 준다 */
     estimatedPoints: p.pointRate ? Math.floor(p.price * p.pointRate) : null,
   };
@@ -198,8 +201,17 @@ export async function getStore(idOrSlug: string) {
 
   await prisma.fanStore.update({ where: { id: store.id }, data: { viewCount: { increment: 1 } } }).catch(() => null);
 
+  /* 팬들의 응원 (누적) — 방문·구매확정·응원 메시지. 전부 원장에서 센 값 (시안 F12) */
+  const [purchases, messages] = await Promise.all([
+    prisma.fanStoreClick.count({ where: { storeId: store.id, confirmedAt: { not: null } } }),
+    prisma.athleteCommunityPost.count({ where: { athleteId: store.athleteId, isHidden: false, isPrivate: false, authorRole: 'FAN' } }),
+  ]);
+  const rates = store.products.map((p) => p.pointRate).filter((r): r is number => typeof r === 'number' && r > 0);
+
   return {
     ...decorate(store),
+    stats: { views: store.viewCount + 1, purchases, messages },
+    pointRatePercent: rates.length ? Math.round(Math.max(...rates) * 100) : null,
     products: store.products.map(decorateProduct),
     exitNotice: EXIT_NOTICE,
     disclosures: [

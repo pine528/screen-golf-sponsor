@@ -316,11 +316,15 @@ export async function getLedger(userId: string, params: {
       : {}),
   };
 
-  const [rows, total, summary] = await Promise.all([
+  const [rows, total, summary, allAthleteIds] = await Promise.all([
     prisma.pointLedgerTx.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
     prisma.pointLedgerTx.count({ where }),
     getMyPoints(userId),
+    prisma.pointLedgerTx.findMany({ where: { userId, athleteId: { not: null } }, select: { athleteId: true }, distinct: ['athleteId'] }),
   ]);
+  const filterAthletes = allAthleteIds.length
+    ? await prisma.athlete.findMany({ where: { id: { in: allAthleteIds.map((a) => a.athleteId as string) } }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+    : [];
 
   /* 선수명 붙이기 */
   const ids = [...new Set(rows.map((r) => r.athleteId).filter(Boolean))] as string[];
@@ -332,6 +336,7 @@ export async function getLedger(userId: string, params: {
   return {
     items: rows.map((r) => ({ ...shapeTx(r), athlete: r.athleteId ? map.get(r.athleteId) ?? null : null })),
     total, page, limit,
+    athletes: filterAthletes,
     summary: {
       available: summary.available,
       pending: summary.pending,

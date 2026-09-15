@@ -23,6 +23,14 @@ export const INTERESTS = [
   { code: 'AFFILIATED', label: '소속·거래', desc: '재직 중이거나 거래 관계가 있습니다' },
 ] as const;
 
+/** 추천 협업 형태 (시안 F14, 복수 선택) */
+export const COLLAB_TYPES = [
+  { code: 'PROFILE_PATCH', label: '온라인 프로필 패치', desc: '선수 프로필·중계 노출 패치' },
+  { code: 'SNS', label: 'SNS 콘텐츠 협업', desc: '선수 SNS 콘텐츠 제작·노출' },
+  { code: 'FAN_STORE', label: '팬 스토어 협업', desc: '팬 전용 협업 상품·할인' },
+  { code: 'PRODUCT', label: '제품 스폰서십', desc: '용품·의류 등 제품 후원' },
+] as const;
+
 /** 파이프라인 (§9.1) */
 export const PIPELINE = [
   { code: 'RECEIVED', label: '접수', desc: '추천이 등록되었습니다' },
@@ -50,11 +58,21 @@ export async function getOptions(userId?: string) {
       where: { fanUserId: userId, createdAt: { gte: monthStart } },
     });
   }
+  const { EARN_RULES } = await import('./fanPoint.service');
+  const pts = (code: string) => (EARN_RULES.find((r) => r.code === code) as any)?.points ?? null;
   return {
     categories: SUGGEST_CATEGORIES,
     interests: INTERESTS,
+    collabTypes: COLLAB_TYPES,
     pipeline: PIPELINE,
     reason: { min: MIN_REASON, max: MAX_REASON },
+    /* 참여 보상 — 적립표 값 그대로 (검토 완료 시 / 브랜드 채택 시) */
+    rewards: { suggest: pts('BRAND_SUGGEST'), adopted: pts('BRAND_ADOPTED') },
+    examples: [
+      { title: '선수의 이미지와 브랜드 가치가 잘 맞아야 해요.', desc: '예) 건강한 라이프스타일을 추구하는 골퍼 이미지와 헬스케어 브랜드의 방향성이 일치' },
+      { title: '구체적인 협업 아이디어를 제안해주세요.', desc: '예) SNS에서 건강 루틴 콘텐츠 제작, 골프 라운드 시 제품 노출 등' },
+      { title: '선수가 팬들과 함께 성장할 수 있는 기회를 만들어주세요.', desc: '팬과 선수가 모두 긍정적인 시너지를 낼 수 있는 협업을 제안해 주세요.' },
+    ],
     quota: { used, limit: MONTHLY_LIMIT, remaining: Math.max(0, MONTHLY_LIMIT - used) },
     notices: [
       '추천은 브랜드에게 익명 인사이트로 전달되며, 팬의 개인정보는 제공되지 않습니다.',
@@ -67,8 +85,14 @@ export async function getOptions(userId?: string) {
 export async function create(input: {
   userId: string; athleteId: string; category: string;
   brandName?: string; reason: string; interest: string; isPublic?: boolean;
+  brandUrl?: string; collabTypes?: string[];
 }) {
   if (!input.category) throw Object.assign(new Error('카테고리를 선택해주세요'), { status: 400 });
+  const brandUrl = (input.brandUrl || '').trim();
+  if (brandUrl && !/^https?:\/\/[^\s]+$/i.test(brandUrl)) {
+    throw Object.assign(new Error('브랜드 홈페이지는 https:// 로 시작하는 주소만 입력할 수 있습니다'), { status: 400 });
+  }
+  const collabTypes = [...new Set((input.collabTypes || []).filter((c) => COLLAB_TYPES.some((t) => t.code === c)))];
   if (!INTERESTS.some((i) => i.code === input.interest)) {
     throw Object.assign(new Error('이해관계 여부를 선택해주세요'), { status: 400 });
   }
@@ -108,6 +132,8 @@ export async function create(input: {
       reason: reason.slice(0, MAX_REASON),
       interest: input.interest,
       isPublic: input.isPublic ?? false,
+      brandUrl: brandUrl ? brandUrl.slice(0, 300) : null,
+      collabTypes,
       status: 'RECEIVED',
     },
   });
@@ -139,6 +165,8 @@ function shape(s: any) {
     reason: s.reason,
     interest: s.interest,
     isPublic: s.isPublic,
+    brandUrl: s.brandUrl ?? null,
+    collabTypes: (s.collabTypes ?? []) as string[],
     status,
     statusLabel: PIPELINE.find((p) => p.code === status)?.label ?? TERMINAL[status] ?? status,
     statusNote: s.statusNote,
@@ -156,9 +184,16 @@ export async function listMine(userId: string) {
     orderBy: { createdAt: 'desc' },
     include: { athlete: { select: { id: true, name: true, profileImageUrl: true, tour: true } } },
   });
+  const shaped = rows.map((r) => ({ ...shape(r), athlete: r.athlete }));
   return {
-    suggestions: rows.map((r) => ({ ...shape(r), athlete: r.athlete })),
+    suggestions: shaped,
     pipeline: PIPELINE,
+    /* 단계별 건수 — 채택/보류 는 마지막 칸에 함께 센다 (시안 '채택/보류') */
+    stageCounts: PIPELINE.map((p) => ({
+      code: p.code, label: p.label, desc: p.desc,
+      count: shaped.filter((x) => x.status === p.code || (p.code === 'ADOPTED' && x.stageIndex < 0)).length,
+    })),
+    collabTypes: COLLAB_TYPES,
   };
 }
 

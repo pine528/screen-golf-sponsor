@@ -8,6 +8,7 @@ import {
   ENGAGE_RULES, POST_TABS, SUGGEST_CATEGORIES,
   getTemperature, listCommunityAthletes, listPosts, createPost, toggleLike,
   listComments, addComment, suggestBrand, getBrandSuggestionSummary, getMyEngagement, getCommunitySummary,
+  REPORT_REASONS, reportContent,
 } from '../services/fanEngage.service';
 
 const router = Router();
@@ -121,6 +122,20 @@ router.post('/athletes/:id/brand-suggestions', authenticate, async (req: any, re
     );
     res.status(201).json({ success: true, data, error: null });
   } catch (e: any) { if (e?.status) return fail(res, e); next(e); }
+});
+
+/** GET /api/fan-engage/report-reasons — 신고 사유 목록 (공개) */
+router.get('/report-reasons', (_req: Request, res: Response) => {
+  res.json({ success: true, data: { reasons: REPORT_REASONS }, error: null });
+});
+
+/** POST /api/fan-engage/reports — 게시글·댓글·사용자 신고 (로그인) */
+router.post('/reports', authenticate, async (req: any, res: Response) => {
+  try {
+    res.json({ success: true, data: await reportContent(req.user.id, {
+      targetType: req.body?.targetType, targetId: req.body?.targetId, reason: req.body?.reason, detail: req.body?.detail,
+    }), error: null });
+  } catch (e) { fail(res, e); }
 });
 
 /** GET /api/fan-engage/me — 내 팬포인트·응원 요약 */

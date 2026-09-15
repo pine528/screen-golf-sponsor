@@ -3940,6 +3940,9 @@ model FanBrandSuggestion {
   interest   String    @default("NONE")
   /// 공개범위 — 기본 비공개, 승인된 요약만 공개 (§9.1)
   isPublic   Boolean   @default(false) @map("is_public")
+  /// 시안 2026-09-15 F14 — 브랜드 홈페이지(선택) · 추천 협업 형태(복수)
+  brandUrl    String?  @map("brand_url")
+  collabTypes String[] @default([]) @map("collab_types")
   /// 파이프라인 (§9.1) — RECEIVED | REVIEWING | DELIVERED | INTERESTED | ADOPTED | HOLD | CLOSED
   /// (구 데이터의 PENDING/ACCEPTED/REJECTED 는 화면에서 RECEIVED/ADOPTED/CLOSED 로 읽는다)
   status     String    @default("RECEIVED")

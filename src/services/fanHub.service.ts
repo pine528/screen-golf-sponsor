@@ -226,8 +226,38 @@ export async function getVote(voteId: string, userId?: string) {
 
   const ranked = recentResults.filter((r) => r.rank != null);
 
+  /* 지난 투표 결과 (시안 F03) — 같은 선수의 가장 최근 종료·정산 투표. 결과가 공개 가능한 것만 */
+  let previousVote: any = null;
+  if (athleteId) {
+    const prev = await prisma.voteV2.findFirst({
+      where: {
+        id: { not: vote.id }, status: { in: ['CLOSED', 'SETTLED'] },
+        target: { path: ['playerId'], equals: athleteId },
+      },
+      orderBy: { closeAt: 'desc' },
+      include: { _count: { select: { participations: true } } },
+    });
+    if (prev) {
+      const pt = await prisma.voteParticipationV2.groupBy({ by: ['answer'], where: { voteId: prev.id }, _count: { _all: true } });
+      const popts = (prev.options as any[]).map(optionLabel);
+      const ptotal = prev._count.participations;
+      previousVote = {
+        id: prev.id, title: prev.title, closeAt: prev.closeAt, participants: ptotal,
+        results: popts.map((label, i) => {
+          const c = pt.find((x) => JSON.stringify(x.answer) === JSON.stringify(label) || JSON.stringify(x.answer) === JSON.stringify(i));
+          const n = c?._count._all ?? 0;
+          return { label, count: n, percent: ptotal ? Math.round((n / ptotal) * 100) : 0 };
+        }).sort((a, b) => b.count - a.count),
+        correctAnswer: prev.status === 'SETTLED' ? optionLabel(prev.correctAnswer) : null,
+      };
+    }
+  }
+
   return {
     id: vote.id,
+    createdAt: vote.createdAt,
+    status: vote.status,
+    previousVote,
     title: vote.title,
     description: vote.description,
     type: t,
@@ -256,6 +286,9 @@ export async function getVote(voteId: string, userId?: string) {
       ? {
           avgRank: Math.round(ranked.reduce((s, r) => s + r.rank!, 0) / ranked.length * 10) / 10,
           top10: ranked.filter((r) => r.rank! <= 10).length,
+          bestRank: Math.min(...ranked.map((r) => r.rank!)),
+          latest: recentResults[0] ?? null,
+          count: ranked.length,
           results: recentResults,
         }
       : null,
@@ -720,7 +753,7 @@ export async function getMyActivity(userId: string) {
   const { getMyPoints } = await import('./fanPoint.service');
   const { getMyContributions } = await import('./fanTemperature.service');
 
-  const [points, contributions, votes, posts, letters, suggestions, events] = await Promise.all([
+  const [points, contributions, votes, posts, letters, suggestions, events, lastBallot, myVoteIds, clicks, suggestionAll, favorites] = await Promise.all([
     getMyPoints(userId).catch(() => null),
     getMyContributions(userId).catch(() => ({ contributions: [] as any[] })),
     prisma.voteParticipationV2.count({ where: { userId } }),
@@ -734,7 +767,22 @@ export async function getMyActivity(userId: string) {
       where: { userId }, orderBy: { createdAt: 'desc' }, take: 10,
       include: { athlete: { select: { id: true, name: true, profileImageUrl: true } } },
     }),
+    prisma.voteParticipationV2.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    prisma.voteParticipationV2.findMany({ where: { userId }, select: { voteId: true } }),
+    prisma.fanStoreClick.findMany({ where: { userId }, select: { confirmedAt: true } }),
+    prisma.fanBrandSuggestion.findMany({ where: { fanUserId: userId }, select: { status: true } }),
+    prisma.userFavoriteAthlete.findMany({
+      where: { userId }, orderBy: { createdAt: 'desc' }, take: 6,
+      include: { athlete: { select: { id: true, name: true, tour: true, sportType: true, profileImageUrl: true } } },
+    }),
   ]);
+
+  /* 다음 VOTE — 아직 참여하지 않은 진행 중 투표 가운데 가장 먼저 마감되는 것 */
+  const nextVote = await prisma.voteV2.findFirst({
+    where: { status: 'OPEN', closeAt: { gt: new Date() }, id: { notIn: myVoteIds.map((v) => v.voteId) }, createdBy: { not: userId } },
+    orderBy: { closeAt: 'asc' }, select: { id: true, title: true, closeAt: true },
+  });
+  const DELIVERED = ['DELIVERED', 'INTERESTED', 'ADOPTED', 'ACCEPTED'];
 
   const SOURCE_LABEL: Record<string, string> = {
     VOTE: 'VOTE 참여', COMMUNITY: '커뮤니티 활동', LETTER: '응원 편지',
@@ -747,8 +795,15 @@ export async function getMyActivity(userId: string) {
       balance: points?.balance ?? 0,
       pending: points?.pending ?? 0,
       athletes: contributions.contributions.length,
-      suggestions: suggestions.length,
+      suggestions: suggestionAll.length,
+      suggestionsDelivered: suggestionAll.filter((x) => DELIVERED.includes(x.status)).length,
+      storeVisits: clicks.length,
+      storePurchases: clicks.filter((c) => !!c.confirmedAt).length,
+      lastVoteAt: lastBallot?.createdAt ?? null,
     },
+    nextVote,
+    favorites: favorites.map((f) => f.athlete),
+    campaign: contributions.contributions[0]?.campaign ?? null,
     contributions: contributions.contributions,
     suggestions: suggestions.map((s) => ({
       id: s.id, athlete: s.athlete, category: s.category, brandName: s.brandName,

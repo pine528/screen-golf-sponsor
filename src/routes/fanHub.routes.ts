@@ -107,7 +107,7 @@ router.post('/votes/:id/ballot', authenticate, async (req: any, res: Response, n
 
 /** GET /api/fan-hub/athletes/:id/temperature — F07 */
 router.get('/athletes/:id/temperature', optionalAuth, async (req: any, res: Response, next: NextFunction) => {
-  try { ok(res, await getTemperatureView(req.params.id, { userId: req.user?.id })); } catch (e) { next(e); }
+  try { ok(res, await getTemperatureView(req.params.id, { userId: req.user?.id, days: Number(req.query.days) || undefined })); } catch (e) { next(e); }
 });
 
 /** GET /api/fan-hub/me/contributions — F08 */
@@ -179,6 +179,8 @@ router.post('/athletes/:id/brand-suggestions', authenticate, async (req: any, re
       reason: req.body?.reason,
       interest: req.body?.interest,
       isPublic: req.body?.isPublic,
+      brandUrl: req.body?.brandUrl,
+      collabTypes: Array.isArray(req.body?.collabTypes) ? req.body.collabTypes : [],
     }));
   } catch (e) { next(e); }
 });
