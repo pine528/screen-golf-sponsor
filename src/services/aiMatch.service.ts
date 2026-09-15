@@ -135,7 +135,7 @@ function recencyDecay(days: number | null): number | null {
 
 /* ── 후보 수집 + Hard Filter (§11 Phase A) ── */
 
-async function buildCandidates(input: AiMatchInput): Promise<{ candidates: CandidateRaw[]; excluded: { athleteId: string; name: string; reason: string }[] }> {
+async function buildCandidates(input: AiMatchInput): Promise<{ candidates: CandidateRaw[]; excluded: { athleteId: string; name: string; reason: string }[]; cheapestSlotPrice: number | null }> {
   const now = new Date();
   const athletes = await prisma.athlete.findMany({
     where: { isActive: true, kycStatus: 'APPROVED' },
@@ -144,7 +144,14 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
         where: { saleEnabled: true },
         include: {
           slotTemplate: true,
-          inventories: { where: { status: 'AVAILABLE', endDate: { gte: now } }, take: 1 },
+          /* 직접 PICK(getOffers)과 같은 판정 — 판매 중 슬롯은 "막는 재고(판매완료·경매·승인대기·임시예약)나
+             활성 hold가 없는 것"이다. 예전처럼 AVAILABLE 재고 행을 요구하면 대회 재고 기간이 끝난 뒤
+             전 선수가 후보에서 빠져 추천이 항상 비거나(0명) 세션에 남은 옛 결과만 보이게 된다 (2026-09-15). */
+          inventories: {
+            where: { endDate: { gte: now }, status: { in: ['SOLD', 'AUCTION_ACTIVE', 'PENDING_APPROVAL', 'HELD'] } },
+            take: 1,
+          },
+          holds: { where: { releasedAt: null, expiresAt: { gt: now } }, take: 1 },
         },
       },
       eventResults: { where: { status: 'APPROVED' }, orderBy: { eventDate: 'desc' }, take: 20 },
@@ -155,13 +162,14 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
 
   const candidates: CandidateRaw[] = [];
   const excluded: { athleteId: string; name: string; reason: string }[] = [];
+  let cheapestSlotPrice: number | null = null; // 예산과 무관하게 판매 중인 최저가 — 후보 0명일 때 안내용
   const preferredSet = new Set(input.preferredAthleteIds || []);
 
   for (const a of athletes) {
     // 슬롯별 실제 판매방식 — 선수 단위가 아니라 '그 슬롯'의 OPEN 인스턴스 기준 (2026-08-12 오표기 수정)
     const instBySlotTemplate = new Map(a.slotInstances.map((si) => [si.slotTemplateId, si]));
     const slots = a.athleteSlots
-      .filter((s) => s.inventories.length > 0)
+      .filter((s) => s.inventories.length === 0 && s.holds.length === 0 && !s.restrictionNote && s.basePrice > 0)
       .map((s) => {
         const inst = instBySlotTemplate.get(s.slotTemplateId);
         const saleMode = inst?.saleMode === 'AUCTION' || (inst?.enableAuction && !inst?.enableDirectBuy) ? 'AUCTION'
@@ -183,13 +191,16 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
     };
 
     if (slots.length === 0) { reject('현재 판매 가능한 슬롯이 없습니다'); continue; }
-    const minSlotPrice = Math.min(...slots.map((s) => s.price));
-    if (minSlotPrice > input.budget.max) { reject('가장 저렴한 슬롯이 예산 상한을 초과합니다'); continue; } // AC-09
 
     const followers = parseFollowers(a.snsStats);
     const fields = (a.activityFields as any) || {};
     const snsActive = !!(fields.sns || fields.youtube || followers);
     if (input.options.includeSns && !snsActive) { reject('SNS 활동 정보가 확인되지 않습니다'); continue; }
+
+    // 예산 판정은 마지막에 — 그래야 cheapestSlotPrice가 "조건을 만족하는 선수 기준 최저가"가 된다
+    const minSlotPrice = Math.min(...slots.map((s) => s.price));
+    cheapestSlotPrice = cheapestSlotPrice === null ? minSlotPrice : Math.min(cheapestSlotPrice, minSlotPrice);
+    if (minSlotPrice > input.budget.max) { reject('가장 저렴한 슬롯이 예산 상한을 초과합니다'); continue; } // AC-09
 
     const hasAuction = a.slotInstances.some((si) => si.enableAuction || si.saleMode === 'AUCTION');
     const hasDirect = a.slotInstances.some((si) => si.saleMode !== 'AUCTION') || slots.length > 0;
@@ -220,7 +231,7 @@ async function buildCandidates(input: AiMatchInput): Promise<{ candidates: Candi
     });
   }
 
-  return { candidates, excluded };
+  return { candidates, excluded, cheapestSlotPrice };
 }
 
 /* ── 역할별 서브 점수 (§5, §6.2) — cohort percentile 기반 0~100 ── */
@@ -577,7 +588,7 @@ export async function previewMatch(input: AiMatchInput) {
 }
 
 export async function createMatchRequest(input: AiMatchInput, userId?: string) {
-  const [{ candidates: allCandidates, excluded }, priorAthletes, brandCtx, prefs, exposure] = await Promise.all([
+  const [{ candidates: allCandidates, excluded, cheapestSlotPrice }, priorAthletes, brandCtx, prefs, exposure] = await Promise.all([
     buildCandidates(input),
     priorAthletesOf(userId),
     userId ? getBrandContext(userId) : Promise.resolve(null),
@@ -795,6 +806,7 @@ export async function createMatchRequest(input: AiMatchInput, userId?: string) {
     scoringVersion: RULE_VERSION,
     dataAsOf,
     candidateCount: candidates.length,
+    cheapestSlotPrice,
     goalWeights: w,
     diversityMode: style,
     sourceStatus: sourceStatus(),

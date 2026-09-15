@@ -11,7 +11,7 @@
  */
 import { createMatchRequest, RULE_VERSION } from './aiMatch.service';
 
-export const RECOMMEND_PICK_VERSION = 'recommend-pick-v1-2026-09-01';
+export const RECOMMEND_PICK_VERSION = 'recommend-pick-v1.1-2026-09-15';
 
 /* 자연어/칩 입력 (프론트 랜딩·brief 화면과 동일 키) */
 export interface RecommendPickInput {
@@ -116,40 +116,75 @@ function toMember(r: any, role: string, chosen?: any) {
   };
 }
 
+/** 목표별 슬롯 선택 성향 — 인지도·지역은 가시성, 체험·구매·SNS는 비용 효율(남는 예산을 콘텐츠·추가 활동에) */
+const SLOT_PREF: Record<string, 'VISIBILITY' | 'VALUE'> = {
+  AWARENESS: 'VISIBILITY', LOCAL: 'VISIBILITY', TRIAL: 'VALUE', PURCHASE: 'VALUE', SNS: 'VALUE',
+};
+
+type SlotMode = 'VISIBILITY' | 'VALUE' | 'CHEAP';
+
 /**
- * 3안 생성. reranked(점수순 후보)에서 안별 성향에 맞게 2~3명을 뽑되,
- * 이미 다른 안에 쓴 선수는 제외해 중복 노출을 막는다.
+ * 한 자리(seat) 예산 안에서 슬롯 하나를 고른다.
+ *  VISIBILITY: 자리 예산 안에서 가장 가시성 높은 슬롯 (package.slots는 가시성순)
+ *  VALUE:      자리 예산 안에서 가장 저렴한 슬롯
+ *  CHEAP:      남은 예산 안에서 가장 저렴한 슬롯 (더 많은 선수를 담기 위해)
+ * 자리 예산에 맞는 슬롯이 없으면 남은 예산 안의 최저가로 내려간다.
  */
-function buildPlans(reranked: any[], budget: { min: number; max: number }) {
+function pickSlot(slots: any[], seatCap: number, remaining: number, mode: SlotMode) {
+  const priced = (slots || []).filter((x: any) => (x?.price ?? 0) > 0);
+  if (!priced.length) return null;
+  const byPrice = [...priced].sort((a, b) => a.price - b.price);
+  if (mode === 'CHEAP') return byPrice[0].price <= remaining ? byPrice[0] : null;
+  const inSeat = priced.filter((x: any) => x.price <= seatCap);
+  if (inSeat.length) return mode === 'VISIBILITY' ? inSeat[0] : [...inSeat].sort((a, b) => a.price - b.price)[0];
+  return byPrice[0].price <= remaining ? byPrice[0] : null;
+}
+
+/**
+ * 3안 생성. reranked(점수순 후보)에서 안별 성향에 맞게 1~3명을 뽑되,
+ * 이미 다른 안에 쓴 선수는 제외해 중복 노출을 막는다 (§6.4).
+ * 목표(슬롯 성향)·예산(자리 배분)·기간(개월 합계)이 결과에 그대로 반영된다.
+ */
+function buildPlans(
+  reranked: any[],
+  budget: { min: number; max: number },
+  ctx: { objective: string; months: number; durationLabel: string },
+) {
   const used = new Set<string>();
-  /**
-   * 예산 안에서 선수와 슬롯을 함께 고른다.
-   * package.slots는 가시성 높은 순으로 정렬되어 있으므로 앞에서부터 시도하고,
-   * 남은 예산에 맞지 않으면 더 저렴한 슬롯으로 내려간다 (§6.5 예산 최적화).
-   */
-  const take = (pool: any[], count: number, max: number) => {
+  const pref: SlotMode = SLOT_PREF[ctx.objective] || 'VISIBILITY';
+
+  const take = (pool: any[], count: number, cap: number, mode: SlotMode, prefer?: (r: any, picked: any[]) => number) => {
     const out: { r: any; slot: any }[] = [];
     let total = 0;
-    for (const r of pool) {
-      if (out.length >= count) break;
-      if (used.has(r.athleteId)) continue;
-      const slots: any[] = (r.package?.slots || []).filter((s: any) => (s?.price ?? 0) > 0);
-      if (slots.length === 0) continue;
-      // 남은 예산: 아직 못 채운 자리 수를 감안해 1인당 상한을 둔다
+    // prefer가 있으면 자리마다 다시 정렬한다 (예: 균형형은 이미 담은 선수와 다른 투어 우선)
+    for (let seat = 0; seat < count; seat++) {
       const remainingSeats = count - out.length;
-      const perSeatCap = Math.max((max - total) / remainingSeats, 0);
-      const affordable = slots.filter((s) => s.price <= Math.max(perSeatCap, max - total));
-      const slot = affordable[0] || [...slots].sort((a, b) => a.price - b.price)[0];
-      if (!slot || total + slot.price > max) continue;
-      out.push({ r, slot });
-      used.add(r.athleteId);
-      total += slot.price;
+      const seatCap = Math.max((cap - total) / remainingSeats, 0);
+      const candidates = pool.filter((r) => !used.has(r.athleteId) && !out.some((o) => o.r.athleteId === r.athleteId));
+      const ordered = prefer ? [...candidates].sort((a, b) => prefer(a, out) - prefer(b, out)) : candidates;
+      let chosen: { r: any; slot: any } | null = null;
+      for (const r of ordered) {
+        const slot = pickSlot(r.package?.slots, seatCap, cap - total, mode);
+        if (!slot) continue;
+        chosen = { r, slot };
+        break;
+      }
+      if (!chosen) break;
+      out.push(chosen);
+      used.add(chosen.r.athleteId);
+      total += chosen.slot.price;
     }
     return { picked: out, total };
   };
 
-  const verified = reranked.filter((r) => r.confidence === 'HIGH' || r.confidence === 'MEDIUM');
-  const growth = reranked.filter((r) => r.isDiscovery || r.subScores?.longTerm >= 55);
+  const fit = (r: any) => r.finalScore ?? r.matchScore ?? 0;
+  const confRank = (r: any) => (r.confidence === 'HIGH' ? 2 : r.confidence === 'MEDIUM' ? 1 : 0);
+  const verified = reranked
+    .filter((r) => r.confidence === 'HIGH' || r.confidence === 'MEDIUM')
+    .sort((a, b) => confRank(b) - confRank(a) || fit(b) - fit(a));
+  const growth = reranked
+    .filter((r) => r.isDiscovery || (r.subScores?.longTerm ?? 0) >= 55)
+    .sort((a, b) => Number(!!b.isDiscovery) - Number(!!a.isDiscovery) || (b.subScores?.longTerm ?? 0) - (a.subScores?.longTerm ?? 0));
 
   const plans: any[] = [];
   const ROLES = ['패치 노출', 'SNS 콘텐츠', '보조 노출·확장'];
@@ -157,19 +192,38 @@ function buildPlans(reranked: any[], budget: { min: number; max: number }) {
   (Object.keys(PLAN_META) as Plan[]).forEach((key) => {
     const meta = PLAN_META[key];
     const cap = Math.round(budget.max * meta.budgetRatio);
-    // 안정형은 검증 선수 우선, 도전형은 성장/신규 우선, 균형형은 혼합
-    const pool =
-      key === 'STABLE' ? [...verified, ...reranked]
-        : key === 'CHALLENGE' ? [...growth, ...reranked]
-        : [...reranked];
-    const wanted = key === 'STABLE' ? 2 : 3;
-    const { picked, total } = take(pool, wanted, cap);
+    let result: { picked: { r: any; slot: any }[]; total: number };
+    if (key === 'STABLE') {
+      // 검증된 선수 1~2명, 목표에 맞는 슬롯 — 실행 가능성 우선. 후보가 적으면 1명으로 줄여 세 안이 모두 만들어지게 한다
+      result = take([...verified, ...reranked], reranked.length < 6 ? 1 : 2, cap, pref);
+    } else if (key === 'CHALLENGE') {
+      // 성장·신규 선수 우선, 저렴한 슬롯으로 인원을 늘린다
+      result = take([...growth, ...reranked], 3, cap, 'CHEAP');
+    } else {
+      // 균형형: 점수순 2명, 두 번째는 다른 투어(KPGA/KLPGA)·SNS 보유를 우선해 조합을 넓힌다
+      result = take(reranked, 2, cap, pref === 'VISIBILITY' ? 'VALUE' : pref, (r, picked) => {
+        if (!picked.length) return -fit(r);
+        const sameTour = picked.some((o) => o.r.tour && o.r.tour === r.tour) ? 1 : 0;
+        const noSns = r.metrics?.followers ? 0 : 1;
+        return sameTour * 100 + noSns * 50 - fit(r) / 100;
+      });
+    }
+    const { picked, total } = result;
     if (picked.length === 0) return;
 
     const members = picked.map((p, i) => toMember(p.r, ROLES[i] || '추가 노출', p.slot));
     const followers = members.reduce((s, m) => s + (m.followers || 0), 0);
     const channels = new Set<string>();
     members.forEach((m) => { if (m.slot) channels.add('경기 착장'); if ((m.followers || 0) > 0) channels.add('SNS'); });
+
+    const reasons = buildReasons(key, members);
+    reasons.splice(1, 0, {
+      code: 'OBJECTIVE',
+      label: '목표 반영',
+      text: pref === 'VISIBILITY'
+        ? `${OBJECTIVE_LABEL[ctx.objective] || ctx.objective} 목표라 자리 예산 안에서 가시성이 높은 위치를 먼저 골랐습니다.`
+        : `${OBJECTIVE_LABEL[ctx.objective] || ctx.objective} 목표라 비용 효율이 높은 위치를 골라 콘텐츠·추가 활동 여지를 남겼습니다.`,
+    });
 
     plans.push({
       key,
@@ -178,6 +232,9 @@ function buildPlans(reranked: any[], budget: { min: number; max: number }) {
       badge: meta.badge || null,
       total,
       budgetCap: cap,
+      months: ctx.months,
+      durationLabel: ctx.durationLabel,
+      periodTotal: total * ctx.months,
       members,
       /* 기대지표 — 추정 없이 실측 합계만 (§17.1) */
       metrics: {
@@ -187,7 +244,7 @@ function buildPlans(reranked: any[], budget: { min: number; max: number }) {
         channels: [...channels],
         avgFit: Math.round(members.reduce((s, m) => s + (m.fitScore || 0), 0) / members.length),
       },
-      reasons: buildReasons(key, members),
+      reasons,
       approvability: buildApprovability(members),
       risks: buildRisks(key, members, total, budget.max),
       expected: buildExpected(members),
@@ -305,7 +362,9 @@ export async function createRecommendPick(input: RecommendPickInput, userId?: st
     preferredAthleteIds: input.preferredAthleteIds || [],
     excludedAthleteIds: input.excludedAthleteIds || [],
     budget: { min: budget.min, max: budget.max },
-    options: { includeSns: true, includeGrowthMarket: true, performanceGuarantee50: false },
+    /* SNS 활동은 SNS 확산 목표일 때만 필수 조건이다. 다른 목표에서는 점수(SNS 적합)로만 반영한다 —
+       전 목표에 필수로 걸면 SNS 미등록 선수가 전부 빠져 후보가 1~2명으로 줄고 3안이 늘 같은 얼굴이 된다 (2026-09-15) */
+    options: { includeSns: objective === 'SNS', includeGrowthMarket: true, performanceGuarantee50: false },
     brandDescription: input.freeText,
     currentChannels: input.channels,
     audience: input.targetAges?.length ? { ages: input.targetAges } : undefined,
@@ -315,13 +374,14 @@ export async function createRecommendPick(input: RecommendPickInput, userId?: st
 
   const engine: any = await createMatchRequest(engineInput as any, userId);
   const ranked: any[] = engine.recommendations || [];
-  const plans = buildPlans(ranked, budget);
+  const durationMeta = DURATION_LABEL[durationBand] || DURATION_LABEL.M1_3;
+  const plans = buildPlans(ranked, budget, { objective, months: durationMeta.months, durationLabel: durationMeta.label });
 
   /* 예산 불일치 안내 (§2.4) — 조합을 못 만들면 최소 필요 금액과 완화안을 준다 */
   const slotPrices = ranked
     .flatMap((r) => (r.package?.slots || []).map((s: any) => s?.price))
     .filter((p: any) => typeof p === 'number' && p > 0);
-  const minRequired = slotPrices.length ? Math.min(...slotPrices) : null;
+  const minRequired = slotPrices.length ? Math.min(...slotPrices) : (engine.cheapestSlotPrice ?? null);
   const budgetGap = plans.length === 0 && minRequired
     ? {
         minRequired,
@@ -343,7 +403,7 @@ export async function createRecommendPick(input: RecommendPickInput, userId?: st
       freeText: input.freeText || '',
       objective, objectiveLabel: OBJECTIVE_LABEL[objective] || objective,
       budgetBand, budgetLabel: budget.label, budgetMin: budget.min, budgetMax: budget.max,
-      durationBand, durationLabel: (DURATION_LABEL[durationBand] || DURATION_LABEL.M1_3).label,
+      durationBand, durationLabel: durationMeta.label, months: durationMeta.months,
       category,
       extracted: hints,
     },
