@@ -1793,3 +1793,16 @@
 ### 참고
 - 예전 시드머니(EP) 기반 사용자 투표(`/votes/create`, voteV2 createUserVote)는 그대로 두었다. 새 팬 허브 투표는 시드 없이 개설자 적립 규칙으로 대체.
 
+## [2026-09-15] 구 시드머니 투표 화면 정리
+
+### 변경 사항
+- 프론트 구 투표 화면 5개 삭제(`pages/fan/{VoteV2List,VoteV2Detail,VoteCreate,MyCreatedVotes}.tsx`, `pages/fanhub/FanVote.tsx`).
+- `/votes` → `/fan/vote`, `/votes/create` → `/fan/vote/create`, `/votes/my-created` → `/fan/vote/mine`, `/votes/:id` → `/fan/vote/:id`(같은 VoteV2 id), `/brand/votes*` → 팬 허브 VOTE. 레이아웃 사이드바·팬 대시보드·홈 투표 섹션·소개 페이지 링크 갱신.
+- 백엔드 `/votes/user/*`(시드머니 생성·정산) 엔드포인트는 남겨 두었다(관리자 생성·리워드풀 경로와 공유). 프론트에서는 더 이상 쓰지 않는다.
+
+### 영향받는 파일
+- `src/frontend/src/App.tsx`, `components/{Layout,Breadcrumb,HomeVoteSection}.tsx`, `pages/fan/FanDashboard.tsx`, `pages/about/AboutHow.tsx`
+
+### 검증
+- tsc·build 통과. `/votes`, `/votes/:id`, `/votes/my-created` 접속 시 새 경로로 이동 확인.
+
