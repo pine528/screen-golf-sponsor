@@ -18,6 +18,7 @@ export const EARN_RULES = [
   { code: 'FAVORITE', label: '관심선수 최초 등록', points: 3, limit: '선수당 1회', dailyCap: null, monthlyCap: null, confirm: 'INSTANT' },
   { code: 'VOTE', label: 'Fan VOTE 참여', points: 2, limit: '일 5건', dailyCap: 5, monthlyCap: null, confirm: 'AFTER_CLOSE' },
   { code: 'VOTE_CORRECT', label: '예측 정답', points: 5, limit: 'VOTE별 1회', dailyCap: null, monthlyCap: null, confirm: 'AFTER_RESULT' },
+  { code: 'VOTE_HOST', label: '내가 만든 VOTE에 다른 팬 참여', points: 1, limit: '일 20건 · 투표당 50명', dailyCap: 20, monthlyCap: null, confirm: 'INSTANT' },
   { code: 'COMMENT', label: '유효 댓글', points: 1, limit: '일 5건', dailyCap: 5, monthlyCap: null, confirm: 'AFTER_24H' },
   { code: 'POST', label: '유효 게시글', points: 3, limit: '주 3건', dailyCap: null, monthlyCap: 12, confirm: 'AFTER_24H' },
   { code: 'BRAND_SUGGEST', label: '브랜드 추천', points: 5, limit: '월 3건', dailyCap: null, monthlyCap: 3, confirm: 'AFTER_REVIEW' },

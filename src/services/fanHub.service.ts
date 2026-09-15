@@ -37,7 +37,24 @@ const typeOf = (v: any): string => {
   if (t.startsWith('T1')) return 'OX';
   if (t.startsWith('T2')) return 'MULTI';
   if (t.startsWith('T3') || t.startsWith('T4')) return 'PREDICT';
+  if (t.startsWith('T5')) return 'BRAND';
+  if (t.startsWith('T6')) return 'PICK';
   return 'OX';
+};
+/** 팬 생성 VOTE 유형 → templateCode (기존 T1~T4 + 브랜드 설문·팬선정) */
+const TEMPLATE_OF: Record<string, string> = { OX: 'T1-YesNo', MULTI: 'T2-MC', PREDICT: 'T3-TopN', BRAND: 'T5-Brand', PICK: 'T6-Pick' };
+
+/** 팬 VOTE 생성 규칙 — 예전 사용자 투표 한도(하루 5개·최소 1시간)를 그대로 쓴다. 시드머니는 무료 참여 모델에서 받지 않는다 */
+export const VOTE_CREATE_RULES = {
+  maxDailyCreates: 5,
+  minCloseHours: 1,
+  maxCloseDays: 30,
+  minOptions: 2,
+  maxOptions: 6,
+  titleMax: 80,
+  hostPointsPerParticipant: 1,
+  hostPerVoteCap: 50,   // 투표당 적립되는 참여자 수 상한
+  hostDailyCap: 20,     // EARN_RULES.VOTE_HOST.dailyCap 와 같은 값
 };
 
 const optionLabel = (o: any) => (typeof o === 'string' ? o : o?.label ?? o?.id ?? '');
@@ -53,7 +70,7 @@ function canRevealResult(vote: any, ballots: number, voted: boolean) {
 /* ── F02 VOTE 목록 ──────────────────────────────────── */
 
 export async function listVotes(params: {
-  tab?: string; athleteId?: string; type?: string; sort?: string; userId?: string; limit?: number;
+  tab?: string; athleteId?: string; type?: string; sort?: string; userId?: string; limit?: number; favorites?: boolean;
 }) {
   const now = new Date();
   const tab = params.tab || 'OPEN';
@@ -66,7 +83,7 @@ export async function listVotes(params: {
 
   const rows = await prisma.voteV2.findMany({
     where,
-    orderBy: { closeAt: params.sort === 'CLOSING' ? 'asc' : 'desc' },
+    orderBy: params.sort === 'CLOSING' ? { closeAt: 'asc' } : params.sort === 'LATEST' ? { createdAt: 'desc' } : { closeAt: 'desc' },
     take: Math.min(params.limit ?? 30, 60),
     include: { _count: { select: { participations: true } } },
   });
@@ -121,12 +138,20 @@ export async function listVotes(params: {
       correctBonus: def.correctBonus,
       resultPolicy: t === 'PREDICT' ? 'AFTER_CLOSE' : 'AFTER_CLOSE',
       voted: myVoteIds.includes(v.id),
+      createdByMe: !!params.userId && v.createdBy === params.userId,
       status: v.status,
     };
   });
 
   if (params.athleteId) shaped = shaped.filter((v) => v.athlete?.id === params.athleteId);
   if (params.type && params.type !== 'ALL') shaped = shaped.filter((v) => v.type === params.type);
+  /* 관심선수 필터 — 계정 단위 관심 선수 */
+  if (params.favorites && params.userId) {
+    const favs = await prisma.userFavoriteAthlete.findMany({ where: { userId: params.userId }, select: { athleteId: true } });
+    const set = new Set(favs.map((f) => f.athleteId));
+    shaped = shaped.filter((v) => v.athlete && set.has(v.athlete.id));
+  }
+  if (params.sort === 'POPULAR') shaped.sort((a, b) => b.participants - a.participants);
 
   /* 탭 카운트 */
   const [openCount, closedCount] = await Promise.all([
@@ -134,9 +159,10 @@ export async function listVotes(params: {
     prisma.voteV2.count({ where: { OR: [{ status: { in: ['CLOSED', 'SETTLED'] } }, { status: 'OPEN', closeAt: { lte: now } }] } }),
   ]);
 
+  const createdCount = params.userId ? await prisma.voteV2.count({ where: { createdBy: params.userId, status: { not: 'CANCELED' } } }) : 0;
   return {
     votes: shaped,
-    counts: { OPEN: openCount, UPCOMING: 0, CLOSED: closedCount, MINE: myVoteIds.length },
+    counts: { OPEN: openCount, UPCOMING: 0, CLOSED: closedCount, MINE: myVoteIds.length, CREATED: createdCount },
     types: VOTE_TYPES,
     notice: '공정한 팬 참여를 위해 1인 1표 원칙을 지킵니다. 예측형 투표는 변경 마감 시간 이후 수정이 불가합니다.',
   };
@@ -241,6 +267,208 @@ export async function getVote(voteId: string, userId?: string) {
   };
 }
 
+/* ── 팬 VOTE 생성 · 내가 만든 투표 (시안 2026-09-15 "투표 만들기") ─────────────────────
+ * 예전 사용자 투표 기능(voteV2 createUserVote)의 한도(하루 5개·최소 1시간 뒤 마감)와
+ * "다른 팬이 참여하면 개설자에게 적립 + 한계치" 규칙을 무료 참여 모델에 맞게 옮겼다.
+ * 시드머니·에스크로는 받지 않는다. 예측형 정답은 개설자가 종료 후 입력하고, 정답자에게 VOTE_CORRECT가 적립된다.
+ */
+
+/** 개설자 적립 — 참여자당 +1P, 투표당 50명·일 20건 상한. 중복은 (refType, refId) 유니크로 막힌다 */
+async function rewardHost(vote: any, participantUserId: string) {
+  if (!vote.createdBy || vote.createdBy === participantUserId) return { earned: 0, reason: 'SKIP' };
+  const perVote = await prisma.pointLedgerTx.count({
+    where: { userId: vote.createdBy, refType: 'VOTE_HOST', refId: { startsWith: `${vote.id}:` }, delta: { gt: 0 } },
+  });
+  if (perVote >= VOTE_CREATE_RULES.hostPerVoteCap) return { earned: 0, reason: 'VOTE_CAP' };
+  return earn({
+    userId: vote.createdBy, code: 'VOTE_HOST', refType: 'VOTE_HOST', refId: `${vote.id}:${participantUserId}`,
+    description: `내가 만든 VOTE에 참여: ${vote.title}`,
+  });
+}
+
+const BAD_TEXT: { re: RegExp; reason: string }[] = [
+  { re: /01[016-9][-\s]?\d{3,4}[-\s]?\d{4}/, reason: '전화번호는 넣을 수 없습니다' },
+  { re: /[\w.+-]+@[\w-]+\.[\w.]+/, reason: '이메일 주소는 넣을 수 없습니다' },
+  { re: /(카톡|카카오톡|텔레그램|디엠|dm)\s*(아이디|id|주세요|알려)/i, reason: '외부 연락처 요청은 넣을 수 없습니다' },
+  { re: /(돈|현금|송금|후원금)\s*(주세요|보내|요구)/, reason: '금전 요구는 넣을 수 없습니다' },
+];
+
+export async function getCreateOptions(userId: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const created = await prisma.voteV2.count({ where: { createdBy: userId, createdAt: { gte: today }, status: { not: 'CANCELED' } } });
+  const hostRule = (await import('./fanPoint.service')).EARN_RULES.find((r) => r.code === 'VOTE_HOST');
+  return {
+    types: VOTE_TYPES,
+    rules: VOTE_CREATE_RULES,
+    todayCreated: created,
+    remainingToday: Math.max(0, VOTE_CREATE_RULES.maxDailyCreates - created),
+    hostRule: hostRule ? { points: hostRule.points, limit: hostRule.limit } : null,
+    presets: {
+      PREDICT: [['1위', '2~5위', '6~10위', '11위 이하'], ['TOP 10 진입', 'TOP 10 실패'], ['컷 통과', '컷 탈락']],
+      OX: [['O', 'X']],
+    },
+  };
+}
+
+export async function createFanVote(userId: string, input: {
+  type: string; title: string; description?: string; options?: string[]; athleteId?: string; closeAt: string;
+}) {
+  const type = String(input.type || '').toUpperCase();
+  const def = VOTE_TYPES.find((t) => t.code === type);
+  if (!def) throw Object.assign(new Error('투표 유형을 선택해주세요'), { status: 400 });
+
+  const title = String(input.title || '').trim();
+  if (title.length < 5 || title.length > VOTE_CREATE_RULES.titleMax) {
+    throw Object.assign(new Error(`질문은 5~${VOTE_CREATE_RULES.titleMax}자로 적어주세요`), { status: 400 });
+  }
+  const description = input.description ? String(input.description).trim().slice(0, 300) : null;
+  for (const p of BAD_TEXT) {
+    if (p.re.test(title) || (description && p.re.test(description))) throw Object.assign(new Error(p.reason), { status: 400 });
+  }
+
+  let options: { id: string; label: string }[];
+  if (type === 'OX') {
+    options = [{ id: 'O', label: 'O' }, { id: 'X', label: 'X' }];
+  } else {
+    const labels = (input.options || []).map((o) => String(o || '').trim()).filter(Boolean);
+    const uniq = [...new Set(labels)];
+    if (uniq.length < VOTE_CREATE_RULES.minOptions || uniq.length > VOTE_CREATE_RULES.maxOptions) {
+      throw Object.assign(new Error(`선택지는 ${VOTE_CREATE_RULES.minOptions}~${VOTE_CREATE_RULES.maxOptions}개여야 합니다`), { status: 400 });
+    }
+    if (uniq.some((l) => l.length > 30)) throw Object.assign(new Error('선택지는 30자 이내로 적어주세요'), { status: 400 });
+    options = uniq.map((label, i) => ({ id: String(i + 1), label }));
+  }
+
+  const closeAt = new Date(input.closeAt);
+  if (Number.isNaN(closeAt.getTime())) throw Object.assign(new Error('마감 시간을 선택해주세요'), { status: 400 });
+  const now = Date.now();
+  if (closeAt.getTime() < now + VOTE_CREATE_RULES.minCloseHours * 3600_000) {
+    throw Object.assign(new Error(`마감은 최소 ${VOTE_CREATE_RULES.minCloseHours}시간 뒤여야 합니다`), { status: 400 });
+  }
+  if (closeAt.getTime() > now + VOTE_CREATE_RULES.maxCloseDays * 86400_000) {
+    throw Object.assign(new Error(`마감은 최대 ${VOTE_CREATE_RULES.maxCloseDays}일 안이어야 합니다`), { status: 400 });
+  }
+
+  let target: any = {};
+  if (input.athleteId) {
+    const a = await prisma.athlete.findFirst({ where: { id: input.athleteId, isActive: true }, select: { id: true } });
+    if (!a) throw Object.assign(new Error('선수를 찾을 수 없습니다'), { status: 404 });
+    target = { playerId: a.id };
+  }
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const created = await prisma.voteV2.count({ where: { createdBy: userId, createdAt: { gte: today }, status: { not: 'CANCELED' } } });
+  if (created >= VOTE_CREATE_RULES.maxDailyCreates) {
+    throw Object.assign(new Error(`하루 최대 ${VOTE_CREATE_RULES.maxDailyCreates}개까지 투표를 만들 수 있습니다. 내일 다시 시도해주세요.`), { status: 429 });
+  }
+
+  const vote = await prisma.voteV2.create({
+    data: {
+      templateCode: TEMPLATE_OF[type],
+      title, description,
+      options: options as any,
+      status: 'OPEN',
+      fundingSource: 'USER_POINTS', // 무료 참여 — 리워드풀 소액 보상을 쓰지 않는다
+      rewardBudgetEp: 0n, escrowEp: 0n, maxPerWinnerEp: 0n,
+      target,
+      outcomeSource: 'creator',
+      closeAt,
+      createdBy: userId,
+    },
+  });
+  return { id: vote.id, title: vote.title, type, closeAt: vote.closeAt };
+}
+
+export async function listMyVotes(userId: string) {
+  const rows = await prisma.voteV2.findMany({
+    where: { createdBy: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    include: { _count: { select: { participations: true } } },
+  });
+  const athleteIds = [...new Set(rows.map((v) => (v.target as any)?.playerId).filter(Boolean))] as string[];
+  const athletes = athleteIds.length
+    ? await prisma.athlete.findMany({ where: { id: { in: athleteIds } }, select: { id: true, name: true, tour: true, profileImageUrl: true } })
+    : [];
+  const aMap = new Map(athletes.map((a) => [a.id, a]));
+  const hostTx = await prisma.pointLedgerTx.groupBy({
+    by: ['refId'], where: { userId, refType: 'VOTE_HOST', delta: { gt: 0 } }, _sum: { delta: true },
+  });
+  const earnedBy = new Map<string, number>();
+  for (const t of hostTx) {
+    const voteId = String(t.refId).split(':')[0];
+    earnedBy.set(voteId, (earnedBy.get(voteId) || 0) + Number(t._sum.delta || 0));
+  }
+  const now = Date.now();
+  const votes = rows.map((v) => {
+    const t = typeOf(v);
+    const def = VOTE_TYPES.find((x) => x.code === t)!;
+    const closed = v.status !== 'OPEN' || new Date(v.closeAt).getTime() <= now;
+    return {
+      id: v.id, title: v.title, type: t, typeLabel: def.label,
+      athlete: (v.target as any)?.playerId ? aMap.get((v.target as any).playerId) ?? null : null,
+      options: (v.options as any[]).map(optionLabel),
+      closeAt: v.closeAt, createdAt: v.createdAt, closed, status: v.status,
+      participants: v._count.participations,
+      hostEarned: earnedBy.get(v.id) || 0,
+      hostCapReached: (earnedBy.get(v.id) || 0) >= VOTE_CREATE_RULES.hostPerVoteCap * VOTE_CREATE_RULES.hostPointsPerParticipant,
+      needsAnswer: t === 'PREDICT' && closed && v.status !== 'SETTLED' && v.status !== 'CANCELED',
+      correctAnswer: v.status === 'SETTLED' ? optionLabel(v.correctAnswer) : null,
+      canCancel: v.status === 'OPEN' && v._count.participations === 0,
+    };
+  });
+  return {
+    votes,
+    summary: {
+      total: votes.filter((v) => v.status !== 'CANCELED').length,
+      open: votes.filter((v) => !v.closed && v.status === 'OPEN').length,
+      participants: votes.reduce((s, v) => s + v.participants, 0),
+      hostEarned: votes.reduce((s, v) => s + v.hostEarned, 0),
+      needsAnswer: votes.filter((v) => v.needsAnswer).length,
+    },
+    rules: VOTE_CREATE_RULES,
+  };
+}
+
+/** 예측형 정답 입력 → 정답자 VOTE_CORRECT 적립, 상태 SETTLED */
+export async function settleMyVote(userId: string, voteId: string, correctAnswer: string) {
+  const vote = await prisma.voteV2.findUnique({ where: { id: voteId }, include: { participations: true } });
+  if (!vote) throw Object.assign(new Error('투표를 찾을 수 없습니다'), { status: 404 });
+  if (vote.createdBy !== userId) throw Object.assign(new Error('내가 만든 투표만 정산할 수 있습니다'), { status: 403 });
+  if (typeOf(vote) !== 'PREDICT') throw Object.assign(new Error('예측형 투표만 정답을 입력합니다'), { status: 400 });
+  if (new Date(vote.closeAt).getTime() > Date.now()) throw Object.assign(new Error('마감 후에 정답을 입력할 수 있습니다'), { status: 409 });
+  if (vote.status === 'SETTLED') throw Object.assign(new Error('이미 정산된 투표입니다'), { status: 409 });
+  const labels = (vote.options as any[]).map(optionLabel);
+  const answer = String(correctAnswer || '').trim();
+  const idx = labels.indexOf(answer);
+  if (idx < 0) throw Object.assign(new Error('선택지 중에서 정답을 골라주세요'), { status: 400 });
+
+  const isCorrect = (p: any) => JSON.stringify(p.answer) === JSON.stringify(answer) || JSON.stringify(p.answer) === JSON.stringify(idx);
+  const winners = vote.participations.filter(isCorrect);
+  await prisma.$transaction(async (tx) => {
+    await tx.voteV2.update({ where: { id: voteId }, data: { status: 'SETTLED', correctAnswer: answer, settleAt: new Date() } });
+    for (const p of vote.participations) {
+      await tx.voteParticipationV2.update({ where: { voteId_userId: { voteId, userId: p.userId } }, data: { isCorrect: isCorrect(p) } });
+    }
+  });
+  let rewarded = 0;
+  for (const w of winners) {
+    const r = await earn({ userId: w.userId, code: 'VOTE_CORRECT', refType: 'VOTE_CORRECT', refId: voteId }).catch(() => null);
+    if (r && (r as any).earned > 0) rewarded++;
+  }
+  return { id: voteId, status: 'SETTLED', correctAnswer: answer, winners: winners.length, rewarded };
+}
+
+export async function cancelMyVote(userId: string, voteId: string) {
+  const vote = await prisma.voteV2.findUnique({ where: { id: voteId }, include: { _count: { select: { participations: true } } } });
+  if (!vote) throw Object.assign(new Error('투표를 찾을 수 없습니다'), { status: 404 });
+  if (vote.createdBy !== userId) throw Object.assign(new Error('내가 만든 투표만 취소할 수 있습니다'), { status: 403 });
+  if (vote.status !== 'OPEN') throw Object.assign(new Error('진행 중인 투표만 취소할 수 있습니다'), { status: 409 });
+  if (vote._count.participations > 0) throw Object.assign(new Error('이미 참여한 팬이 있어 취소할 수 없습니다'), { status: 409 });
+  await prisma.voteV2.update({ where: { id: voteId }, data: { status: 'CANCELED' } });
+  return { id: voteId, status: 'CANCELED' };
+}
+
 /* ── 활동 기록 (§3.1 공통 원장) ─────────────────────── */
 
 /**
@@ -301,7 +529,12 @@ export async function submitBallot(voteId: string, userId: string, answer: any) 
     return { changed: true, point: { earned: 0, reason: 'ALREADY' } };
   }
 
+  if (vote.createdBy === userId) {
+    throw Object.assign(new Error('내가 만든 투표에는 참여할 수 없습니다'), { status: 403, code: 'OWN_VOTE' });
+  }
+
   await voteV2Service.participate(voteId, userId, { answer });
+  await rewardHost(vote, userId).catch(() => null);
 
   const point = athleteId
     ? (await record({

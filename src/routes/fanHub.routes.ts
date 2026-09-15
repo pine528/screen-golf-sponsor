@@ -9,6 +9,7 @@ import {
   VOTE_TYPES, RESULT_POLICIES, AD_CRITERIA,
   getHub, listVotes, getVote, submitBallot, sendLetter, getLetterQuota,
   getMyActivity, getAdCampaign,
+  getCreateOptions, createFanVote, listMyVotes, settleMyVote, cancelMyVote,
 } from '../services/fanHub.service';
 import {
   EARN_RULES, SPEND_RULES, BADGES, POINT_EXPIRY_MONTHS,
@@ -55,8 +56,31 @@ router.get('/votes', optionalAuth, async (req: any, res: Response, next: NextFun
       sort: req.query.sort as string,
       limit: Number(req.query.limit) || 30,
       userId: req.user?.id,
+      favorites: req.query.favorites === '1' || req.query.favorites === 'true',
     }));
   } catch (e) { next(e); }
+});
+
+/* ── 투표 만들기 (시안 2026-09-15) — /votes/:id 보다 먼저 선언 ── */
+const failWith = (res: Response, e: any) => res.status(e.status || 500).json({ success: false, data: null, error: { code: e.code || 'ERROR', message: e.message } });
+
+router.get('/votes/create-options', authenticate, async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await getCreateOptions(req.user.id)); } catch (e) { next(e); }
+});
+router.post('/votes', authenticate, async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await createFanVote(req.user.id, req.body || {})); }
+  catch (e: any) { if (e?.status) return failWith(res, e); next(e); }
+});
+router.get('/me/votes', authenticate, async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await listMyVotes(req.user.id)); } catch (e) { next(e); }
+});
+router.post('/me/votes/:id/settle', authenticate, async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await settleMyVote(req.user.id, req.params.id, req.body?.correctAnswer)); }
+  catch (e: any) { if (e?.status) return failWith(res, e); next(e); }
+});
+router.post('/me/votes/:id/cancel', authenticate, async (req: any, res: Response, next: NextFunction) => {
+  try { ok(res, await cancelMyVote(req.user.id, req.params.id)); }
+  catch (e: any) { if (e?.status) return failWith(res, e); next(e); }
 });
 
 /** GET /api/fan-hub/votes/:id — F03 · F04 */
