@@ -114,6 +114,77 @@ export async function listStores(params: { athleteId?: string; limit?: number } 
   };
 }
 
+/* ── 팬스토어 메인 (시안 2026-09-15) — 상품 모아보기·브랜드·선수 ───────────────
+ * 공개 스토어의 판매 중 상품을 한 화면에 모은다. 배지는 확인된 사실에서만:
+ *  NEW = 30일 내 등록, SALE = 정가 대비 할인, LIMITED = 재고 메모에 '한정', RECOMMENDED = 추천 선수 스토어.
+ */
+export async function storeHome(params: { tab?: string; limit?: number; athleteId?: string; userId?: string } = {}) {
+  const now = nowish();
+  const d30 = new Date(now.getTime() - 30 * 86400_000);
+  const stores = await prisma.fanStore.findMany({
+    where: { status: 'PUBLISHED', OR: [{ endAt: null }, { endAt: { gte: now } }], ...(params.athleteId ? { athleteId: params.athleteId } : {}) },
+    include: {
+      athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true, isRecommended: true } },
+      products: { where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  let products = stores.flatMap((s) => s.products.map((p) => {
+    const discountRate = p.originalPrice && p.originalPrice > p.price ? Math.round((1 - p.price / p.originalPrice) * 100) : null;
+    const isNew = p.createdAt >= d30;
+    const isLimited = /한정|limited|단독/i.test(`${p.stockNote || ''} ${p.name}`);
+    return {
+      id: p.id, name: p.name, imageUrl: p.imageUrl, price: p.price, originalPrice: p.originalPrice, discountRate,
+      isNew, isLimited, isRecommended: !!s.athlete.isRecommended, pointRate: p.pointRate,
+      badge: discountRate ? 'SALE' : isLimited ? 'LIMITED' : isNew ? 'NEW' : s.athlete.isRecommended ? 'BEST' : null,
+      store: { id: s.id, slug: s.slug, title: s.title, brandName: s.brandName },
+      athlete: s.athlete,
+      createdAt: p.createdAt,
+    };
+  }));
+  const tab = (params.tab || 'ALL').toUpperCase();
+  if (tab === 'NEW') products = products.filter((p) => p.isNew);
+  else if (tab === 'SALE') products = products.filter((p) => p.discountRate);
+  else if (tab === 'LIMITED') products = products.filter((p) => p.isLimited);
+  else if (tab === 'RECOMMENDED') products = products.filter((p) => p.isRecommended);
+  products.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  /* 브랜드·선수 — 공개 스토어에서만 */
+  const brandMap = new Map<string, { name: string; stores: number; slug: string }>();
+  for (const s of stores) {
+    const b = brandMap.get(s.brandName) || { name: s.brandName, stores: 0, slug: s.slug };
+    b.stores += 1; brandMap.set(s.brandName, b);
+  }
+  const athleteMap = new Map<string, any>();
+  for (const s of stores) if (!athleteMap.has(s.athleteId)) athleteMap.set(s.athleteId, { ...s.athlete, storeSlug: s.slug, stores: 1 }); else athleteMap.get(s.athleteId).stores += 1;
+
+  /* 내가 응원하는 선수(계정 단위 관심 선수) 중 스토어가 있는 선수 */
+  let myAthletes: any[] = [];
+  if (params.userId) {
+    const favs = await prisma.userFavoriteAthlete.findMany({ where: { userId: params.userId }, select: { athleteId: true } });
+    myAthletes = favs.map((f) => athleteMap.get(f.athleteId)).filter(Boolean);
+  }
+
+  const { EARN_RULES } = await import('./fanPoint.service');
+  const rate = (EARN_RULES.find((r) => r.code === 'STORE_PURCHASE') as any)?.rate ?? null;
+
+  return {
+    products: products.slice(0, Math.min(params.limit ?? 20, 60)),
+    counts: {
+      ALL: stores.reduce((n, s) => n + s.products.length, 0),
+      NEW: stores.flatMap((s) => s.products).filter((p) => p.createdAt >= d30).length,
+      SALE: stores.flatMap((s) => s.products).filter((p) => p.originalPrice && p.originalPrice > p.price).length,
+    },
+    brands: [...brandMap.values()],
+    athletes: [...athleteMap.values()],
+    myAthletes,
+    stores: stores.map(decorate).slice(0, 12),
+    pointRatePercent: rate ? Math.round(rate * 100) : null,
+    notice: '팬스토어의 상품은 브랜드가 판매합니다. 구매·배송·환불은 각 브랜드 정책을 따릅니다.',
+  };
+}
+
 /** F12 스토어 상세 */
 export async function getStore(idOrSlug: string) {
   const store = await prisma.fanStore.findFirst({

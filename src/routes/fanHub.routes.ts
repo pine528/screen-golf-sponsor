@@ -185,6 +185,16 @@ router.post('/athletes/:id/brand-suggestions', authenticate, async (req: any, re
 
 /* ── 팬스토어 (F11~F13 · §8) ──────────────────────── */
 
+/** GET /api/fan-hub/store-home — 팬스토어 메인 (시안 2026-09-15) */
+router.get('/store-home', optionalAuth, async (req: any, res: Response, next: NextFunction) => {
+  try {
+    ok(res, await fanStore.storeHome({
+      tab: req.query.tab as string, limit: Number(req.query.limit) || 20,
+      athleteId: req.query.athleteId as string, userId: req.user?.id,
+    }));
+  } catch (e) { next(e); }
+});
+
 /** GET /api/fan-hub/stores — F11 */
 router.get('/stores', async (req: Request, res: Response, next: NextFunction) => {
   try {
