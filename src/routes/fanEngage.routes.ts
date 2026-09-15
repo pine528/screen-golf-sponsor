@@ -7,7 +7,7 @@ import { authenticate, optionalAuth } from '../middleware/auth';
 import {
   ENGAGE_RULES, POST_TABS, SUGGEST_CATEGORIES,
   getTemperature, listCommunityAthletes, listPosts, createPost, toggleLike,
-  listComments, addComment, suggestBrand, getBrandSuggestionSummary, getMyEngagement,
+  listComments, addComment, suggestBrand, getBrandSuggestionSummary, getMyEngagement, getCommunitySummary,
 } from '../services/fanEngage.service';
 
 const router = Router();
@@ -45,6 +45,15 @@ router.get('/athletes', async (req: Request, res: Response, next: NextFunction) 
 });
 
 /** GET /api/fan-engage/athletes/:id/temperature — 팬온도 + 구성 */
+/** GET /api/fan-engage/athletes/:id/summary — 커뮤니티 헤더·사이드바 (시안 2026-09-15) */
+router.get('/athletes/:id/summary', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getCommunitySummary(req.params.id);
+    if (!data) return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: '선수를 찾을 수 없습니다' } });
+    res.json({ success: true, data, error: null });
+  } catch (e) { next(e); }
+});
+
 router.get('/athletes/:id/temperature', optionalAuth, async (req: any, res: Response, next: NextFunction) => {
   try {
     res.json({ success: true, data: await getTemperature(req.params.id, req.user?.id), error: null });

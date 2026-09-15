@@ -171,6 +171,60 @@ export async function listCommunityAthletes(params: { q?: string; limit?: number
   };
 }
 
+/* ── 커뮤니티 요약 (시안 2026-09-15 선수 커뮤니티 헤더·사이드바) ─────────────────
+ * 참여 팬 수 · 최근 30일 응원 수 · 이번 시즌 TOP10 · 오늘의 인기 반응 · 이번 주 응원 랭킹.
+ * 전부 원장·게시글·공식 성적에서 센 값이다. 랭킹은 포인트가 아니라 이번 주 활동 건수로 매긴다(개인 포인트 노출 금지).
+ */
+export async function getCommunitySummary(athleteId: string) {
+  const athlete = await prisma.athlete.findUnique({
+    where: { id: athleteId },
+    select: { id: true, name: true, tour: true, region: true, profileImageUrl: true, isRecommended: true, highlights: true, bio: true },
+  });
+  if (!athlete) return null;
+  const now = new Date();
+  const d30 = new Date(now.getTime() - 30 * 86400_000);
+  const d7 = new Date(now.getTime() - 7 * 86400_000);
+  const seasonStart = new Date(now.getFullYear(), 0, 1);
+
+  const [fans, cheers, top10, topPosts, weekly, tv] = await Promise.all([
+    prisma.fanTemperatureEvent.findMany({ where: { athleteId }, select: { userId: true }, distinct: ['userId'] }),
+    prisma.athleteCommunityPost.count({ where: { athleteId, isHidden: false, isPrivate: false, authorRole: 'FAN', createdAt: { gte: d30 } } }),
+    prisma.athleteEventResult.count({ where: { athleteId, status: 'APPROVED', rank: { lte: 10 }, eventDate: { gte: seasonStart } } }),
+    prisma.athleteCommunityPost.findMany({
+      where: { athleteId, isHidden: false, isPrivate: false, createdAt: { gte: d30 } },
+      orderBy: [{ likeCount: 'desc' }, { createdAt: 'desc' }], take: 5,
+      select: { id: true, content: true, likeCount: true, type: true },
+    }),
+    prisma.fanTemperatureEvent.groupBy({
+      by: ['userId'], where: { athleteId, createdAt: { gte: d7 } },
+      _count: { _all: true }, orderBy: { _count: { userId: 'desc' } }, take: 5,
+    }),
+    (await import('./fanTemperature.service')).getTemperatureView(athleteId).catch(() => null),
+  ]);
+
+  const userIds = weekly.map((w) => w.userId).filter(Boolean) as string[];
+  const fanRows = userIds.length
+    ? await prisma.fan.findMany({ where: { userId: { in: userIds } }, select: { userId: true, nickname: true, avatarUrl: true } })
+    : [];
+  const fanBy = new Map(fanRows.map((f) => [f.userId, f]));
+
+  return {
+    athlete: {
+      id: athlete.id, name: athlete.name, tour: athlete.tour, region: athlete.region, profileImageUrl: athlete.profileImageUrl,
+      isRecommended: athlete.isRecommended,
+      quote: Array.isArray(athlete.highlights) && (athlete.highlights as any[]).length ? String((athlete.highlights as any[])[0]) : null,
+    },
+    stats: { fanCount: fans.length, recentCheers: cheers, seasonTop10: top10 },
+    temperature: tv ? { score: tv.score, tier: tv.tier, lowSample: tv.lowSample, weeklyDelta: (tv as any).weeklyDelta ?? null } : null,
+    topPosts: topPosts.map((p) => ({ id: p.id, content: p.content, likeCount: p.likeCount, type: p.type })),
+    weeklyFans: weekly.map((w, i) => {
+      const f = fanBy.get(w.userId as string);
+      return { rank: i + 1, nickname: f?.nickname || '팬', avatarUrl: f?.avatarUrl || null, activities: w._count._all };
+    }),
+    asOf: now.toISOString(),
+  };
+}
+
 /* ── 커뮤니티 ───────────────────────────────────────────── */
 
 export async function listPosts(
