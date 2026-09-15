@@ -1856,3 +1856,29 @@
 ### 검증
 - tsc·build 통과. 로컬 1280px 빈 상태 렌더 + 로컬 샘플 스토어(상품 3)로 배지·가격·브랜드·선수 표시 확인.
 
+
+## [2026-09-15] 팬 참여 세부 화면 10종 — 리디자인/9 시안 세부 적용
+
+### 변경 사항
+- 리디자인/9 이미지 32장 검토(00~07·28~31 관리자, 08~27 팬 공개 화면). 공용 셸 `components/fanhub/FanShell.tsx`(FanPage·Container·FanCrumb·BackButton·Panel·fmtDate) 추가.
+- VOTE 상세 `/fan/vote/:id`(14·15): 선수 헤더+팬온도, OX 큰 O/X 버튼, 투표 종료까지·참여 보상·지난 투표 결과 스트립, 최근 성적 요약 4칸(승인 기록만), 사이드 투표 안내·이번 VOTE 정보, 하단 고정 "이 선택으로 투표하기", 결과 3상태(내 선택 → 결과 집계 중 → 공식 결과·내 예측 적중 P·내 참여/다른 VOTE/공유).
+- 응원 보내기 `/fan/letter/:id`(17): 공개/비공개 토글, 제목(필수 50)·내용(50~500) 카운터, 사진 첨부(드래그/클릭, JPG·PNG 5MB → `uploadFile`), 가이드 동의(필수), 이번 달 n/2통, AutoMod 안내·응원 예시·실시간 미리보기, 개별 답장 비보장 고지.
+- 팬온도 `/fan/temperature/:id`(18): 선수 카드(활동 팬 30일), 현재 팬온도·상태·이번 주 변화·마지막 계산·산정 기간, 구성 요소 6종 가중치, 7/30/90일 라인 차트(스냅샷 2개 이상일 때)·이전 기간 대비, 최근 상승 요인(+°C), 감사 카드, 내 기여.
+- 내 응원이 만든 변화 `/fan/contributions`(19): 응원 선수 목록(기여도 %·레벨), 활동 다양성 도넛 n/4·지속성 링 n주·활동 기여 4종, 다음 목표(미충족 조건에서 계산), 연말 이벤트 참여 현황 3조건.
+- 포인트 내역 `/fan/points/ledger`(21): 탭 5(전체/적립/사용/예정/소멸), 요약 3, 기간·선수 필터·초기화, 표(일시·유형·내용·선수·포인트·상태) + 행 펼침(사유·참조 번호·유의 사항·이의 신청→고객센터), 숫자 페이지네이션, 소멸 예정 일정·정책 안내.
+- 팬스토어 상세 `/fan/store/:idOrSlug`(23): 히어로 배너·스토리, 팬 혜택(할인 코드 복사·혜택·적립률·기간)·외부 스토어 바로가기·AR 보기(준비 중 비활성), 판매·배송 책임 스트립, 팬들의 응원(방문·구매확정·응원 메시지), 상품 그리드(NEW/SALE/광고 배지), 거래 고지.
+- 상품 상세 `/fan/store/product/:id`(24): 콜라보 배지, 팬 혜택(할인%·적립 예상·판매처), 상품 소개 접기, 판매 정보, 팬 혜택가 카드·할인 코드 복사, 브랜드 스토어 이동 모달(고지 3 + 기록 정보 + 동의 체크), SPON Pay(준비 중 비활성).
+- 브랜드 추천 `/fan/brand-suggest/:id`(25): 선택 선수 스트립(팬온도·활동 영역), 브랜드명(필수)·카테고리·홈페이지(선택)·사유·협업 형태(복수)·이해관계, 비공개 안내, 좋은 추천 예시·팬 보호 약속·참여 보상(적립표 5P/30P), 내 추천 현황(단계별 건수 + 표).
+- 연말 응원광고 `/fan/campaign`(26): 히어로·이벤트 기간(없으면 "공고 예정")·선정 심사 기준 4, 후보 선수 현황(종합 지수·마크, 순위 아님), 내가 응원하는 선수의 광고 자격(닉네임 노출 기본값·3조건), 꼭 확인해주세요·이벤트 안내/응원 이어가기.
+- 내 팬활동 `/fan/activity`(27): 좌 내비 8, 카드(응원 선수·VOTE 참여(최근·다음 VOTE)·커뮤니티·포인트·팬스토어 주문/방문·브랜드 추천·연말 이벤트 n/3), 타임라인, 빠른 활동 4, 브랜드 추천 현황, 개인정보 관리, 선수별 알림 설정(준비 중 비활성)·주문/방문 지원.
+- 선수 커뮤니티(09·16 보강): 게시글 ··· 메뉴(게시글 신고·사용자 신고·숨기기), 신고 모달(사유 5), 커뮤니티 이용 안내 5항목, 이번 주 Fan VOTE 카드, 팬 온도에 함께해 주신 분들(응원 참여·메시지·이번 주 상승), 팬온도는 이렇게 만들어져요(가중치 6).
+- 백엔드: `getVote` previousVote(같은 선수의 최근 종료 투표 결과)·recentSummary.latest/bestRank·createdAt; 팬온도 `?days=7|30|90`; `getStore` stats(views·purchases·messages)·pointRatePercent·상품 isNew; `getLedger` athletes(필터); `getMyActivity` lastVoteAt·nextVote·storeVisits/Purchases·suggestionsDelivered·favorites·campaign; `getCommunitySummary` temperature.components·activeFanCount·recentLetters, 게시글 authorUserId(팬 글만);
+  신고 `GET /fan-engage/report-reasons`·`POST /fan-engage/reports`(FanReport 생성, 중복 접수 방지, P1/P2 SLA); 브랜드 추천 `brandUrl`·`collabTypes[]`(마이그레이션 `20260915_brand_suggestion_details`), 옵션에 collabTypes·rewards·examples, 내 추천 stageCounts.
+
+### 영향받는 파일
+- `src/frontend/src/components/fanhub/FanShell.tsx`, `src/frontend/src/pages/fanhub/{FanVoteDetail,FanLetter,FanTemperature,FanContributions,FanPointLedger,FanStoreDetail,FanStoreProduct,FanBrandSuggest,FanCampaign,FanActivity,FanCommunityNew}.tsx`, `services/api.ts`
+- `src/backend/prisma/schema.prisma`, `prisma/migrations/20260915_brand_suggestion_details/`, `src/services/{fanHub,fanTemperature,fanStore,fanPoint,fanEngage,fanBrandSuggest}.service.ts`, `src/routes/{fanHub,fanEngage}.routes.ts`
+
+### 검증
+- backend tsc · frontend tsc/build 통과. 로컬 1280px 11개 화면 렌더, 팬 계정으로 OX 투표 제출(참여 완료 배너·참여 수 반영), 이동 모달 동의 게이트 확인, 390px 11개 화면 가로 스크롤 없음.
+- 보류(미구축 → 비활성 표기): AR 보기, SPON Pay, 선수별 알림 설정, 실명 노출 설정, 상품 다중 이미지 → `REDESIGN_BACKLOG.md` C10.
