@@ -1718,3 +1718,18 @@
 ### 참고
 - 프로덕션은 Render 배포 후 반영. 재고 기간 정책(대회별 SlotInventory)은 그대로이며, 엔진만 직접 PICK 기준으로 맞춘 것.
 
+## [2026-09-15] 선수 허브 `/athletes` 신설 — 4메뉴 (시안 적용)
+
+### 변경 사항
+- `/athletes`를 선수 허브로 교체: 히어로(질문 + 찾기→비교하기→선택하기) → 2×2 메뉴 카드(선수 찾기 Green / 나에게 맞는 선수 Coral / 선수 비교 Blue / 관심 선수 Yellow) → 선택이 어렵다면 4경로 → 4단계 → 선수 등록 CTA. 데스크톱·모바일.
+- 선수 목록은 `/athletes/find`로 이동. 목록으로 가야 하는 링크(소개·경매·디지털·팬허브·제안·상세 오류·체크아웃) 갱신. 브레드크럼 라벨 추가.
+- 헤더 선수 드롭다운을 4메뉴로 교체: 선수 찾기(`/athletes/find`) · 나에게 맞는 선수(`/sponsor/recommended`) · 선수 비교(`/athletes/compare`) · 관심 선수(`/favorites`).
+- `/athletes/compare` 신설: 이름 검색으로 최대 3명 추가(localStorage·`?ids=` 유지), 투어/지역/팬온도/SPONPIK INDEX/최근 5경기 평균 순위/TOP10/후원 가능 슬롯/시작가/주요 활동 비교, 전체 프로필·이 선수 PICK 바로가기. 미측정 값은 집계 중/확인 필요.
+
+### 영향받는 파일
+- `src/frontend/src/pages/athletes/AthletesHub.tsx`, `src/frontend/src/pages/athletes/AthleteCompare.tsx` (신규)
+- `src/frontend/src/App.tsx`, `src/frontend/src/components/PublicHeader.tsx`, `src/frontend/src/components/Breadcrumb.tsx`, 목록 링크 10곳
+
+### 검증
+- 빌드 통과. 로컬 1280px·390px에서 허브 렌더, 비교 페이지에 2명 추가·제외·검색 동작 확인.
+
