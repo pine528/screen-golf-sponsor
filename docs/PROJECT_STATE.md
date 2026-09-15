@@ -1037,6 +1037,7 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
   `/sponsor/digital`, `/opportunities`)은 `App.tsx`에서 Navigate replace.
 - (2026-09-14) 직접 PICK 구성은 `/sponsor/direct/build/:athleteId` 한 화면(위치·온라인 상품·기간·판매 방식·추가 활동·사용 범위·서버 견적·담기). `/configure` 경로는 build로 이동.
 - (2026-09-14) 관리자 사이드바는 9도메인(선수운영·상품운영·거래운영·팬운영·Trust·CMS·성과보장·데이터품질·분석·감사), `/admin`은 처리할 일 → 콘솔 카드 → 수익.
-- (2026-09-14) 선수 상세 `/athletes/:id?tab=profile|games|sponsor|fan|content` 5탭. 브랜드 기본 탭은 sponsor.
+- (2026-09-15) 선수 상세 `/athletes/:id?tab=summary|results|activity|slots|brands` — 시안 기준 히어로(사진·칩·3지표·INDEX 레이더·공유/관심)
+  + 5탭(요약/대회 성과/활동/후원 가능 슬롯/브랜드 협업 이력) + 하단 공유/PDF(인쇄)/이 선수 PICK. 구 tab 값(profile/games/sponsor/fan/content)은 자동 대응. `#slots`는 slots 탭.
 - (2026-09-14) 후원 신청 결제 완료(`checkoutApplication`) 시 Campaign 자동 생성·`campaignId` 연결. 계약 스냅샷 예상 범위는 `application.snapshot.plan.expected`.
 - (2026-09-14) 디지털 플랜 가격 단일 출처 = `DigitalPlan` 테이블. 관리자 `/admin/digital-plans` 에서 수정(사유 필수·감사로그). 랜딩·신청·결제 모두 API 값 사용.
