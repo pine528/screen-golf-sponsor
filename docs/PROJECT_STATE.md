@@ -1041,3 +1041,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
   + 5탭(요약/대회 성과/활동/후원 가능 슬롯/브랜드 협업 이력) + 하단 공유/PDF(인쇄)/이 선수 PICK. 구 tab 값(profile/games/sponsor/fan/content)은 자동 대응. `#slots`는 slots 탭.
 - (2026-09-14) 후원 신청 결제 완료(`checkoutApplication`) 시 Campaign 자동 생성·`campaignId` 연결. 계약 스냅샷 예상 범위는 `application.snapshot.plan.expected`.
 - (2026-09-14) 디지털 플랜 가격 단일 출처 = `DigitalPlan` 테이블. 관리자 `/admin/digital-plans` 에서 수정(사유 필수·감사로그). 랜딩·신청·결제 모두 API 값 사용.
+- (2026-09-15) 추천 PICK 엔진 v1.1: 후보 판정은 직접 PICK 판매 가능 기준(재고 행 불요), SNS 필수는 SNS 목표만, 3안은 자리 예산 배분·목표별 슬롯 성향·기간(months·periodTotal) 반영. 결과 캐시는 requestId 일치 시만.

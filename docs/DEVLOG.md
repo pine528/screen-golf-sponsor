@@ -1696,3 +1696,25 @@
 ### 검증
 - 로컬 브랜드 계정으로 조건 구성 → 견적함에 담기 → `/sponsor/direct/cart?draft=…` 이동 확인. 승인 요청 화면에서 PNG 업로드 후 미리보기·"업로드 완료" 표시 확인.
 
+## [2026-09-15] 스폰픽 추천 PICK — 조건과 무관하게 같은 3안이 나오던 문제
+
+### 원인
+1. 엔진 후보 판정이 `SlotInventory`의 AVAILABLE 행(대회 재고 기간)을 요구했다. 9월 대회 재고가 9/12에 모두 끝나면서 전 선수가 후보에서 빠져 프로덕션 응답이 후보 0명·3안 없음이 됐다.
+2. 결과 화면이 세션 캐시(`sponpik.recommend.result`)를 requestId와 무관하게 재사용해, 9/7에 만든 옛 결과가 어떤 조건을 넣어도 그대로 보였다(화면 기준일 2026.9.7).
+3. 후보가 있어도 SNS 활동을 전 목표에 필수로 걸어 후보가 1~2명으로 줄고, 3안 구성이 "가장 비싼 슬롯 1개"로 예산을 소진해 안마다 선수 1명·같은 금액이 됐다.
+
+### 변경 사항
+- 백엔드 `aiMatch.service`: 후보 슬롯 판정을 직접 PICK(`getOffers`)과 동일하게 — 막는 재고(SOLD/AUCTION_ACTIVE/PENDING_APPROVAL/HELD)·활성 hold·제한이 없는 판매 슬롯이면 후보. `cheapestSlotPrice` 반환(후보 0명 안내용). SNS 판정을 예산 판정 앞으로.
+- 백엔드 `recommendPick.service` v1.1: `includeSns`는 SNS 목표에만. 3안 구성 재작업 — 자리(seat) 예산 배분, 목표별 슬롯 성향(인지도·지역=가시성 / 체험·구매·SNS=비용 효율), 균형형은 다른 투어·SNS 보유 선수 우선, 도전형은 저가 슬롯으로 인원 확대(최대 3명), 후보 6명 미만이면 안정형 1명. 기간 반영 `months`·`periodTotal`, 근거에 「목표 반영」 줄 추가. 후보 0명이면 조건 충족 선수 기준 최저가로 예산 안내.
+- 프론트: 결과 캐시를 `{requestId, data}`로 저장하고 같은 id일 때만 사용. 안 카드에 "N개월 M만원" 기간 총액 표시.
+
+### 영향받는 파일
+- `src/backend/src/services/aiMatch.service.ts`, `src/backend/src/services/recommendPick.service.ts`
+- `src/frontend/src/pages/recommend/RecommendAnalyzing.tsx`, `src/frontend/src/pages/recommend/RecommendResults.tsx`
+
+### 검증
+- 로컬 7가지 브리프(목표×예산×기간)에서 선수·슬롯·월 총액·기간 총액이 모두 달라짐. 후보 0명(SNS 목표·60~100만)은 "최소 1,500,000원 필요" 안내. 브라우저에서 옛 세션 캐시가 있어도 새 결과가 표시됨.
+
+### 참고
+- 프로덕션은 Render 배포 후 반영. 재고 기간 정책(대회별 SlotInventory)은 그대로이며, 엔진만 직접 PICK 기준으로 맞춘 것.
+
