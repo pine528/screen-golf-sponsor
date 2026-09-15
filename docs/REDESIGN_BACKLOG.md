@@ -221,6 +221,17 @@
 - [ ] `fanEngage.service.ts`의 `ENGAGE_RULES` 누적 ℃ 원장과
       `fanTemperature.service.ts`의 30일 산식이 공존한다 — 구 화면 제거 시점에 정리
 
+
+## C9. 선수 메뉴 상세 핸드오프 v1.0 (2026-09-15 접수, 리디자인/8)
+- [ ] Analytics Event Spec(§12) — athlete_hub_view … athlete_registration_cta_click 14종. 공통 이벤트 로거가 정해지면 붙인다
+- [ ] E2E ATH-E2E-01~12(§14.1) 자동화. 현재는 수동 확인
+- [ ] Feature flag(§15.2) athlete_hub_v2 … — 현재 항상 ON. 단계 릴리스가 필요하면 config 도입
+- [ ] 관심 선수 알림(우측 안내 "알림으로 확인") — Watchlist update feed(`GET /me/favorite-athletes/updates`)와 알림 발송은 미구현. 지금은 목록 조회 시 서버가 신호를 계산
+- [ ] 나에게 맞는 선수 가중치 config/version 관리(§5.3 Scoring) — 엔진 `GOAL_WEIGHTS` 코드 상수. 어드민 설정으로 이동 검토
+- [ ] 선수 비교 "추천 포인트" 행의 Match context 개인화(§6.2) — 지금은 주요 이력 + 조건 입력 안내
+- [ ] 종목 확장 — 골프 외 종목 칩은 "준비 중" 비활성. `Sport` 테이블 연결 시 개수·필터 활성화
+- [ ] 선수 등록 온보딩 `/athlete/register`(§1.3 P1) — 현재 `/register`로 연결
+
 ---
 
 ## 처리 방법

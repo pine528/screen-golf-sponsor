@@ -1733,3 +1733,25 @@
 ### 검증
 - 빌드 통과. 로컬 1280px·390px에서 허브 렌더, 비교 페이지에 2명 추가·제외·검색 동작 확인.
 
+## [2026-09-15] 선수 메뉴 상세 핸드오프 v1.0 (리디자인/8) — 선수 찾기 · 나에게 맞는 선수 · 선수 비교 · 관심 선수
+
+### 변경 사항
+- **IA/Route** (§1): `/athletes` Gate(기존 허브) · `/athletes/search` 선수 찾기 · `/athletes/match` 나에게 맞는 선수 · `/athletes/compare?ids=` 선수 비교 · `/athletes/favorites` 관심 선수. 목록 query가 붙은 `/athletes?…`는 search로 보존 이동, `?recommended=1`은 match로. `/athletes/find`는 search로 redirect. 헤더 선수 메뉴 4개 + Mega Menu·모바일 하단 "선수이신가요? 선수 등록하기" CTA 분리(§1.1).
+- **공통 컴포넌트** (§2.1): `components/athlete/AthleteCard`(배지 1개·태그 ≤2·primary CTA 1개·extra 한 줄), `QuickProfile`(5탭·3지표·레이더, `Radar` export), `CompareBar`(최대 3명 → compare 페이지), `useAthleteTools`(`useFavorites` 계정 단위·Guest 로그인 후 복원·해제 되돌리기 / `useCompare` sessionStorage). 직접 PICK 선수 탐색(`DirectAthletes`)도 같은 컴포넌트로 교체(로컬 카드·팝업·비교 바 삭제).
+- **선수 찾기** (§4): 검색+종목 칩 → 빠른 필터(지역·투어·후원 가능·온라인·정렬) → 빠른 테마 5(팬온도/최근 성적/후원 가능/지역/온라인) → 좌측 상세 필터(종목·투어·지역·활동 유형·후원 가능·예산, 개수 표기) / 모바일 필터 시트 → 8명/페이지 + 페이지네이션(5칸) → 비교 바. 모든 조건은 URL query 동기화(뒤로가기 복원). 0건 → 조건 초기화 / 나에게 맞는 선수.
+- **나에게 맞는 선수** (§5): 목표(1~2)·타깃(0~2)·예산·종목·활동 유형(0~2)·지역(0~2) 칩 입력 + 추천 가이드/현재 조건/이번 추천의 근거(결과 집계) → 추천 선수 최대 4명(추천 이유 1줄·배지·태그·적합도/팬온도 정렬) → 후보 부족 시 있는 만큼 + 조건 완화 제안(가짜 4명 금지) → 추천 테마 프리셋 4. 조건은 URL query(공유·새로고침 시 재실행).
+- **선수 비교** (§6) 재작업: 후보 바(검색으로 변경·교체) → 카테고리 nav → 핵심 요약 3열(투어 배지·팬온도·TOP10·INDEX·5각형·태그) → 비교표(기본 정보/경기·팬 지표/후원 가능/추천 포인트) → 선수별 선수정보·관심선수·이 선수 PICK → 하단 바(비교 중 n명·전체 초기화·비교 결과로 추천받기). 순위 선언 없음(§6.3). 레이더 축은 퀵프로필과 동일 실측 축.
+- **관심 선수** (§7): 로그인 전용 Watchlist. Summary 4(관심/최근 업데이트/후원 가능/비교 중) → 필터(전체/업데이트 있음/후원 가능/팬온도 상승/신규 슬롯) + 정렬 → 카드(업데이트 배지·최근 변경 1줄·PICK하기/후원하기) + 우측 안내·비교 후보 → 선수 찾기 CTA. 해제 즉시 반영 + 되돌리기 toast.
+- **백엔드**: `UserFavoriteAthlete`(계정 단위, 기존 팬 즐겨찾기 이관 마이그레이션 `20260915_user_favorite_athletes`) + `GET/PUT/DELETE /me/favorite-athletes(/:id)`, `GET /me/favorite-athletes/ids`(브랜드·팬 모두, 팬은 기존 FavoriteAthlete에도 반영). 업데이트 신호(§7.3) NEW_AVAILABILITY/FAN_TEMPERATURE_UP/PERFORMANCE_UP/PROFILE_REFRESH — 임계값 `WATCHLIST_CONFIG` 서버 한 곳. `POST /athlete-match`(athlete-only: 기존 심층매칭 엔진 → 지역·활동 필터 → 최대 4명, reasons/evidence/engineVersion/dataAsOf, relax hints). `listPickAthletes` 확장: `ids`·콤마 다중 tour/region·`activity`·`sponsorship`·`online`·`NAME`/`RECOMMENDED` 정렬·`isNew`·`activities`·`includeClosed`.
+
+### 영향받는 파일
+- FE 신규: `src/frontend/src/components/athlete/{AthleteCard,QuickProfile,CompareBar}.tsx`, `useAthleteTools.ts`, `src/frontend/src/pages/athletes/{AthleteSearch,AthleteMatch,AthleteFavorites}.tsx`
+- FE 수정: `pages/athletes/{AthletesHub,AthleteCompare}.tsx`, `pages/direct/DirectAthletes.tsx`, `App.tsx`, `components/{PublicHeader,Breadcrumb}.tsx`, `services/api.ts`, 목록 링크 10곳
+- BE: `prisma/schema.prisma`, `prisma/migrations/20260915_user_favorite_athletes`, `src/services/athleteHub.service.ts`, `src/routes/athleteHub.routes.ts`, `src/services/directPick.service.ts`, `src/routes/{directPick,index}.routes.ts`
+
+### 검증
+- BE·FE tsc, vite build 통과. 로컬(브랜드 계정): 관심 등록/목록/ids, athlete-match(후보 8 → 4명, 이유·배지·태그), search 필터·정렬 API 확인. 브라우저 1280px: 선수 찾기(9명·필터 패널·테마·비교 바), 나에게 맞는 선수(조건→4명 결과·근거 집계), 선수 비교(3명·레이더·표·하단 바), 관심 선수(2명·Summary·비교 후보), 직접 PICK 선수 탐색(공통 카드 8장) 렌더.
+
+### 보류 (REDESIGN_BACKLOG C9)
+- Analytics 이벤트(§12), E2E 자동화(§14), feature flag(§15.2), 관심 선수 알림(bell) 실제 발송, 종목 확장(현재 골프만), 추천 가중치 config화(엔진 상수), 비교의 Match context 개인화(추천 포인트 행).
+
