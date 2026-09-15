@@ -1806,3 +1806,21 @@
 ### 검증
 - tsc·build 통과. `/votes`, `/votes/:id`, `/votes/my-created` 접속 시 새 경로로 이동 확인.
 
+## [2026-09-15] 선수 커뮤니티 `/fan/community/:athleteId` — 시안 적용
+
+### 변경 사항
+- 히어로("선수 커뮤니티", SPORTS CONNECTS US) → 검색 + 선수 칩 슬라이더(좌우 화살표·선택 선수 자동 스크롤·스크롤바 숨김)
+  → 선수 카드(사진 + 필기체 이름 + 이력 인용, 투어 칩·지역, 이름·추천 배지, 팬온도 카드, 참여 팬 수/최근 30일 응원 수/이번 시즌 TOP 10,
+  응원 편지 쓰기/브랜드 추천하기/선수 정보 보기/팬스토어 보기) → 글쓰기(사진 업로드 `/upload/asset`·이모지·태그·유형 선택·게시하기)
+  → 탭(전체/선수 소식/팬 응원/경기 이야기/사진·영상) → 타임라인(공지 강조·좋아요·댓글).
+- 우측: 커뮤니티 안내 · 오늘의 인기 반응(최근 30일 좋아요순 5) · 이번 주 응원 랭킹(7일 활동 건수 5, 닉네임/아바타) · SPONPIK 배너. 모바일은 세로 누적.
+- 사이트 헤더 포함. 비로그인은 글쓰기·좋아요·댓글 시 로그인으로 보내고 돌아온다.
+- 백엔드 `GET /fan-engage/athletes/:id/summary` 신설(원장·게시글·공식 성적에서 센 값만, 개인 포인트 미노출).
+
+### 영향받는 파일
+- `src/frontend/src/pages/fanhub/FanCommunityNew.tsx`, `services/api.ts`
+- `src/backend/src/services/fanEngage.service.ts`, `src/backend/src/routes/fanEngage.routes.ts`
+
+### 검증
+- tsc·build 통과. 로컬 1280px에서 슬라이더·선수 카드·글쓰기·사이드바 렌더, 요약 API 값 확인.
+
