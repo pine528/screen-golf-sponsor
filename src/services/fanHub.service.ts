@@ -323,9 +323,11 @@ export async function getHub(userId?: string) {
       orderBy: { closeAt: 'asc' }, take: 3,
       include: { _count: { select: { participations: true } } },
     }),
+    /* 관심 선수는 계정 단위 저장(UserFavoriteAthlete)을 본다 — 브랜드·팬 모두 (선수 메뉴 v1.0 §7.1) */
     userId
-      ? prisma.favoriteAthlete.findMany({
-          where: { fan: { userId } },
+      ? prisma.userFavoriteAthlete.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
           include: { athlete: { select: { id: true, name: true, tour: true, profileImageUrl: true, sportType: true } } },
           take: 5,
         }).catch(() => [])
