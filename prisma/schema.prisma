@@ -44,6 +44,7 @@ model User {
   athlete              Athlete?
   admin                Admin?
   fan                  Fan?
+  watchAthletes        UserFavoriteAthlete[]
   agency               Agency?
   auditLogs            AuditLog[]
   pointLedgers         PointLedger[]
@@ -212,6 +213,7 @@ model Athlete {
   eventParticipations EventParticipation[]
   payoutItems         PayoutItem[]
   favoritedBy         FavoriteAthlete[]
+  watchedBy           UserFavoriteAthlete[]
   withdrawalRequests  WithdrawalRequest[]
   donationsReceived   Donation[]
   agencyRequests      AgencyAthleteRequest[]
@@ -349,6 +351,21 @@ model FavoriteAthlete {
 
   @@unique([fanId, athleteId])
   @@map("favorite_athletes")
+}
+
+// 관심 선수(Watchlist) — 계정 단위. 브랜드·팬 모두 저장 가능 (선수 메뉴 핸드오프 v1.0 §7.1)
+model UserFavoriteAthlete {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  athleteId String   @map("athlete_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, athleteId])
+  @@index([userId])
+  @@map("user_favorite_athletes")
 }
 
 model FavoriteBrand {

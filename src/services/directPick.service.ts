@@ -95,20 +95,27 @@ export function getOptions() {
 export interface SearchParams {
   q?: string; tour?: string; region?: string; maxMonthly?: number;
   mode?: string; sort?: string; limit?: number;
+  /** 선수 메뉴 v1.0 §4.2 — 콤마 구분 다중값·활동·후원 가능·온라인 */
+  ids?: string[]; activity?: string; sponsorship?: string; online?: string;
+  /** 관심 선수 목록처럼 판매 상품이 없는 선수도 유지할 때 */
+  includeClosed?: boolean;
 }
+
+const splitMulti = (v?: string) => (v ? v.split(',').map((x) => x.trim()).filter(Boolean) : []);
 
 export async function listPickAthletes(params: SearchParams) {
   const athletes = await prisma.athlete.findMany({
     where: {
       isActive: true,
       kycStatus: 'APPROVED',
+      ...(params.ids?.length ? { id: { in: params.ids } } : {}),
       ...(params.q ? { name: { contains: params.q, mode: 'insensitive' } } : {}),
-      ...(params.tour ? { tour: { contains: params.tour, mode: 'insensitive' } } : {}),
-      ...(params.region ? { region: { contains: params.region, mode: 'insensitive' } } : {}),
+      ...(splitMulti(params.tour).length ? { OR: splitMulti(params.tour).map((t) => ({ tour: { contains: t, mode: 'insensitive' as const } })) } : {}),
+      ...(splitMulti(params.region).length ? { AND: [{ OR: splitMulti(params.region).map((r) => ({ region: { contains: r, mode: 'insensitive' as const } })) }] } : {}),
     },
     select: {
       id: true, name: true, tour: true, region: true, profileImageUrl: true,
-      isRecommended: true, recommendOrder: true, profileUpdatedAt: true, createdAt: true,
+      isRecommended: true, recommendOrder: true, profileUpdatedAt: true, createdAt: true, activityFields: true,
     },
     /* limit은 '결과 수'다 — 판매 상품이 없는 선수가 걸러지므로 후보는 넉넉히 읽는다 */
     take: 300,
@@ -198,9 +205,21 @@ export async function listPickAthletes(params: SearchParams) {
         : a.profileUpdatedAt && Date.now() - new Date(a.profileUpdatedAt).getTime() > 90 * 86400_000 ? 'DUE'
         : 'FRESH',
       isRecommended: a.isRecommended,
+      recommendOrder: a.recommendOrder,
+      isNew: Date.now() - new Date(a.createdAt).getTime() < 60 * 86400_000,
+      activities: Object.entries((a.activityFields as any) || {}).filter(([, v]) => v).map(([k]) => k),
       createdAt: a.createdAt,
     };
-  }).filter((a) => a.slotTotal > 0 || a.offerCount > 0);
+  }).filter((a) => params.includeClosed || a.slotTotal > 0 || a.offerCount > 0);
+
+  /* 선수 메뉴 §4.2 필터 */
+  const acts = splitMulti(params.activity);
+  if (acts.length) list = list.filter((a) => acts.some((k) => a.activities.includes(k)));
+  if (params.sponsorship === 'available') list = list.filter((a) => a.availability === 'OPEN');
+  else if (params.sponsorship === 'confirmation') list = list.filter((a) => a.modes.includes('협의형'));
+  else if (params.sponsorship === 'unavailable') list = list.filter((a) => a.availability === 'CLOSED');
+  if (params.online === 'active') list = list.filter((a) => a.activities.includes('sns') || a.activities.includes('youtube') || a.modes.includes('온라인 전용'));
+  else if (params.online === 'none') list = list.filter((a) => !a.activities.includes('sns') && !a.activities.includes('youtube'));
 
   if (params.maxMonthly) list = list.filter((a) => a.minPrice != null && a.minPrice <= params.maxMonthly!);
   if (params.mode === 'ONLINE') list = list.filter((a) => a.modes.includes('온라인 전용'));
@@ -214,6 +233,8 @@ export async function listPickAthletes(params: SearchParams) {
     PERFORMANCE: (a, b) => (a.recentAvgRank ?? 999) - (b.recentAvgRank ?? 999),
     PRICE: (a, b) => (a.minPrice ?? Infinity) - (b.minPrice ?? Infinity),
     NEW: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    NAME: (a, b) => String(a.name).localeCompare(String(b.name), 'ko'),
+    RECOMMENDED: (a, b) => Number(b.isRecommended) - Number(a.isRecommended) || (a.recommendOrder ?? 999) - (b.recommendOrder ?? 999) || lastDate(b) - lastDate(a),
   };
   list.sort(sorters[params.sort || 'RECENT'] || sorters.RECENT);
 

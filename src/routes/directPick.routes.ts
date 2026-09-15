@@ -49,6 +49,10 @@ router.get('/athletes', async (req: Request, res: Response, next: NextFunction) 
       mode: req.query.mode as string,
       sort: req.query.sort as string,
       limit: Number(req.query.limit) || 60,
+      ids: typeof req.query.ids === 'string' ? (req.query.ids as string).split(',').filter(Boolean).slice(0, 50) : undefined,
+      activity: req.query.activity as string,
+      sponsorship: req.query.sponsorship as string,
+      online: req.query.online as string,
     }));
   } catch (e) { next(e); }
 });

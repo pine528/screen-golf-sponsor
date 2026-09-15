@@ -5,6 +5,7 @@ import aiMatchRoutes from './aiMatch.routes';
 import recommendPickRoutes from './recommendPick.routes';
 import applicationRoutes from './application.routes';
 import digitalPartnerRoutes from './digitalPartner.routes';
+import { favoriteAthleteRoutes, athleteMatchRoutes } from './athleteHub.routes';
 import directPickRoutes from './directPick.routes';
 import fanEngageRoutes from './fanEngage.routes';
 import fanHubRoutes from './fanHub.routes';
@@ -76,6 +77,8 @@ router.use('/recommend-pick', recommendPickRoutes);
 router.use('/applications', applicationRoutes);
 router.use('/digital-partner', digitalPartnerRoutes);
 router.use('/direct-pick', directPickRoutes);
+router.use('/me/favorite-athletes', favoriteAthleteRoutes); // 선수 메뉴 v1.0 — 관심 선수(계정 단위)
+router.use('/athlete-match', athleteMatchRoutes); // 선수 메뉴 v1.0 — 나에게 맞는 선수
 router.use('/fan-engage', fanEngageRoutes);
 router.use('/fan-hub', fanHubRoutes);
 router.use('/admin/fan', fanAdminRoutes);
