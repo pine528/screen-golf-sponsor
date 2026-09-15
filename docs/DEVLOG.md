@@ -1771,3 +1771,25 @@
 ### 검증
 - tsc·build 통과. 로컬 1280px 비로그인(유도 카드·4카드·4단계), 로그인(인사·포인트·응원 선수 수·4패널), 390px 모바일 가로 스크롤 없음.
 
+## [2026-09-15] 팬 VOTE 목록 시안 적용 + 투표 만들기(팬 생성) 기능
+
+### 변경 사항
+- **목록 `/fan/vote`** 시안: 히어로 → 탭(진행 중/예정/종료/내 참여, 개수) → 유형 칩(전체/일반 OX/4지선다/경기예측/브랜드 설문/팬선정) + 관심선수 필터·정렬(최신/마감 임박/참여 많은순) + [투표 만들기] → 카드(선수·유형·질문·남은 시간·적립 P·참여 수·투표하기/자세히 보기, 내가 만든 투표 배지) → 우측 내가 만든 투표(개수·참여 적립·정답 입력 대기·새 투표 만들기)·참여 가이드 → 참여 원칙 → 4단계. 사이트 헤더 포함.
+- **투표 만들기 `/fan/vote/create`**(로그인): 유형 5종 → 대상 선수 검색(선택) → 질문·설명 → 선택지(OX 고정 / 예측형 프리셋 / 2~6개) → 마감(1·3·7일/직접) → 규칙 동의 → 미리보기·규칙 패널. 모바일 고정 CTA.
+- **내가 만든 투표 `/fan/vote/mine`**: 요약(만든 투표·진행 중·총 참여자·참여 적립) → 목록(상태·참여·적립·상한 표시, 예측형 마감 후 정답 입력 → 정산, 참여자 0명일 때 취소).
+- **백엔드** `fanHub.service`: 예전 사용자 투표 규칙을 무료 참여 모델로 이식 — `VOTE_CREATE_RULES`(하루 5개·마감 최소 1시간/최대 30일·선택지 2~6·질문 80자), 시드머니/에스크로 없음(fundingSource USER_POINTS·escrow 0 → 리워드풀 소액 보상 미지급). 유형 T5-Brand/T6-Pick 추가(`typeOf`). 연락처·금전 요구 문구 차단.
+  - 개설자 적립: 다른 팬이 참여할 때 `VOTE_HOST` +1P (EARN_RULES 추가, 일 20건 상한) + 투표당 50명 상한(`rewardHost`, refId `voteId:participant` 유니크로 중복 방지). 본인 투표 참여 금지(403 OWN_VOTE).
+  - 예측형 정산 `POST /fan-hub/me/votes/:id/settle`: 마감 후 개설자가 정답 입력 → 참여 isCorrect 기록·정답자 `VOTE_CORRECT`(+5P) 적립·SETTLED. 취소 `…/cancel`은 참여자 0명·OPEN만.
+  - `GET /fan-hub/votes/create-options`, `POST /fan-hub/votes`, `GET /fan-hub/me/votes`. 목록 `favorites=1`(계정 단위 관심 선수)·`sort=POPULAR`·`createdByMe`·`counts.CREATED`.
+
+### 영향받는 파일
+- FE: `pages/fanhub/{FanVoteList,FanVoteCreate,FanVoteMine}.tsx`, `App.tsx`, `services/api.ts`, `components/Breadcrumb.tsx`
+- BE: `services/fanHub.service.ts`, `services/fanPoint.service.ts`, `routes/fanHub.routes.ts`
+
+### 검증
+- 로컬 API: 브랜드 계정 생성 → 본인 참여 403 → 팬 계정 참여(참여자 +2P pending, 개설자 hostEarned 1) → 목록 createdByMe·CREATED 1 → 마감 전 정산 409 → 참여자 있는 취소 409. 1시간 미만 마감 400.
+- 브라우저 1280px: 목록 시안 렌더(탭 개수·칩·필터·카드·우측 패널·4단계), 만들기 폼으로 한글 투표 생성 확인.
+
+### 참고
+- 예전 시드머니(EP) 기반 사용자 투표(`/votes/create`, voteV2 createUserVote)는 그대로 두었다. 새 팬 허브 투표는 시드 없이 개설자 적립 규칙으로 대체.
+

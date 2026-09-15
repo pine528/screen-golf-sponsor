@@ -1043,3 +1043,5 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - (2026-09-14) 디지털 플랜 가격 단일 출처 = `DigitalPlan` 테이블. 관리자 `/admin/digital-plans` 에서 수정(사유 필수·감사로그). 랜딩·신청·결제 모두 API 값 사용.
 - (2026-09-15) 추천 PICK 엔진 v1.1: 후보 판정은 직접 PICK 판매 가능 기준(재고 행 불요), SNS 필수는 SNS 목표만, 3안은 자리 예산 배분·목표별 슬롯 성향·기간(months·periodTotal) 반영. 결과 캐시는 requestId 일치 시만.
 - (2026-09-15) 선수 메뉴 v1.0(리디자인/8): `/athletes` Gate · `/athletes/search`(선수 찾기, URL query 동기화·8명/페이지) · `/athletes/match`(나에게 맞는 선수, `POST /athlete-match` athlete-only) · `/athletes/compare?ids=`(최대 3) · `/athletes/favorites`(계정 단위 `/me/favorite-athletes`, 업데이트 신호 서버 판정). 공통 `components/athlete/{AthleteCard,QuickProfile,CompareBar,useAthleteTools}` — 직접 PICK 탐색도 같은 컴포넌트. 선수 등록 CTA는 헤더 Mega Menu 하단.
+- (2026-09-15) 팬 VOTE: `/fan/vote` 시안 목록, `/fan/vote/create` 팬 생성(하루 5개·마감 1h~30d·시드 없음), `/fan/vote/mine` 정산/취소. 개설자 적립 `VOTE_HOST` +1P/참여(일 20·투표당 50), 본인 투표 참여 금지, 예측형 정답은 개설자 입력 → `VOTE_CORRECT`.
+
