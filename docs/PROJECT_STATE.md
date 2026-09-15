@@ -1046,3 +1046,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 - (2026-09-15) 팬 VOTE: `/fan/vote` 시안 목록, `/fan/vote/create` 팬 생성(하루 5개·마감 1h~30d·시드 없음), `/fan/vote/mine` 정산/취소. 개설자 적립 `VOTE_HOST` +1P/참여(일 20·투표당 50), 본인 투표 참여 금지, 예측형 정답은 개설자 입력 → `VOTE_CORRECT`.
 
 - (2026-09-15) 팬 참여 세부 화면 10종 리디자인/9 시안 적용(VOTE 상세 3상태·응원 보내기·팬온도 7/30/90일·기여도·포인트 내역 표·스토어/상품 상세·브랜드 추천 협업 형태·연말 광고·내 팬활동) + 커뮤니티 신고(`POST /fan-engage/reports`→FanReport)·숨기기. 공용 셸 `components/fanhub/FanShell.tsx`. 브랜드 추천 `brandUrl`·`collabTypes[]` 추가. 미구축(AR·SPON Pay·알림 설정)은 "준비 중" 비활성.
+- (2026-09-16) 팬스토어 데모 카탈로그 3스토어·22상품을 `FanStore` 레코드로 시드(`seedDemoStores`, `POST /admin/fan/stores/seed-demo`, seed.ts). 외부 이동은 구 데모 페이지 경로, 상품 사진 없음 → 관리자에서 교체.

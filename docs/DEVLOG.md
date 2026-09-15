@@ -1895,3 +1895,17 @@
 
 ### 검증
 - tsc 통과. 배포 프리뷰에서 팬 계정 `login?returnUrl=/fan/activity` → 내 팬활동 도착, `/dashboard` 직접 진입 → `/fan` 이동 확인(아래 배포 후 확인).
+
+## [2026-09-16] 팬스토어 데모 카탈로그를 DB 스토어로 이관 (운영 빈 스토어 해소)
+
+### 변경 사항
+- 새 팬스토어(`/fan/store*`)는 `FanStore` 테이블을 읽는데 운영 DB에 스토어가 없어 목록·상세·상품 화면이 모두 비어 있었다. 구 데모 페이지(`/fan-store/orex` · `/fan-store/the-guys` · `/fan-store/hoi-bakery`)에 하드코딩된 카탈로그를 레코드로 옮겼다.
+- `fanStoreDemo.service.ts` `seedDemoStores()`: 3스토어(배진리×호이베이커리 8 · 염돈웅×OREX 8 · 염돈웅×the GUYS 6) — slug·상품명 기준 멱등 upsert, 선수는 이름으로 매핑(없으면 SKIPPED). 값은 프론트 `data/{orexStore,guysStore,hoiStore}.ts`와 동일, 정가 없는 상품은 null.
+- `POST /api/admin/fan/stores/seed-demo`(ADMIN)로 운영 적용(2026-09-16 실행, 22상품). `prisma/seed.ts`에서도 호출.
+- 외부 이동 주소는 구 데모 페이지 경로. 상품 이미지는 원본 데모에도 없어 비워 둠(브랜드명 카드) — 브랜드 실제 몰 주소·상품 사진은 관리자 `/admin/fan/stores`에서 교체.
+
+### 영향받는 파일
+- `src/backend/src/services/fanStoreDemo.service.ts`, `src/backend/src/routes/fanAdmin.routes.ts`, `src/backend/prisma/seed.ts`
+
+### 검증
+- 로컬 실행 → 호이베이커리 CREATED, 재실행 UPDATED(중복 없음). 운영 `store-home` 응답 22상품·3브랜드, 배포 프리뷰 `/fan/store` 목록·상세·상품 화면 확인.
