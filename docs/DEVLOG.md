@@ -1681,3 +1681,18 @@
 ### 영향받는 파일
 - `src/frontend/src/pages/PublicAthleteDetail.tsx`
 
+## [2026-09-15] 직접 PICK 견적함 담기 실패 수정 + 소재 제출 로고 업로드
+
+### 변경 사항
+- **원인**: 브라우저가 `POST /direct-pick/drafts/:id/items`에 `Idempotency-Key` 헤더를 붙이는데 백엔드 CORS `allowedHeaders`에 없어 프리플라이트가 거부됨 → 화면에는 "견적함에 담지 못했습니다"만 표시. 백엔드 `allowedHeaders`에 `Idempotency-Key` 추가 (Render main 배포 필요).
+- 승인 요청(6단계) 소재 제출: 브랜드 로고를 PC에서 선택해 `/upload/asset`(PNG/JPG/GIF/WebP, 10MB)으로 업로드, 미리보기·교체·삭제. 업로드 URL은 `submitDraft`의 `brandInfo.logoUrl`/`logoFileName`으로 스냅샷에 저장. 패치 아트워크는 기존대로 결제 후 제출.
+- 메인 `BrandCarousel`: 캐러셀이 숨겨져 `clientWidth`가 0일 때 페이지 수가 Infinity가 되어 `Array.from`이 터지던 문제 방지.
+- 참고: 사용자가 보낸 화면(조건 구성 안 「6 소재 제출」, "직접 선택 PICK" 명칭)은 9/1 빌드의 구 배포 URL. 최신 프리뷰는 `…-git-redesign-…vercel.app` 별칭 사용.
+
+### 영향받는 파일
+- `src/backend/src/index.ts`
+- `src/frontend/src/pages/direct/DirectRequest.tsx`, `src/frontend/src/pages/Home.tsx`
+
+### 검증
+- 로컬 브랜드 계정으로 조건 구성 → 견적함에 담기 → `/sponsor/direct/cart?draft=…` 이동 확인. 승인 요청 화면에서 PNG 업로드 후 미리보기·"업로드 완료" 표시 확인.
+
