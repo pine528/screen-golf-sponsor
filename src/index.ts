@@ -69,7 +69,7 @@ app.use(cors({
   origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-idempotency-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-idempotency-key', 'Idempotency-Key'],
 }));
 
 // Request ID 미들웨어 (가장 먼저)
