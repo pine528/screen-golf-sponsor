@@ -1882,3 +1882,16 @@
 ### 검증
 - backend tsc · frontend tsc/build 통과. 로컬 1280px 11개 화면 렌더, 팬 계정으로 OX 투표 제출(참여 완료 배너·참여 수 반영), 이동 모달 동의 게이트 확인, 390px 11개 화면 가로 스크롤 없음.
 - 보류(미구축 → 비활성 표기): AR 보기, SPON Pay, 선수별 알림 설정, 실명 노출 설정, 상품 다중 이미지 → `REDESIGN_BACKLOG.md` C10.
+
+## [2026-09-16] 로그인 후 이동 경로 · 팬 대시보드 분기 버그 수정
+
+### 변경 사항
+- 배포 프리뷰 점검 중 발견: 팬 계정 로그인 시 `returnUrl`을 무시하고 `/dashboard`로 이동했고, `Dashboard`에 FAN 분기가 없어 관리자 "운영 홈"(전부 집계 중)이 표시됨.
+- `Login.tsx`: `?returnUrl`(또는 `redirect`)이 같은 출처 경로면 그곳으로, 없으면 FAN은 `/fan`, 그 외 `/dashboard`.
+- `Dashboard.tsx`: FAN 역할은 `/fan`으로 리다이렉트.
+
+### 영향받는 파일
+- `src/frontend/src/pages/Login.tsx`, `src/frontend/src/pages/Dashboard.tsx`
+
+### 검증
+- tsc 통과. 배포 프리뷰에서 팬 계정 `login?returnUrl=/fan/activity` → 내 팬활동 도착, `/dashboard` 직접 진입 → `/fan` 이동 확인(아래 배포 후 확인).
