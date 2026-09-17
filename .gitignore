@@ -2,3 +2,12 @@ node_modules/
 dist/
 .env
 *.log
+
+# 로컬 업로드·캐시·임시 파일 (2026-09-17 정리)
+uploads/
+.cache/
+nul
+*.tmp.ts
+# 선수 등록·병합 등 1회성 데이터 스크립트는 저장소 밖(../../_local/backend-oneoff)에 보관한다
+prisma/register-*.ts
+prisma/merge-*.ts
