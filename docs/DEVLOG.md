@@ -1970,3 +1970,7 @@
 ### 영향받는 파일
 - `src/backend/prisma/{seed,seed-athletes,ingest-excel-profiles}.ts`, `src/backend/.env.example`, `src/backend/README.md`
 - `README.md`, `tools/audit-athlete-profiles.cjs`, `docs/DEVLOG.md`, `docs/CODE_REVIEW_NOTES.md`
+
+## [2026-09-17] 저장소 공개 전환
+
+- 외부 개발자 코드 검토를 위해 백엔드·프론트엔드 저장소를 GitHub Public으로 전환(사용자 직접 실행). 태그 `v1-current`/`v2-redesign`, `docs/VERSIONS.md`·`docs/CODE_REVIEW_NOTES.md` 공개 확인. 검토 종료 후 Private으로 되돌릴 예정.
