@@ -40,7 +40,8 @@ function fromExcel(file) {
 }
 
 (async () => {
-  const login = await post('/auth/login', { email: 'admin@screengolf.com', password: 'admin123!' });
+  if (!process.env.ADMIN_PASSWORD) throw new Error('ADMIN_PASSWORD 환경변수가 필요합니다');
+  const login = await post('/auth/login', { email: process.env.ADMIN_EMAIL || 'admin@screengolf.com', password: process.env.ADMIN_PASSWORD });
   const tok = login.data.accessToken;
   const all = (await get('/athletes?limit=200', tok)).data || [];
 

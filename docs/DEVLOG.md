@@ -119,8 +119,8 @@
 ### 변경 사항
 - 박현주·강채린 중복 레코드 통합 (운영 DB 24명 → 22명)
   - 선수 본인 실제 이메일 계정(KEEP)에 사진·프로필·입상내역 이전 후 sponpik 중복 계정(DROP) 삭제
-  - 박현주: eee4330@naver.com 유지 (입상 10건 이전)
-  - 강채린: happycl001@naver.com 유지, 기존 height 163cm 보존 (입상 9건 이전)
+  - 박현주: ee***@naver.com 유지 (입상 10건 이전)
+  - 강채린: ha***@naver.com 유지, 기존 height 163cm 보존 (입상 9건 이전)
 - 원인: 두 선수가 **본인이 직접 가입**해둔 계정이 이미 있었으나, 이름 중복 확인 없이 새 sponpik 계정으로 등록 → 중복 발생
 
 ### 발견 (중요)
@@ -229,7 +229,7 @@
 ### 변경 사항
 - 김은채(KIM EUN CHAE) 신규 등록: 2001년생 · 2019 KLPGA 정회원(01351) · 수원 · 광교 카카오프렌즈 소속 · 2026 WGTOUR · 루베로(LUVERO) 후원 / 입상 6건. 사진은 지원서 PDF 임베드 이미지 추출.
 - 최우영(Wooyoung Choi) 신규 등록: KPGA 투어프로 · 미국 톨레도대 졸업/한체대 대학원 · NCAA Mountain West 단체전 우승 / 입상 5건. 인스타 heyimwy_cc_7, 유튜브 우영프로.
-- 김다훈: 기존 자가가입 계정(dhk7422@naver.com)에 통합 — KPGA 투어프로, 2017 JTBC 파운더스컵 우승, GTOUR 활동중 / 입상 5건. (신규 계정 X)
+- 김다훈: 기존 자가가입 계정(dh***@naver.com)에 통합 — KPGA 투어프로, 2017 JTBC 파운더스컵 우승, GTOUR 활동중 / 입상 5건. (신규 계정 X)
 - 사진 3종 3:4 상반신 크롭 후 프론트엔드 main 푸시
 - ※ 연락처/개인 이메일은 미등록
 
@@ -251,7 +251,7 @@
 ---
 
 ## [2026-06-10] 최서영 프로 통합 (자가가입 계정)
-- 최서영: 기존 자가가입 계정(tjdud0213@naver.com)에 통합 — KLPGA 정회원·홍익대 산업스포츠학과 / 입상 5건(2021 호반 드림투어 3위, 2020 솔라고 점프투어 9차전 준우승, KYGA 볼빅배 국제대회 우승 등). 사진 3:4 크롭 후 main 푸시.
+- 최서영: 기존 자가가입 계정(tj***@naver.com)에 통합 — KLPGA 정회원·홍익대 산업스포츠학과 / 입상 5건(2021 호반 드림투어 3위, 2020 솔라고 점프투어 9차전 준우승, KYGA 볼빅배 국제대회 우승 등). 사진 3:4 크롭 후 main 푸시.
   - tour WGTOUR→KLPGA, kyc APPROVED. KYGA/경인일보 연도 추정(확인 필요). 전 소속(노랑통닭/골프앤요트/Callaway)·연락처는 미반영.
   - `src/backend/prisma/register-choi-seoyoung.ts`, `src/frontend/public/golfers/choi-seoyoung.jpg`
 - 운영 DB 선수 수: 29명 유지 (최서영은 기존 계정 통합)
@@ -295,7 +295,7 @@
 ---
 
 ## [2026-06-12] 요코야마 미즈카 통합 + 김하림 신규 등록 (KLPGA)
-- 요코야마 미즈카: 자가가입 계정(hyj5299@naver.com)에 통합. PDF 이력서(전주예술고·원광대 경영학과·전북 익산·프로번호 01576·SNS골프스튜디오 소속·2026 WGTOUR) 반영, 입상 7건. tour WGTOUR→KLPGA, 이름 '요코야마미즈카'→'요코야마 미즈카'.
+- 요코야마 미즈카: 자가가입 계정(hy***@naver.com)에 통합. PDF 이력서(전주예술고·원광대 경영학과·전북 익산·프로번호 01576·SNS골프스튜디오 소속·2026 WGTOUR) 반영, 입상 7건. tour WGTOUR→KLPGA, 이름 '요코야마미즈카'→'요코야마 미즈카'.
 - 김하림: 신규 등록. KLPGA 정회원·중앙대 골프전공·2025 KCGF 전국대학 선수권 개인전 우승 등 입상 4건. (※ 사용자 확인: PDF는 요코야마 것, 인라인 불릿은 김하림 것)
 - 사진 2종 3:4 크롭 후 main 푸시. 연락처/개인 이메일 미반영.
 - `register-yokoyama-mizuka.ts`, `register-kim-harim.ts`, `public/golfers/yokoyama-mizuka.jpg`, `kim-harim.jpg`
@@ -783,7 +783,7 @@
 ## [2026-08-11] 이정우 프로 중복 계정 통합
 
 ### 변경 사항
-- 본인 가입 계정(rndwltkgkd@naver.com, 2026-08-11)에 기존 큐레이션 프로필(leejungwoo@sponpik.com) 연결
+- 본인 가입 계정(rn***@naver.com, 2026-08-11)에 기존 큐레이션 프로필(leejungwoo@sponpik.com) 연결
 - 빈 중복 선수행 삭제, 플레이스홀더 유저 삭제 (seed mergeDuplicateAthleteAccounts 패턴, 멱등)
 - 운영 확인: 이정우 계정 1개 · 본인 이메일 · 프로필(KPGA 프로/대전) 유지
 
@@ -1953,3 +1953,20 @@
 ### 남은 위험
 - 1회성 스크립트에 있던 정보는 선수 개인 이메일·초기 비밀번호·소개글(전화번호 없음). HEAD에서는 제거했고 git 이력에는 남아 있으나, 2026-09-17 사용자 결정으로 이력 정리는 하지 않기로 함.
 - 프론트 `redesign` → `main` 머지는 UI 최종 확인 후.
+
+## [2026-09-17] 저장소 공개 전 계정 정보 가리기
+
+### 변경 사항
+- 백엔드 `prisma/seed.ts`: 기본 계정 5종 비밀번호를 코드에서 제거. `SEED_<ROLE>_PASSWORD` 환경변수 또는 실행마다 무작위 생성 후 콘솔 출력(`seedPassword()`). 기존 계정은 `update: {}`라 운영 배포 시 영향 없음.
+- `prisma/seed-athletes.ts`·`prisma/ingest-excel-profiles.ts`: 실명 선수 계정 초기 비밀번호 평문 제거 → `SEED_ATHLETE_PASSWORD` 또는 무작위.
+- `.env.example`에 `SEED_*` 항목 추가. 백엔드·루트 README의 비밀번호 표 제거, `tools/audit-athlete-profiles.cjs`는 `ADMIN_PASSWORD` 환경변수 필수.
+- `docs/DEVLOG.md`에 남아 있던 선수 개인 이메일 6건 마스킹(`ee***@naver.com` 형식).
+- `docs/CODE_REVIEW_NOTES.md` 신규: 검토 개발자에게 전달할 하드코딩·정책 상수·시드 데이터·이력 관련 메모.
+
+### 남은 사항
+- 운영 계정(관리자·예시 계정·선수 5명)의 실제 비밀번호는 바꾸지 않음(2026-09-17 사용자 결정: 가리기만). 이력에는 예전 값이 남아 있으므로 공개 후에는 운영 비밀번호 변경을 권장.
+- 첫 커밋의 옛 Supabase DB 접속 정보: 프로젝트 삭제/비밀번호 변경 여부 확인 필요.
+
+### 영향받는 파일
+- `src/backend/prisma/{seed,seed-athletes,ingest-excel-profiles}.ts`, `src/backend/.env.example`, `src/backend/README.md`
+- `README.md`, `tools/audit-athlete-profiles.cjs`, `docs/DEVLOG.md`, `docs/CODE_REVIEW_NOTES.md`

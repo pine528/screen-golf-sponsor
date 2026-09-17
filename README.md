@@ -18,6 +18,8 @@
 - `DEVLOG.md` — 작업 기록 (append only)
 - `REDESIGN_BACKLOG.md` — 시안 대비 보류·미결정 항목 (C8~C11)
 - `ENV_SETUP.md` — 환경변수·외부 서비스 설정
+- `CODE_REVIEW_NOTES.md` — 외부 검토용 하드코딩·검토 포인트 메모
+- `VERSIONS.md` — 외부 검토용 버전(태그) 안내
 - `DR_RUNBOOK.md` — 백업·복구 절차
 - `DEMO_GUIDE.md` — 데모 시나리오
 - `CLAUDE.md` — 개발 규칙(불변식·Definition of Done)
@@ -34,11 +36,11 @@ cd src/frontend && npm install && cp .env.example .env && npm run dev
 
 ## 시드 기본 계정 (로컬 전용)
 
-| 역할 | 이메일 | 비밀번호 |
-|---|---|---|
-| 관리자 | admin@screengolf.com | admin123! |
-| 브랜드 | brand@example.com | brand123! |
-| 선수 | athlete@example.com | athlete123! |
-| 팬 | fan@example.com | test123! |
+| 역할 | 이메일 |
+|---|---|
+| 관리자 | admin@screengolf.com |
+| 브랜드 | brand@example.com |
+| 선수 | athlete@example.com |
+| 팬 | fan@example.com |
 
-운영 환경에서는 반드시 변경합니다.
+비밀번호는 `src/backend/.env`의 `SEED_<ROLE>_PASSWORD`로 지정하거나, 비워 두면 `npm run seed` 실행 시 무작위로 생성돼 콘솔에 출력됩니다. 운영 계정 비밀번호는 저장소에 기록하지 않습니다.
