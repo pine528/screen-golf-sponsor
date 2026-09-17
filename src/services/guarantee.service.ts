@@ -181,6 +181,7 @@ function shapeSnapshot(s: any) {
     hasPending: obs.some((o: any) => o.collectStatus === 'PENDING'),
     remedyRules: s.remedyRules,
     finalizedAt: s.finalizedAt,
+    createdAt: s.createdAt,
     locked: !!s.lockedAt,
   };
 }

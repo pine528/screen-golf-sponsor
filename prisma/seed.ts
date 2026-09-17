@@ -2,6 +2,7 @@ import { PrismaClient, BodyPart, MaterialRule, SlotGrade, SlotCategory } from '@
 import bcrypt from 'bcryptjs';
 import { SLOT_DISPLAY_COORDS } from './slot-display-coords';
 import { seedDemoStores } from '../src/services/fanStoreDemo.service';
+import { seedAboutPartners } from '../src/services/aboutDemo.service';
 
 const prisma = new PrismaClient();
 
@@ -1174,6 +1175,14 @@ async function backfillSlotInventory() {
     console.log('Fan store demo:', r.results.map((x) => `${x.slug}=${x.status}`).join(', '));
   } catch (e) {
     console.warn('Warning: 팬스토어 데모 시드 실패 (non-fatal):', e);
+  }
+
+  /* 소개 파트너 브랜드 · 실측 매칭사례 — slug 기준 멱등 */
+  try {
+    const r = await seedAboutPartners();
+    console.log('About partners:', r.results.filter((x) => x.status !== 'UPDATED').map((x) => `${x.kind}:${x.slug}=${x.status}`).join(', ') || 'all up to date');
+  } catch (e) {
+    console.warn('Warning: 소개 파트너 시드 실패 (non-fatal):', e);
   }
 }
 

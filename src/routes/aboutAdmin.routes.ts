@@ -5,6 +5,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/auth';
 import * as adm from '../services/aboutAdmin.service';
+import { seedAboutPartners } from '../services/aboutDemo.service';
 
 const router = Router();
 const ok = (res: Response, data: any) => res.json({ success: true, data, error: null });
@@ -246,6 +247,11 @@ router.get('/brands/:id', async (req: Request, res: Response, next: NextFunction
     if (!data) return notFound(res, '브랜드를 찾을 수 없습니다');
     ok(res, data);
   } catch (e) { next(e); }
+});
+
+/** POST /api/admin/about/seed-partners — 구 소개 페이지의 파트너 브랜드 로고 10종 · 실측 사례 2건을 레코드로 (멱등) */
+router.post('/seed-partners', async (_req: any, res: Response, next: NextFunction) => {
+  try { res.json({ success: true, data: await seedAboutPartners(), error: null }); } catch (e) { next(e); }
 });
 
 router.post('/brands', async (req: any, res: Response, next: NextFunction) => {

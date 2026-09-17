@@ -79,6 +79,7 @@ router.get('/brands', async (req: Request, res: Response, next: NextFunction) =>
       q: req.query.q as string,
       hasStore: req.query.hasStore as string,
       status: req.query.status as string,
+      sponsorType: req.query.sponsorType as string,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 12,
     }));
