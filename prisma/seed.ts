@@ -1,16 +1,29 @@
 import { PrismaClient, BodyPart, MaterialRule, SlotGrade, SlotCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { SLOT_DISPLAY_COORDS } from './slot-display-coords';
 import { seedDemoStores } from '../src/services/fanStoreDemo.service';
 import { seedAboutPartners } from '../src/services/aboutDemo.service';
 
 const prisma = new PrismaClient();
 
+/**
+ * 시드 계정 비밀번호: SEED_<ROLE>_PASSWORD 환경변수가 있으면 그 값을, 없으면 실행마다 무작위 값을 쓰고 콘솔에 출력한다.
+ * (이미 존재하는 계정은 update: {} 이므로 비밀번호가 바뀌지 않는다 — 운영 배포 시드는 기존 계정에 영향 없음)
+ */
+const SEED_PASSWORDS: Record<string, string> = {};
+function seedPassword(role: string): string {
+  const fromEnv = process.env[`SEED_${role}_PASSWORD`];
+  const pw = fromEnv && fromEnv.length >= 8 ? fromEnv : randomBytes(9).toString('base64url');
+  SEED_PASSWORDS[role] = pw;
+  return pw;
+}
+
 async function main() {
   console.log('Seeding database...');
 
   // Create Admin User
-  const adminPassword = await bcrypt.hash('admin123!', 12);
+  const adminPassword = await bcrypt.hash(seedPassword('ADMIN'), 12);
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@screengolf.com' },
     update: {},
@@ -49,7 +62,7 @@ async function main() {
   console.log('Platform system user created:', platformUser.id);
 
   // Create Brand User
-  const brandPassword = await bcrypt.hash('brand123!', 12);
+  const brandPassword = await bcrypt.hash(seedPassword('BRAND'), 12);
   const brandUser = await prisma.user.upsert({
     where: { email: 'brand@example.com' },
     update: {},
@@ -72,7 +85,7 @@ async function main() {
   console.log('Brand user created:', brandUser.email);
 
   // Create Athlete User
-  const athletePassword = await bcrypt.hash('athlete123!', 12);
+  const athletePassword = await bcrypt.hash(seedPassword('ATHLETE'), 12);
   const athleteUser = await prisma.user.upsert({
     where: { email: 'athlete@example.com' },
     update: {},
@@ -93,7 +106,7 @@ async function main() {
   console.log('Athlete user created:', athleteUser.email);
 
   // Create Agency User
-  const agencyPassword = await bcrypt.hash('agency123!', 12);
+  const agencyPassword = await bcrypt.hash(seedPassword('AGENCY'), 12);
   const agencyUser = await prisma.user.upsert({
     where: { email: 'agency@example.com' },
     update: {},
@@ -116,7 +129,7 @@ async function main() {
   console.log('Agency user created:', agencyUser.email);
 
   // Create Fan User
-  const fanPassword = await bcrypt.hash('test123!', 12);
+  const fanPassword = await bcrypt.hash(seedPassword('FAN'), 12);
   const fanUser = await prisma.user.upsert({
     where: { email: 'fan@example.com' },
     update: {},
@@ -941,9 +954,11 @@ async function main() {
     console.log('========================================\n');
 
     console.log('🔐 데모 계정:');
-    console.log('  관리자: admin@screengolf.com / admin123!');
-    console.log('  브랜드: brand@example.com / brand123!');
-    console.log('  선수: athlete@example.com / athlete123!\n');
+    console.log('  관리자: admin@screengolf.com /', SEED_PASSWORDS.ADMIN);
+    console.log('  브랜드: brand@example.com /', SEED_PASSWORDS.BRAND);
+    console.log('  선수: athlete@example.com /', SEED_PASSWORDS.ATHLETE);
+    console.log('  팬: fan@example.com /', SEED_PASSWORDS.FAN);
+    console.log('  (이미 있던 계정은 비밀번호가 바뀌지 않음. 고정하려면 SEED_<ROLE>_PASSWORD 환경변수)\n');
 
     console.log('🎯 LIVE 경매 정보:');
     console.log(`  경매 ID: ${auction.id}`);

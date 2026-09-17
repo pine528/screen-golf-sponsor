@@ -12,12 +12,12 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
 interface AthleteSeed {
   email: string;
-  password: string;
   name: string;
   tour: string;
   bio: string;
@@ -37,7 +37,6 @@ interface AthleteSeed {
 const ATHLETES: AthleteSeed[] = [
   {
     email: 'anyein@sponpik.com',
-    password: 'anyein2026!',
     name: '안예인',
     tour: 'KLPGA',
     bio: '176cm · 1998년생 · 2018년 KLPGA 정회원 · SBSGOLF 골프클리닉 출연. 5.1만 인스타 팔로워',
@@ -70,7 +69,6 @@ const ATHLETES: AthleteSeed[] = [
   },
   {
     email: 'baejinri@sponpik.com',
-    password: 'baejinri2026!',
     name: '배진리',
     tour: 'KLPGA',
     bio: '170cm · 2001년생 · 2020년 KLPGA 정회원 · WGTOUR 1차 2위. 인스타 @baeaee_',
@@ -101,7 +99,6 @@ const ATHLETES: AthleteSeed[] = [
   },
   {
     email: 'songyuna@sponpik.com',
-    password: 'songyuna2026!',
     name: '송유나',
     tour: 'KLPGA',
     bio: '165cm · 1998년생 · 2021년 KLPGA 정회원 · 르꼬끄 골프 앰버서더. 인스타 @_yuna_ssong',
@@ -131,7 +128,6 @@ const ATHLETES: AthleteSeed[] = [
   },
   {
     email: 'ohsehee@sponpik.com',
-    password: 'ohsehee2026!',
     name: '오세희',
     tour: 'KLPGA',
     bio: '168cm · 1998년생 · 2020년 KLPGA 정회원 · 마스터바니 앰버서더 · 펀펀매치 우승. 인스타 1.9만',
@@ -165,7 +161,6 @@ const ATHLETES: AthleteSeed[] = [
   },
   {
     email: 'leeyebin@sponpik.com',
-    password: 'leeyebin2026!',
     name: '이예빈',
     tour: 'KLPGA',
     bio: '168cm · 2000년생 · 2021년 KLPGA 준회원 · SG 더매치 챔피언십 출전. 인스타 @yaeproda',
@@ -244,7 +239,9 @@ async function main() {
   }
 
   for (const a of ATHLETES) {
-    const passwordHash = await bcrypt.hash(a.password, 12);
+    // 초기 비밀번호: SEED_ATHLETE_PASSWORD 환경변수 또는 실행마다 무작위 (신규 생성 시에만 사용, 기존 계정은 유지)
+    const initialPassword = process.env.SEED_ATHLETE_PASSWORD || randomBytes(9).toString('base64url');
+    const passwordHash = await bcrypt.hash(initialPassword, 12);
 
     const result = await prisma.user.upsert({
       where: { email: a.email },
@@ -295,6 +292,7 @@ async function main() {
   }
 
   console.log(`\n✨ 완료. 총 ${ATHLETES.length}명 시드됨.`);
+  console.log(`🔐 신규 생성된 계정의 초기 비밀번호: ${process.env.SEED_ATHLETE_PASSWORD ? '(SEED_ATHLETE_PASSWORD)' : '실행마다 무작위 — 선수에게는 비밀번호 재설정으로 안내'}`);
   console.log(`👀 화면 확인: http://localhost:5173/athletes`);
 }
 

@@ -25,7 +25,7 @@ npm run dev                   # http://localhost:3000/api
 | `npm run seed` | `prisma/seed.ts` — 관리자/브랜드/선수/팬 계정, 슬롯 템플릿, 팬스토어·소개 파트너 시드 |
 | `npm test` | Jest e2e (`tests/`) |
 
-시드 기본 계정: `admin@screengolf.com / admin123!`, `brand@example.com / brand123!`, `athlete@example.com / athlete123!`, `fan@example.com / test123!` — 운영에서는 반드시 변경.
+시드 기본 계정: `admin@screengolf.com`(관리자) · `brand@example.com`(브랜드) · `athlete@example.com`(선수) · `fan@example.com`(팬). 비밀번호는 `.env`의 `SEED_<ROLE>_PASSWORD`로 지정하며, 비워 두면 시드 실행 시 무작위로 만들어 콘솔에 출력한다. 이미 있는 계정의 비밀번호는 시드가 바꾸지 않는다.
 
 ## 구조
 

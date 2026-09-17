@@ -11,6 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -126,7 +127,7 @@ async function main() {
           where: { email },
           update: { athlete: { update: { ...data, socialLinks: links } } },
           create: {
-            email, passwordHash: await bcrypt.hash('kimsiyoon2026!', 12), role: 'ATHLETE',
+            email, passwordHash: await bcrypt.hash(process.env.SEED_ATHLETE_PASSWORD || randomBytes(9).toString('base64url'), 12), role: 'ATHLETE',
             athlete: {
               create: {
                 name, tour: 'KLPGA',
