@@ -64,3 +64,20 @@ coverage/
 
 # 프로필 대조 결과 (실행 시 생성)
 tools/audit-result.json
+
+# 2026-09-17 정리: 소스는 src/backend·src/frontend 각 저장소가 원본. 루트는 문서·인프라 설정만 추적
+src/
+temp_docx/
+_local/
+__pycache__/
+*.pyc
+/*.docx
+/*.png
+/*.jpg
+/*.bmp
+/*.html
+docs/*.zip
+docs/hwpx_tmp/
+docs/__pycache__/
+.claude/*.local.*
+.claude/settings.local.json

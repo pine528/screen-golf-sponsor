@@ -12,9 +12,9 @@ const DIR = 'E:/SPONPIK/선수 프로필 엑셀';
 
 const post = (p, b) => new Promise((res, rej) => { const d = JSON.stringify(b);
   const r = https.request('https://screen-golf-sponsor.onrender.com/api' + p, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(d), Origin: 'https://www.sponpik.com' } },
-    x => { let s = ''; x.on('data', c => s += c); x.on('end', () => res(JSON.parse(s))); }); r.on('error', rej); r.write(d); r.end(); });
+    x => { const b = []; x.on('data', c => b.push(c)); x.on('end', () => res(JSON.parse(Buffer.concat(b).toString('utf8')))); }); r.on('error', rej); r.write(d); r.end(); });
 const get = (p, t) => new Promise((res, rej) => { https.get('https://screen-golf-sponsor.onrender.com/api' + p, { headers: { Authorization: 'Bearer ' + t, Origin: 'https://www.sponpik.com' } },
-    r => { let s = ''; r.on('data', c => s += c); r.on('end', () => { try { res(JSON.parse(s)) } catch (e) { res(null) } }); }).on('error', rej); });
+    r => { const b = []; r.on('data', c => b.push(c)); r.on('end', () => { try { res(JSON.parse(Buffer.concat(b).toString('utf8'))) } catch (e) { res(null) } }); }).on('error', rej); });
 
 const norm = (v) => String(v ?? '').replace(/[\s\u00a0]/g, '').replace(/[·・]/g, '').toLowerCase();
 const num = (v) => { const m = String(v ?? '').match(/\d+/); return m ? Number(m[0]) : null; };

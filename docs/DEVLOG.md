@@ -1942,3 +1942,14 @@
 ### 검증
 - backend/frontend tsc·build 통과. 로컬 1280px 9개 화면 렌더(대표 사례·근거 레이어·브랜드 상세 연동), 390px 가로 스크롤 없음. 운영 시드 후 브랜드 10·사례 2 노출 확인.
 - 성과보장 정책(ACTIVE)은 운영에 없어 "최대 n%"는 '계약별 비율'로 표시 — 관리자 `/admin/about/policies`에서 발행하면 자동 반영. 관리자 시안(00~12·46~60)은 백로그 C11.
+
+## [2026-09-17] 외부 코드 검토 전 저장소 정리
+
+### 변경 사항
+- 백엔드(`main`): 선수 등록·병합 등 1회성 데이터 스크립트 34개(전화·이메일 등 개인정보 포함, 일부는 커밋돼 있었음)를 저장소 밖 `E:\SPONPIK\_localackend-oneoff\`로 이동하고 추적 해제. 디버그 스크립트(`check-embedding.ts`, `debug-detection.ts`, `nul`) 삭제, `uploads/`·`.cache/` 추적 해제·ignore. README 추가.
+- 프론트(`redesign`): 빌드 산출물 `dist/`(120파일) 추적 해제·ignore(Vercel이 직접 빌드), 스크린샷 PNG 이동. README 추가.
+- 루트(`master`): 오래된 `src/` 스냅샷(559파일)·`temp_docx`·docx 2종·`.claude/*.local` 추적 해제. 루트는 문서·인프라 설정만 추적하도록 ignore 정리, README를 저장소 구조 안내로 교체.
+
+### 남은 위험
+- 개인정보 스크립트는 HEAD에서 제거했지만 **git 이력에는 남아 있다**. 외부 공유 전 이력 정리(`git filter-repo`)와 강제 푸시가 필요하며, 협업자 재클론이 동반되므로 대표님 확인 후 진행.
+- 프론트 `redesign` → `main` 머지는 UI 최종 확인 후.
