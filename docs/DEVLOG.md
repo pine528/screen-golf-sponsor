@@ -1917,3 +1917,28 @@
 
 ### 영향받는 파일
 - `src/frontend/src/pages/fanhub/FanStoreHome.tsx`
+
+## [2026-09-17] 스폰픽 소개 세부 화면 8종 — 리디자인/10 시안 세부 적용
+
+### 변경 사항
+- 리디자인/10 이미지 31장 검토(00~12·46~60 관리자, 14~44 공개 소개 화면). 공용 셸 `AboutShell` — 홈›스폰픽 소개›현재 브레드크럼, 테두리형 5탭 바(균등 5분할·활성 밑줄), `crumb` 확장, `InstagramStrip`.
+- 서비스 소개(18·24): PICK 2카드 히어로, "선수의 가능성과 브랜드의 성장을 연결합니다" 4가치 + 선수·브랜드·팬 다이어그램, 핵심 기능 5, 시작 방식 3(직접/추천/디지털 월 구독), 브랜드·선수·팬 가치 탭(사례 카드).
+- 이용방법(20·38·40): 방식 3 → 4단계 흐름, 브랜드 4경로 상세(단계 아이콘·추천 대상·예상 소요·로그인 시점·CTA), 비로그인 탐색 스트립, 선수 5단계/팬 4단계·응원 광고·안내 3, 대상별 카드 + 추천 PICK. `?role=brand|player|fan`.
+- 성과보장(16·32): 5단계(보완 지원 강조), 확인 항목 4, "차기 후원금 최대 n% 보정 지원"(정책 remedyRules 값, 없으면 '계약별 비율'), 예시 흐름 4, 적용 상품·KPI 예시·제외, FAQ 4열, 상담·운영기준·내 계약 결과.
+- 내 성과보장 현황(34): 요약 4(보완지원 확인하기), 계약 카드(상태·남은 기간·계약 상세·3점 타임라인 계약 체결→측정→결과 확정), KPI 카드(목표·잠정 실적·달성률·출처·다음 검증), 정책 요약 사이드, 최종 리포트(확정 후)/이의제기 안내.
+- 이의제기·보완지원(36): 대상 계약 드롭다운, NOT_MET 박스·D-n, 이의 사유 1,000자, 증빙 파일 업로드(PDF/JPG/PNG 10MB → `attachments`), 유형 체크, 사실 확인, 예상 보완지원·절차 4단계(가로)·공정 검토.
+- 매칭사례(14·26): 필터 드롭다운(종목·투어·후원방식·업종·성과유형) + 정렬, 대표 사례(로고 × 선수 사진·목표·선정 조합·성과 요약) + 보조 2, 카드 그리드, 매칭 프로세스 4, "우리 브랜드 매칭안 받아보기".
+- 사례 상세(28·30): 히어로(선수 사진 우측·검증/투어/후원방식/성과유형 칩·브랜드 목표), 실행 요약 아이콘 카드, 진행 과정 원형 타임라인, 성과 지표(아이콘·측정 기간·출처) + 브랜드 승인 코멘트/선수 코멘트, 근거 레이어에 공개 허용 범위·근거 자료 목록.
+- 함께하는 브랜드(22·42): 협업 유형 3 타일, 필터 5(검색·업종·협업유형·활성상태·팬스토어), 카드(선수 n명·프로젝트 n건·협업유형·매칭사례·팬스토어 링크), 숫자 페이지네이션·N개씩, 협업 스토리(대표 사례), CTA(스폰픽 추천받기·제휴 문의).
+- 브랜드 상세(44): 함께한 선수(사진·종목·협업 유형·프로필), 협업 사례 주요 성과·협업 기간, 현재 이용 가능한 상품·함께 만든 상품(팬스토어 상품 연동), 후원 방식, 관련 매칭 사례, 브랜드 담당자 한마디, 검증 고지.
+- 헤더 메가메뉴(46): 스폰픽 소개 메뉴에 좌측 소개 패널 + "처음이신가요? 서비스소개부터 보기".
+- 백엔드: `aboutDemo.service` `seedAboutPartners()` — 구 소개 페이지 브랜드 로고 10종(OREX·FAU·ELENSILIA·NATURE REPUBLIC·Kilogram studio·Brrr. studio·NLT1·안국건강·the GUYS·호이베이커리) + 2026 GTOUR/WGTOUR 6차 실측 사례 2건(염돈웅×OREX, 장연주×ELENSILIA; 지표는 트래킹 리포트 출처, 정성 라벨/조회 수)을 레코드로. `POST /admin/about/seed-partners`(운영 적용 2026-09-17), seed.ts 훅.
+  `listCases` featured·objective facet·process, `getCase` 선수 프로필·목표 라벨, `getMetricEvidence` visibility·attachments, `listBrands` 협업유형 필터·brand sponsorTypes·story, `getBrand` 선수 프로필·팬스토어 상품·담당자 코멘트·후원 방식·통계, snapshot `createdAt`.
+
+### 영향받는 파일
+- `src/frontend/src/components/about/AboutShell.tsx`, `components/PublicHeader.tsx`, `pages/about/{ServiceIntro,HowItWorks,GuaranteeIntro,MyGuarantees,GuaranteeAppeal,CaseList,CaseDetail,BrandList,BrandDetail}.tsx`, `services/api.ts`
+- `src/backend/src/services/{aboutDemo,about,guarantee}.service.ts`, `src/routes/{about,aboutAdmin}.routes.ts`, `prisma/seed.ts`
+
+### 검증
+- backend/frontend tsc·build 통과. 로컬 1280px 9개 화면 렌더(대표 사례·근거 레이어·브랜드 상세 연동), 390px 가로 스크롤 없음. 운영 시드 후 브랜드 10·사례 2 노출 확인.
+- 성과보장 정책(ACTIVE)은 운영에 없어 "최대 n%"는 '계약별 비율'로 표시 — 관리자 `/admin/about/policies`에서 발행하면 자동 반영. 관리자 시안(00~12·46~60)은 백로그 C11.

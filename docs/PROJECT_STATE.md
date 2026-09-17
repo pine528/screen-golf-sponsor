@@ -1047,3 +1047,4 @@ IA: 팬 참여 = **Fan VOTE** / **팬온도** / **팬포인트** / **팬스토�
 
 - (2026-09-15) 팬 참여 세부 화면 10종 리디자인/9 시안 적용(VOTE 상세 3상태·응원 보내기·팬온도 7/30/90일·기여도·포인트 내역 표·스토어/상품 상세·브랜드 추천 협업 형태·연말 광고·내 팬활동) + 커뮤니티 신고(`POST /fan-engage/reports`→FanReport)·숨기기. 공용 셸 `components/fanhub/FanShell.tsx`. 브랜드 추천 `brandUrl`·`collabTypes[]` 추가. 미구축(AR·SPON Pay·알림 설정)은 "준비 중" 비활성.
 - (2026-09-16) 팬스토어 데모 카탈로그 3스토어·22상품을 `FanStore` 레코드로 시드(`seedDemoStores`, `POST /admin/fan/stores/seed-demo`, seed.ts). 외부 이동은 구 데모 페이지 경로, 상품 사진 없음 → 관리자에서 교체.
+- (2026-09-17) 스폰픽 소개 세부 화면 8종 리디자인/10 시안 적용(서비스 소개·이용방법 `?role=`·성과보장·내 현황·이의제기 파일 업로드·매칭사례 대표 사례/필터·사례 상세 근거 레이어·브랜드 목록/상세 팬스토어 연동) + 메가메뉴 소개 패널. 파트너 브랜드 10·실측 사례 2 시드(`seedAboutPartners`, `POST /admin/about/seed-partners`, seed.ts). 성과보장 정책은 관리자 발행 전까지 '계약별'.
